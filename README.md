@@ -1,25 +1,11 @@
-[![SQA badge](https://api.eu.badgr.io/public/assertions/<SQAaaS image ID>/image)](https://api.eu.badgr.io/public/badges/<SQAaaS badge ID>)
+# CESSDA CMV Benchmark-runner
 
-[![Build Status](https://jenkins.cessda.eu/buildStatus/icon?job=cessda.cdc.fuji.runner%2Fmain)](https://jenkins.cessda.eu/job/cessda.cdc.fuji-runner/job/main/)
-[![Bugs](https://sonarqube.cessda.eu/api/project_badges/measure?project=eu.cessda.cdc.fuji.runner%3fuji-runner&metric=bugs)](https://sonarqube.cessda.eu/dashboard?id=eu.cessda.cdc.fuji.runner%3fuji-runner)
-[![Code Smells](https://sonarqube.cessda.eu/api/project_badges/measure?project=eu.cessda.cdc.fuji.runner%3fuji-runner&metric=code_smells)](https://sonarqube.cessda.eu/dashboard?id=eu.cessda.cdc.fuji.runner%3fuji-runner)
-[![Coverage](https://sonarqube.cessda.eu/api/project_badges/measure?project=eu.cessda.cdc.fuji.runner%3fuji-runner&metric=coverage)](https://sonarqube.cessda.eu/dashboard?id=eu.cessda.cdc.fuji.runner%3fuji-runner)
-[![Duplicated Lines (%)](https://sonarqube.cessda.eu/api/project_badges/measure?project=eu.cessda.cdc.fuji.runner%3fuji-runner&metric=duplicated_lines_density)](https://sonarqube.cessda.eu/dashboard?id=eu.cessda.cdc.fuji.runner%3fuji-runner)
-[![Lines of Code](https://sonarqube.cessda.eu/api/project_badges/measure?project=eu.cessda.cdc.fuji.runner%3fuji-runner&metric=ncloc)](https://sonarqube.cessda.eu/dashboard?id=eu.cessda.cdc.fuji.runner%3fuji-runner)
-[![Maintainability Rating](https://sonarqube.cessda.eu/api/project_badges/measure?project=eu.cessda.cdc.fuji.runner%3fuji-runner&metric=sqale_rating)](https://sonarqube.cessda.eu/dashboard?id=eu.cessda.cdc.fuji.runner%3fuji-runner)
-[![Quality Gate Status](https://sonarqube.cessda.eu/api/project_badges/measure?project=eu.cessda.cdc.fuji.runner%3fuji-runner&metric=alert_status)](https://sonarqube.cessda.eu/dashboard?id=eu.cessda.cdc.fuji.runner%3fuji-runner)
-[![Reliability Rating](https://sonarqube.cessda.eu/api/project_badges/measure?project=eu.cessda.cdc.fuji.runner%3fuji-runner&metric=reliability_rating)](https://sonarqube.cessda.eu/dashboard?id=eu.cessda.cdc.fuji.runner%3fuji-runner)
-[![Security Rating](https://sonarqube.cessda.eu/api/project_badges/measure?project=eu.cessda.cdc.fuji.runner%3fuji-runner&metric=security_rating)](https://sonarqube.cessda.eu/dashboard?id=eu.cessda.cdc.fuji.runner%3fuji-runner)
-[![Technical Debt](https://sonarqube.cessda.eu/api/project_badges/measure?project=eu.cessda.cdc.fuji.runner%3fuji-runner&metric=sqale_index)](https://sonarqube.cessda.eu/dashboard?id=eu.cessda.cdc.fuji.runner%3fuji-runner)
-[![Vulnerabilities](https://sonarqube.cessda.eu/api/project_badges/measure?project=eu.cessda.cdc.fuji.runner%3fuji-runner&metric=vulnerabilities)](https://sonarqube.cessda.eu/dashboard?id=eu.cessda.cdc.fuji.runner%3fuji-runner)
-
-# REPO NAME
-
-This repository contains the source code for  ...
+This repository contains the source code for assessing digital objects
+against the CESSDA Benchmark algorithmn, using the FAIR Champion tool.
 
 ## Prerequisites
 
-Java XX or greater is required to build and run this application.
+Java 21 or greater is required to build and run this application.
 
 ## Quick Start
 
@@ -44,10 +30,6 @@ This project uses the standard Maven project structure.
 |       └── resources   # Contains test resource assets.
 └── target              # The output directory for the build.
 ```
-
-## Technology Stack
-
-## Configuration
 
 ## Contributing
 

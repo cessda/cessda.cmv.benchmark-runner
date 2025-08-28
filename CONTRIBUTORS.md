@@ -4,4 +4,4 @@
 
 Name            | Email                     | Role
 :---            | :---                      | :---
-Given Family | given DOT family AT cessda DOT eu | insert job title
+John Shepherdson | john DOT shepherdson AT cessda DOT eu | Project Consultant
