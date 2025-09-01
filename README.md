@@ -20,7 +20,7 @@ Java 21 or greater is required to build and run this application.
 
 This project uses the standard Maven project structure.
 
-```
+``` text
 <ROOT>
 ├── .mvn                # Maven wrapper.
 ├── src                 # Contains all source code and assets for the application.
