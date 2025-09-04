@@ -33,11 +33,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  */
 public class GuidApiClient {
 
-    private static final String API_ENDPOINT = "https://tools.ostrails.eu/champion/assess/algorithm/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw";
+    private static final String BENCHMARK_ALGORITHM_URI = "https://tools.ostrails.eu/champion/assess/algorithm/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw";
     private static final String GUIDS_FILE = "guids.txt";
     private static final String OUTPUT_DIR = "results";
-    private static final String BENCHMARK_ALGORITHM = "https://tools.ostrails.eu/champion/assess/algorithm/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw"; 
-
+   
     private static final String HEADER_VALUE = "application/json";
     private static final String ACCEPT = "Accept";
     private static final String CONTENT_TYPE = "Content-Type";
@@ -178,7 +177,7 @@ public class GuidApiClient {
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode payload = mapper.createObjectNode();
         payload.put("guid", guid);
-        payload.put("url", BENCHMARK_ALGORITHM);
+        payload.put("url", BENCHMARK_ALGORITHM_URI);
         String jsonPayload = mapper.writeValueAsString(payload);
 
         if (logger.isLoggable(java.util.logging.Level.INFO)) {
@@ -190,7 +189,7 @@ public class GuidApiClient {
 
         // Create HTTP request
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(API_ENDPOINT))
+                .uri(URI.create(BENCHMARK_ALGORITHM_URI))
                 .header(ACCEPT, HEADER_VALUE)
                 .header(CONTENT_TYPE, HEADER_VALUE)
                 .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
@@ -460,7 +459,7 @@ public class GuidApiClient {
             
             // Add request details
             ObjectNode requestDetails = mapper.createObjectNode();
-            requestDetails.put("endpoint", API_ENDPOINT);
+            requestDetails.put("endpoint", BENCHMARK_ALGORITHM_URI);
             requestDetails.put("method", "POST");
             jsonResponse.set("requestDetails", requestDetails);
             
