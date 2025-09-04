@@ -16,12 +16,18 @@ Java 21 or greater is required to build and run this application.
 2. Clone the repository to your local workspace.
 3. Add the GUIDs of the digital objects to test in the src/main/resources/guids.txt file
 4. Build the application using `mvn compile`.
-5. Run the application using the following command: `mvn exec:java`.
+5. Run the application using the following command: `mvn exec:java`
+    (this uses the QA algorithm configuration spreadsheet specified by `BENCHMARK_ALGORITHM_URI`).
+6. The assessment results file for each GUID is written to the `results` directory.
 
 ## Customisation
 
-To use a different QA algorithm configuration spreadsheet, change the value of BENCHMARK_ALGORITHM_URI.
-Note this must point to a spreadsheet that is registered in FAIR Champion.
+To use a different QA algorithm configuration spreadsheet, provide it as a command line argument,
+for example
+`mvn exec:java -Dexec.args=https://tools.ostrails.eu/champion/algorithms/16s2klErdtZck2b6i2Zp_PjrgpBBnnrBKaAvTwrnMB4w
+`
+
+Note this must be the URL of spreadsheet that is registered in FAIR Champion.
 You can register a new Google spreadsheet with [FAIR Champion](https://tools.ostrails.eu/champion/algorithms/new).
 You must publish the spreadsheet to the web and use the resulting URL to register it.
 

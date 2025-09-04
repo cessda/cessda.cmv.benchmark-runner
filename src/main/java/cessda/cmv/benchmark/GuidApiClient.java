@@ -87,6 +87,26 @@ public class GuidApiClient {
         // Set the logging level
         logger.setLevel(Level.INFO);
 
+         // Check for command line argument, otherwise use default
+        String spreadsheetUri;
+        if (args.length > 0) {
+            try {
+                URI.create(args[0]); // Validate URI format
+                spreadsheetUri = args[0];
+                if (logger.isLoggable(java.util.logging.Level.INFO)) {
+                    logger.info (String.format("Using spreadsheet URI from command line: %s", spreadsheetUri));
+                }
+            } catch (IllegalArgumentException e) {
+                logger.severe("Invalid URI provided: " + args[0]);
+                return; // Exit the program
+            }
+        } else {
+            spreadsheetUri = BENCHMARK_ALGORITHM_URI;
+            if (logger.isLoggable(java.util.logging.Level.INFO)) {
+                logger.info(String.format("Using default spreadsheet URI: %s", spreadsheetUri));
+            }
+        }
+
         GuidApiClient client = new GuidApiClient();
 
         try {
