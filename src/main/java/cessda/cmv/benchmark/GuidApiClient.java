@@ -105,7 +105,7 @@ public class GuidApiClient {
             }
 
             // Process each GUID
-            client.processGuids(guids);
+            client.processGuids(guids, false, false, true);
 
             if (logger.isLoggable(java.util.logging.Level.INFO)) {
                 logger.info(PROCCOMP);
@@ -155,132 +155,6 @@ public class GuidApiClient {
         throw new FileNotFoundException("Could not find " + GUIDS_FILE + " in resources or current directory");
     }
 
-        /**
-         * Processes a list of GUIDs concurrently using a fixed thread pool.
-         * Each GUID is processed in its own task, allowing for parallel execution.
-         *
-         * @param guids List of GUIDs to process
-         * @throws InterruptedException if the thread is interrupted while waiting for tasks to complete
-         */
-        private void processGuids(List<String> guids) throws InterruptedException {
-        try (ExecutorService executor = Executors.newFixedThreadPool(5)) {
-            for (int i = 0; i < guids.size(); i++) {
-                final String guid = guids.get(i);
-                final int index = i;
-
-                CompletableFuture.runAsync(() -> {
-                    try {
-                        processGuid(guid, index);
-                    } catch (Exception e) {
-                        logger.severe(String.format(PROCERROR, guid, e.getMessage()));
-                        Thread.currentThread().interrupt();
-                    }
-                }, executor);
-            }
-            
-            logger.info(TASKWAIT);
-            executor.shutdown();
-            
-            if (!executor.awaitTermination(10, TimeUnit.MINUTES)) {
-                logger.severe(TASKTOOLONG);
-            } else {
-                logger.info(TASKSUCCESS);
-            }
-        }
-        // ExecutorService automatically closed here
-}
-
-    /**
-     * Processes a single GUID by sending it to the API and saving the response.
-     * If an error occurs, it saves the error information to a separate file.
-     *
-     * @param guid  The GUID to process
-     * @param index The index of the GUID in the list (for logging)
-     * @throws IOException          if an I/O error occurs
-     * @throws InterruptedException if the thread is interrupted while waiting for the request
-     */
-    private void processGuid(String guid, int index) throws IOException, InterruptedException {
-        if (logger.isLoggable(java.util.logging.Level.INFO)) {
-            logger.info(String.format("Processing GUID %d %s %s", (index + 1), ": ", guid));
-        }
-        Path errorPath;
-
-        // Create JSON payload
-        ObjectMapper mapper = new ObjectMapper();
-        ObjectNode payload = mapper.createObjectNode();
-        payload.put("guid", guid);
-        payload.put("url", BENCHMARK_ALGORITHM);
-        String jsonPayload = mapper.writeValueAsString(payload);
-
-
-        // Log the payload if logging is enabled
-        if (logger.isLoggable(java.util.logging.Level.INFO)) {
-            logger.info(REQSEND + jsonPayload);
-        }
-
-        // Create HTTP request
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(API_ENDPOINT))
-                .header(ACCEPT, HEADER_VALUE)
-                .header(CONTENT_TYPE, HEADER_VALUE)
-                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
-                .timeout(Duration.ofSeconds(60))
-                .build();
-
-        try {
-            // Send request
-            HttpResponse<String> response = httpClient.send(request,
-                    HttpResponse.BodyHandlers.ofString());
-
-            // Generate HTML output filename
-            String htmlFilename = generateFilename(guid, index, "html");
-            Path htmlOutputPath = Paths.get(OUTPUT_DIR, htmlFilename);
-
-            // Write the response body to an HTML file
-            writeResponseBodyAsHtml(htmlOutputPath, response.body());
-
-            if (logger.isLoggable(java.util.logging.Level.INFO)) {
-                logger.info(RESPSAVED + (index + 1) + " to " + htmlFilename +
-                        STATUS + response.statusCode() + ")");
-            }
-
-        } catch (Exception e) {
-            logger.severe(PROCFAIL + (index + 1) + ": " + e.getMessage());
-            Thread.currentThread().interrupt(); // Restore interrupted status
-
-            // Save error information
-            try {
-                String errorFilename = ERROR + generateFilename(guid, index, "json");
-
-                // Ensure the error filename is unique
-                if (Files.exists(Paths.get(OUTPUT_DIR, errorFilename))) {
-                    errorFilename = ERROR + System.currentTimeMillis() + "_" + errorFilename;
-                    errorPath = Paths.get(OUTPUT_DIR, errorFilename);
-                } else {
-                    errorPath = Paths.get(OUTPUT_DIR, errorFilename);
-                }
-
-                String errorContent = String.format("""
-                        {
-                          "guid": "%s",
-                          "error": "%s",
-                          "timestamp": "%s"
-                        }
-                        """, escapeJson(guid), escapeJson(e.getMessage()),
-                        java.time.Instant.now().toString());
-
-                Files.write(errorPath, errorContent.getBytes());
-            } catch (IOException ioException) {
-                logger.severe(FILESAVEERROR + ioException.getMessage());
-            } catch (Exception ex) {
-                logger.severe("Error generating error filename: " + ex.getMessage());
-            } finally {
-                // Log the error
-                logger.severe("Error processing GUID " + (index + 1) + ": " + e.getMessage());
-            }
-        }
-    }
-
      /**
      * Enhanced version of processGuid that saves both HTML and JSON formats.
      * 
@@ -300,8 +174,6 @@ public class GuidApiClient {
             logger.info(String.format("Processing GUID %d: %s", (index + 1), guid));
         }
 
-        java.time.Instant requestStart = java.time.Instant.now();
-
         // Create JSON payload
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode payload = mapper.createObjectNode();
@@ -312,6 +184,9 @@ public class GuidApiClient {
         if (logger.isLoggable(java.util.logging.Level.INFO)) {
             logger.info(REQSEND + jsonPayload);
         }
+
+        // Record request start time
+        java.time.Instant requestStart = java.time.Instant.now();
 
         // Create HTTP request
         HttpRequest request = HttpRequest.newBuilder()
@@ -432,7 +307,7 @@ public class GuidApiClient {
         }
 
         // Process each GUID with specified formats
-        processGuidsWithFormats(guids, saveAsHtml, saveAsJson, saveAsStructuredJson);
+        processGuids(guids, saveAsHtml, saveAsJson, saveAsStructuredJson);
 
         if (logger.isLoggable(java.util.logging.Level.INFO)) {
             logger.info(PROCCOMP);
@@ -448,7 +323,7 @@ public class GuidApiClient {
      * @param saveAsStructuredJson Whether to save as structured JSON
      * @throws InterruptedException if processing is interrupted
      */
-    private void processGuidsWithFormats(List<String> guids, boolean saveAsHtml, 
+    private void processGuids(List<String> guids, boolean saveAsHtml, 
                                        boolean saveAsJson, boolean saveAsStructuredJson) 
             throws InterruptedException {
         
@@ -656,16 +531,6 @@ public class GuidApiClient {
         return String.format("response_%03d_%s.%s", index + 1, sanitized, suffix);
     }
 
-    private String escapeJson(String value) {
-        if (value == null)
-            return "";
-        return value.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
-    }
-
     /**
      * Runs the GUID processing workflow.
      * This is a convenience method that wraps the main method functionality
@@ -691,193 +556,11 @@ public class GuidApiClient {
         }
 
         // Process all GUID, saving only structured JSON format
-        processGuidsWithFormats(guids, false, false, true);
+        processGuids(guids, false, false, true);
+
 
         if (logger.isLoggable(java.util.logging.Level.INFO)) {
             logger.info(PROCCOMP);
-        }
-    }
-
-    /**
-     * Runs the GUID processing workflow with custom parameters.
-     * This overloaded method allows specifying custom file paths and output directory.
-     * 
-     * @param guidsFilePath Path to the file containing GUIDs
-     * @param outputDirectory Directory where results should be saved
-     * @throws IOException if file operations fail
-     * @throws InterruptedException if processing is interrupted
-     */
-    public void run(String guidsFilePath, String outputDirectory) throws IOException, InterruptedException {
-        if (logger.isLoggable(java.util.logging.Level.INFO)) {
-            logger.info(String.format("Starting GUID processing with custom paths: %s -> %s", 
-                    guidsFilePath, outputDirectory));
-        }
-        
-        // Create output directory if it doesn't exist
-        Files.createDirectories(Paths.get(outputDirectory));
-
-        // Read GUIDs from specified file
-        List<String> guids = readGuidsFromFile(guidsFilePath);
-
-        if (guids.isEmpty()) {
-            logger.info(NOGUIDS);
-            return;
-        } else if (logger.isLoggable(java.util.logging.Level.INFO)) {
-            logger.info(String.format(FOUNDGUIDS, guids.size()));
-        }
-
-        // Process each GUID with custom output directory
-        try {
-            // Use the processGuidsWithCustomOutput method
-            processGuidsWithCustomOutput(guids, outputDirectory);
-        } catch (InterruptedException ie) {
-            logger.severe("Processing was interrupted: " + ie.getMessage());
-            Thread.currentThread().interrupt(); // Restore interrupted status
-            throw ie.getMessage() != null ? ie : new InterruptedException("Processing interrupted");
-        }
-
-        if (logger.isLoggable(java.util.logging.Level.INFO)) {
-            logger.info(PROCCOMP);
-        }
-    }
-
-    /**
-     * Reads GUIDs from a specified file path.
-     * Helper method for the parameterized run() method.
-     * 
-     * @param filePath Path to the GUIDs file
-     * @return List of GUIDs
-     * @throws IOException if the file cannot be read
-     */
-    private List<String> readGuidsFromFile(String filePath) throws IOException {
-        Path guidsPath = Paths.get(filePath);
-        if (!Files.exists(guidsPath)) {
-            throw new FileNotFoundException("Could not find file: " + filePath);
-        }
-
-        return Files.readAllLines(guidsPath)
-                .stream()
-                .map(String::trim)
-                .filter(line -> !line.isEmpty() && !line.startsWith("#"))
-                .toList();
-    }
-
-    /**
-     * Processes GUIDs with a custom output directory.
-     * Similar to processGuids but allows specifying where results are saved.
-     * 
-     * @param guids List of GUIDs to process
-     * @param outputDirectory Custom output directory
-     * @throws InterruptedException if processing is interrupted
-     */
-    private void processGuidsWithCustomOutput(List<String> guids, String outputDirectory) throws InterruptedException {
-        try (ExecutorService executor = Executors.newFixedThreadPool(5)) {
-            for (int i = 0; i < guids.size(); i++) {
-                final String guid = guids.get(i);
-                final int index = i;
-
-                CompletableFuture.runAsync(() -> {
-                    try {
-                        processGuidWithCustomOutput(guid, index, outputDirectory);
-                    } catch (Exception e) {
-                        logger.severe(String.format(PROCERROR, guid, e.getMessage()));
-                        Thread.currentThread().interrupt();
-                    }
-                }, executor);
-            }
-            
-            logger.info(TASKWAIT);
-            executor.shutdown();
-            
-            if (!executor.awaitTermination(10, TimeUnit.MINUTES)) {
-                logger.severe(TASKTOOLONG);
-            } else {
-                logger.info(TASKSUCCESS);
-            }
-        }
-    }
-
-    /**
-     * Processes a single GUID with custom output directory.
-     * 
-     * @param guid The GUID to process
-     * @param index The index for filename generation
-     * @param outputDirectory Custom output directory
-     * @throws IOException if file operations fail
-     * @throws InterruptedException if the request is interrupted
-     */
-    private void processGuidWithCustomOutput(String guid, int index, String outputDirectory) 
-            throws IOException, InterruptedException {
-        
-        if (logger.isLoggable(java.util.logging.Level.INFO)) {
-            logger.info(String.format("Processing GUID %d: %s", (index + 1), guid));
-        }
-
-        // Create JSON payload using Jackson
-        ObjectMapper mapper = new ObjectMapper();
-        ObjectNode payload = mapper.createObjectNode();
-        payload.put("guid", guid);
-        payload.put("url", BENCHMARK_ALGORITHM);
-        String jsonPayload = mapper.writeValueAsString(payload);
-
-        if (logger.isLoggable(java.util.logging.Level.INFO)) {
-            logger.info(REQSEND + jsonPayload);
-        }
-
-        // Create HTTP request
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(API_ENDPOINT))
-                .header(ACCEPT, HEADER_VALUE)
-                .header(CONTENT_TYPE, HEADER_VALUE)
-                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
-                .timeout(Duration.ofSeconds(60))
-                .build();
-
-        try {
-            // Send request
-            HttpResponse<String> response = httpClient.send(request,
-                    HttpResponse.BodyHandlers.ofString());
-
-            // Generate filename and save to custom directory
-            String htmlFilename = generateFilename(guid, index, "html");
-            Path htmlOutputPath = Paths.get(outputDirectory, htmlFilename);
-
-            // Write the response body to an HTML file
-            writeResponseBodyAsHtml(htmlOutputPath, response.body());
-
-            if (logger.isLoggable(java.util.logging.Level.INFO)) {
-                logger.info(RESPSAVED + (index + 1) + " to " + htmlFilename +
-                        STATUS + response.statusCode() + ")");
-            }
-            
-            throw new IOException("Simulated error for testing"); // For testing error handling
-        } catch (IOException e) {
-            // Save error information to custom directory
-            try {
-                String errorFilename = ERROR + generateFilename(guid, index, "json");
-                Path errorPath = Paths.get(outputDirectory, errorFilename);
-
-                if (Files.exists(errorPath)) {
-                    errorFilename = ERROR + System.currentTimeMillis() + "_" + errorFilename;
-                    errorPath = Paths.get(outputDirectory, errorFilename);
-                }
-
-                String errorContent = String.format("""
-                        {
-                          "guid": "%s",
-                          "error": "%s",
-                          "timestamp": "%s"
-                        }
-                        """, escapeJson(guid), escapeJson(e.getMessage()),
-                        java.time.Instant.now().toString());
-
-                Files.write(errorPath, errorContent.getBytes());
-            } catch (IOException ioException) {
-                logger.severe(FILESAVEERROR + ioException.getMessage());
-            }
-        }   catch (Exception e) {
-            logger.severe(PROCFAIL + (index + 1) + ": " + e.getMessage());
-            Thread.currentThread().interrupt(); // Restore interrupted status
         }
     }
 }

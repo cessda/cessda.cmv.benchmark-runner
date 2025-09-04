@@ -12,7 +12,6 @@ import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -166,42 +165,6 @@ class GuidApiClientTest {
         }
     }
 
-    @Test
-    void testEscapeJson_WithSpecialCharacters() {
-        GuidApiClient testClient = new GuidApiClient();
-        
-        try {
-            java.lang.reflect.Method method = GuidApiClient.class.getDeclaredMethod(
-                "escapeJson", String.class);
-            method.setAccessible(true);
-
-            String input = "Hello \"World\"\nNew line\r\nWith\\backslash\tand\ttab";
-            String result = (String) method.invoke(testClient, input);
-
-            String expected = "Hello \\\"World\\\"\\nNew line\\r\\nWith\\\\backslash\\tand\\ttab";
-            assertEquals(expected, result);
-
-        } catch (Exception e) {
-            fail("Failed to test escapeJson method: " + e.getMessage());
-        }
-    }
-
-    @Test
-    void testEscapeJson_WithNullValue() {
-        GuidApiClient testClient = new GuidApiClient();
-        
-        try {
-            java.lang.reflect.Method method = GuidApiClient.class.getDeclaredMethod(
-                "escapeJson", String.class);
-            method.setAccessible(true);
-
-            String result = (String) method.invoke(testClient, (String) null);
-            assertEquals("", result);
-
-        } catch (Exception e) {
-            fail("Failed to test escapeJson method: " + e.getMessage());
-        }
-    }
 
     @Test
     void testJsonPayloadGeneration() throws Exception {
@@ -224,27 +187,6 @@ class GuidApiClientTest {
         assertEquals(2, parsedPayload.size()); // Should only have these two fields
     }
 
-    @Test
-    void testWriteResponseBodyAsHtml() throws Exception {
-        GuidApiClient testClient = new GuidApiClient();
-        
-        // Create a temporary file path
-        Path htmlFile = tempDir.resolve("test_response.html");
-        String responseBody = "<html><body><h1>Test Response</h1></body></html>";
-
-        // Use reflection to access the private method
-        java.lang.reflect.Method method = GuidApiClient.class.getDeclaredMethod(
-            "writeResponseBodyAsHtml", Path.class, String.class);
-        method.setAccessible(true);
-        
-        // Call the method
-        method.invoke(testClient, htmlFile, responseBody);
-
-        // Verify the file was created and contains the correct content
-        assertTrue(Files.exists(htmlFile));
-        String writtenContent = Files.readString(htmlFile);
-        assertEquals(responseBody, writtenContent);
-    }
 
     @Test
     void testMainMethod_WithEmptyGuidsFile() {
@@ -335,7 +277,15 @@ class GuidApiClientTest {
         Path originalDir = Paths.get(System.getProperty("user.dir"));
         System.setProperty("user.dir", tempDir.toString());
         
+        Path guidsFile = tempDir.resolve("guids.txt");
+        Path backupFile = tempDir.resolve("guids_backup.txt");
+        
         try {
+            // Move guids.txt if it exists
+            if (Files.exists(guidsFile)) {
+                Files.move(guidsFile, backupFile);
+            }
+            
             // Capture system output
             java.io.ByteArrayOutputStream outputStream = new java.io.ByteArrayOutputStream();
             java.io.PrintStream originalErr = System.err;
@@ -348,13 +298,24 @@ class GuidApiClientTest {
                 // Verify that appropriate error handling occurred
                 String output = outputStream.toString();
                 assertTrue(output.contains("Could not find guids.txt") || 
-                          output.contains("FileNotFoundException"));
+                        output.contains("FileNotFoundException"));
                 
             } finally {
                 System.setErr(originalErr);
             }
             
+        } catch (IOException e) {
+            fail("Failed to handle guids.txt file: " + e.getMessage());
         } finally {
+            // Restore the file if it was moved
+            try {
+                if (Files.exists(backupFile)) {
+                    Files.move(backupFile, guidsFile);
+                }
+            } catch (IOException e) {
+                // Log but don't fail the test
+                System.err.println("Warning: Could not restore guids.txt: " + e.getMessage());
+            }
             System.setProperty("user.dir", originalDir.toString());
         }
     }
@@ -403,8 +364,6 @@ class GuidApiClientTest {
         }
     }
 
-
-
      /**
      * Test the run() method wrapper
      */
@@ -421,49 +380,5 @@ class GuidApiClientTest {
                 
                 // Verify output directory was created
                 assertFalse(Files.exists(tempDir.resolve("results")));
-    }
-
-        /**
-     * Test the run() method with custom parameters
-     */
-    @SuppressWarnings("unchecked")
-    @Test
-    void testRunMethodWithCustomParams() throws Exception {
-        // Create custom guids file and output directory
-        Path customGuidsFile = tempDir.resolve("custom_guids.txt");
-        Path customOutputDir = tempDir.resolve("custom_output");
-        
-        String testGuidsContent = "https://datacatalogue.cessda.eu/detail/custom-test-guid\n";
-        Files.write(customGuidsFile, testGuidsContent.getBytes());
-        
-        try (MockedStatic<HttpClient> httpClientMock = mockStatic(HttpClient.class)) {
-            HttpClient.Builder mockBuilder = mock(HttpClient.Builder.class);
-            when(HttpClient.newBuilder()).thenReturn(mockBuilder);
-            when(mockBuilder.connectTimeout(any())).thenReturn(mockBuilder);
-            when(mockBuilder.build()).thenReturn(mockHttpClient);
-            
-            when(mockResponse.statusCode()).thenReturn(200);
-            when(mockResponse.body()).thenReturn("<html>Custom Response</html>");
-            when(mockHttpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
-                .thenReturn(mockResponse);
-            
-            // Test the parameterized run method
-            GuidApiClient testClient = new GuidApiClient();
-            testClient.run(customGuidsFile.toString(), customOutputDir.toString());
-            
-            // Allow time for processing
-            Thread.sleep(1000);
-            
-            // Verify custom output directory was used
-            assertTrue(Files.exists(customOutputDir));
-            
-            List<Path> htmlFiles = Files.list(customOutputDir)
-                .filter(path -> path.toString().endsWith(".html"))
-                .toList();
-            assertEquals(1, htmlFiles.size());
-            
-            String content = Files.readString(htmlFiles.get(0));
-            assertTrue(content.contains("Custom Response"));
-        }
     }
 }
