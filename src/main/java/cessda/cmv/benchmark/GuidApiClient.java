@@ -54,7 +54,7 @@ public class GuidApiClient {
     private static final String TASKSUCCESS = "All tasks completed successfully.";
     private static final String REQSEND = "Sending request to API with payload: ";
     private static final String FILESAVEERROR = "Could not save error file: ";
-
+    private static String spreadsheetUri = "";
     private static Logger logger = Logger.getLogger(GuidApiClient.class.getName());
 
     // HTTP client with a 30-second connection timeout
@@ -88,7 +88,6 @@ public class GuidApiClient {
         logger.setLevel(Level.INFO);
 
          // Check for command line argument, otherwise use default
-        String spreadsheetUri;
         if (args.length > 0) {
             try {
                 URI.create(args[0]); // Validate URI format
@@ -197,7 +196,7 @@ public class GuidApiClient {
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode payload = mapper.createObjectNode();
         payload.put("guid", guid);
-        payload.put("url", BENCHMARK_ALGORITHM_URI);
+        payload.put("url", spreadsheetUri);
         String jsonPayload = mapper.writeValueAsString(payload);
 
         if (logger.isLoggable(java.util.logging.Level.INFO)) {
@@ -209,7 +208,7 @@ public class GuidApiClient {
 
         // Create HTTP request
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(BENCHMARK_ALGORITHM_URI))
+                .uri(URI.create(spreadsheetUri))
                 .header(ACCEPT, HEADER_VALUE)
                 .header(CONTENT_TYPE, HEADER_VALUE)
                 .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
@@ -479,7 +478,7 @@ public class GuidApiClient {
             
             // Add request details
             ObjectNode requestDetails = mapper.createObjectNode();
-            requestDetails.put("endpoint", BENCHMARK_ALGORITHM_URI);
+            requestDetails.put("endpoint", spreadsheetUri);
             requestDetails.put("method", "POST");
             jsonResponse.set("requestDetails", requestDetails);
             
