@@ -22,14 +22,40 @@ Java 21 or greater is required to build and run this application.
 
 ## Customisation
 
-To use a different QA algorithm configuration spreadsheet, provide it as a command line argument,
-for example
-`mvn exec:java -Dexec.args=https://tools.ostrails.eu/champion/algorithms/16s2klErdtZck2b6i2Zp_PjrgpBBnnrBKaAvTwrnMB4w
+In the top level directory (i.e. where the pom.xml file is located)
+you can do the following:
+
+1 Use a different QA algorithm configuration spreadsheet, by providing it as a command line argument, for example:
+
+`mvn exec:java -Dexec.args="-s https://tools.ostrails.eu/champion/algorithms/16s2klErdtZck2b6i2Zp_PjrgpBBnnrBKaAvTwrnMB4w"
+`
+
+or
+
+`mvn exec:java -Dexec.args="--spreadsheet https://tools.ostrails.eu/champion/algorithms/16s2klErdtZck2b6i2Zp_PjrgpBBnnrBKaAvTwrnMB4w"
 `
 
 Note this must be the URL of spreadsheet that is registered in FAIR Champion.
+
 You can register a new Google spreadsheet with [FAIR Champion](https://tools.ostrails.eu/champion/algorithms/new).
 You must publish the spreadsheet to the web and use the resulting URL to register it.
+
+2 Use a different filename for the list of GUID to test, by providing it as a command line argument,
+(file must be located in `resources` directory) for example:
+
+`mvn exec:java -Dexec.args="--filename guids2.txt"`
+
+or
+
+`mvn exec:java -Dexec.args="-f guids2.txt"`
+
+3 Get help with the command line arguments
+
+`mvn exec:java -Dexec.args="--help"`
+
+or
+
+`mvn exec:java -Dexec.args="-h"`
 
 ## Project Structure
 

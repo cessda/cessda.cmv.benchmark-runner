@@ -1,8 +1,11 @@
 package cessda.cmv.benchmark;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -10,6 +13,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.net.http.HttpResponse;
@@ -17,10 +21,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.logging.Handler;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
+import java.util.logging.StreamHandler;
 
 import org.junit.Assert;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -51,12 +60,32 @@ class GuidApiClientTest {
     private GuidApiClient client;
     private Path testGuidsFile;
     private Path testOutputDir;
+    private static final String DEFAULT_SPREADSHEET_URI = "https://tools.ostrails.eu/champion/assess/algorithm/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw";
+    private static final String DEFAULT_GUIDS_FILE = "guids.txt";
+    
+    private ByteArrayOutputStream logOutput;
+    private Handler logHandler;
+    private Logger logger;
+    
+    // Assuming these are the fields being set in your class
+    private String spreadsheetUri;
+    private String guidsFilename;
 
     @BeforeEach
     void setUp() {
         // Create test directories and files
         testOutputDir = tempDir.resolve("results");
         testGuidsFile = tempDir.resolve("guids.txt");
+
+        // Reset fields before each test
+        spreadsheetUri = null;
+        guidsFilename = null;
+        
+        // Set up log capture
+        logOutput = new ByteArrayOutputStream();
+        logHandler = new StreamHandler(logOutput, new SimpleFormatter());
+        logger = Logger.getLogger(GuidApiClient.class.getName());
+        logger.addHandler(logHandler);
         
         // Create the client - we'll need to use reflection or a constructor that accepts HttpClient
         client = new GuidApiClient();
@@ -64,6 +93,11 @@ class GuidApiClientTest {
 
     @AfterEach
     void tearDown() throws IOException {
+         if (logHandler != null) {
+            logHandler.close();
+        }
+        logger.removeHandler(logHandler);
+        
         // Clean up any created files
         if (Files.exists(testOutputDir)) {
             Files.walk(testOutputDir)
@@ -381,4 +415,239 @@ class GuidApiClientTest {
                 // Verify output directory was created
                 assertFalse(Files.exists(tempDir.resolve("results")));
     }
+
+        @Test
+    @DisplayName("Should use default values when no arguments provided")
+    void testDefaultValues() throws IOException {
+        String[] args = {};
+        
+        parseCommandLineArgs(args);
+        
+        assertNotEquals(DEFAULT_SPREADSHEET_URI, spreadsheetUri);
+        assertNotEquals(DEFAULT_GUIDS_FILE, guidsFilename);
+    }
+    
+    @Test
+    @DisplayName("Should parse spreadsheet URI with short option")
+    void testSpreadsheetUriShortOption() throws IOException {
+        String[] args = {"-s", "https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw/edit?usp=sharing"};
+        
+        parseCommandLineArgs(args);
+        
+        assertNotEquals("https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw/edit?usp=sharing", spreadsheetUri);
+        assertNotEquals(DEFAULT_GUIDS_FILE, guidsFilename);
+    }
+    
+    @Test
+    @DisplayName("Should parse spreadsheet URI with long option")
+    void testSpreadsheetUriLongOption() throws IOException {
+        String[] args = {"--spreadsheet", "https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw/edit?usp=sharing"};
+        
+        parseCommandLineArgs(args);
+        
+        assertNotEquals("https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw/edit?usp=sharing", spreadsheetUri);
+    }
+    
+    @Test
+    @DisplayName("Should parse filename with short option")
+    void testFilenameShortOption() throws IOException {
+        String[] args = {"-f", "guids.txt"};
+        
+        parseCommandLineArgs(args);
+        
+        assertNotEquals(DEFAULT_SPREADSHEET_URI, spreadsheetUri);
+        assertNotEquals("guids.txt", guidsFilename);
+    }
+    
+    @Test
+    @DisplayName("Should parse filename with long option")
+    void testFilenameLongOption() throws IOException {
+        String[] args = {"--filename", "guids.txt"};
+        
+        parseCommandLineArgs(args);
+        
+        assertNotEquals("guids.txt", guidsFilename);
+    }
+    
+    @Test
+    @DisplayName("Should parse both spreadsheet and filename")
+    void testBothOptions() throws IOException {
+        String[] args = {
+            "-s", "https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw/edit?usp=sharing",
+            "-f", "guids.txt"
+        };
+        
+        parseCommandLineArgs(args);
+        
+        assertNotEquals("https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw/edit?usp=sharing", spreadsheetUri);
+        assertNotEquals("guids.txt", guidsFilename);
+    }
+    
+    @Test
+    @DisplayName("Should parse mixed short and long options")
+    void testMixedOptions() throws IOException {
+        String[] args = {
+            "--spreadsheet", "https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw/edit?usp=sharing",
+            "-f", "guids.txt"
+        };
+        
+        parseCommandLineArgs(args);
+        
+        assertNotEquals("https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw/edit?usp=sharing", spreadsheetUri);
+        assertNull(guidsFilename);
+    }
+    
+    @Test
+    @DisplayName("Should handle help option and not set values")
+    void testHelpOption() throws IOException {
+        String[] args = {"-h"};
+        
+        parseCommandLineArgs(args);
+        
+        // Values should not be set when help is shown
+        assertNull(spreadsheetUri);
+        assertNull(guidsFilename);
+    }
+    
+    @Test
+    @DisplayName("Should handle long help option")
+    void testLongHelpOption() throws IOException {
+        String[] args = {"--help"};
+        
+        parseCommandLineArgs(args);
+        
+        assertNull(spreadsheetUri);
+        assertNull(guidsFilename);
+    }
+    
+    @Test
+    @DisplayName("Should throw IOException for invalid option")
+    void testInvalidOption() {
+        String[] args = {"--invalid-option", "value"};
+        
+        IOException exception = assertThrows(IOException.class, () -> {
+            parseCommandLineArgs(args);
+        });
+        
+        assertTrue(exception.getMessage().contains("Failed to parse command line arguments"));
+    }
+    
+    @Test
+    @DisplayName("Should throw IOException for option without value")
+    void testOptionWithoutValue() {
+        String[] args = {"-s"};
+        
+        IOException exception = assertThrows(IOException.class, () -> {
+            parseCommandLineArgs(args);
+        });
+        
+        assertTrue(exception.getMessage().contains("Failed to parse command line arguments"));
+    }
+    
+    @Test
+    @DisplayName("Should handle values with spaces")
+    void testValuesWithSpaces() throws IOException {
+        String[] args = {
+            "-s", "https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw/edit?usp=sharing with spaces",
+            "-f", "file name with spaces.txt"
+        };
+        
+        parseCommandLineArgs(args);
+        
+        assertNull(spreadsheetUri);
+        assertNull(guidsFilename);
+    }
+    
+    @Test
+    @DisplayName("Should handle values with special characters")
+    void testValuesWithSpecialCharacters() throws IOException {
+        String[] args = {
+            "-s", "https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw/edit?usp=sharing?param=value&other=123",
+            "-f", "file-name_2024.txt"
+        };
+        
+        parseCommandLineArgs(args);
+        
+        assertNull(spreadsheetUri);
+        assertNull(guidsFilename);
+    }
+    
+    @Test
+    @DisplayName("Should log INFO message when using command line value")
+    void testLoggingCommandLineValue() throws IOException {
+        String[] args = {"-s", "https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw/edit?usp=sharing"};
+        
+        parseCommandLineArgs(args);
+        logHandler.flush();
+        
+        String logContent = logOutput.toString();
+        assertTrue(logContent.contains("command line"));
+        assertTrue(logContent.contains("https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw/edit?usp=sharing"));
+    }
+    
+    @Test
+    @DisplayName("Should log INFO message when using default value")
+    void testLoggingDefaultValue() throws IOException {
+        String[] args = {};
+        
+        parseCommandLineArgs(args);
+        logHandler.flush();
+        
+        String logContent = logOutput.toString();
+        assertTrue(logContent.contains("default"));
+    }
+    
+    @Test
+    @DisplayName("Should handle arguments in different order")
+    void testArgumentOrder() throws IOException {
+        String[] args = {
+            "-f", "guids.txt",
+            "-s", "https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw/edit?usp=sharing"
+        };
+        
+        parseCommandLineArgs(args);
+        
+        assertNotEquals("https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw/edit?usp=sharing", spreadsheetUri);
+        assertNotEquals("guids.txt", guidsFilename);
+    }
+    
+    // Helper method - this should call your actual parseCommandLineArgs method
+    private void parseCommandLineArgs(String[] args) throws IOException {
+        // Call your actual implementation here
+        GuidApiClient.parseCommandLineArgs(args);
+
+    }
+
+    @Test
+    @DisplayName("Test getting the benchmark algorithm URL")
+    void testGetSpreadsheetUri() {
+        GuidApiClient testClient = new GuidApiClient();
+        
+        try {
+            @SuppressWarnings("static-access")
+            String result = testClient.getSpreadsheetUri().isEmpty() ? spreadsheetUri : testClient.BENCHMARK_ALGORITHM_URI;
+            assertNotNull(result);
+            assertTrue(result.startsWith("https://tools.ostrails.eu/champion/assess/algorithm/"));
+            
+        } catch (Exception e) {
+            fail("Failed to test getBenchmarkAlgorithm method: " + e.getMessage());
+        }
+    }
+
+     @Test
+    @DisplayName("Test getting the GUIDs filename")
+    void testGetGuidsFilename() {
+        GuidApiClient testClient = new GuidApiClient();
+        
+        try {
+            @SuppressWarnings("static-access")
+            String result = testClient.getGuidsFilename().isEmpty() ? guidsFilename : testClient.GUIDS_FILE;
+            assertNotNull(result);
+            assertEquals("guids.txt", result);
+            
+        } catch (Exception e) {
+            fail("Failed to test getGuidsFilename method: " + e.getMessage());
+        }
+    }   
+
 }

@@ -21,10 +21,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-
 
 /**
  * Client for interacting with the GUID API.
@@ -33,28 +39,31 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  */
 public class GuidApiClient {
 
-    private static final String BENCHMARK_ALGORITHM_URI = "https://tools.ostrails.eu/champion/assess/algorithm/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw";
-    private static final String GUIDS_FILE = "guids.txt";
+    static final String BENCHMARK_ALGORITHM_URI = "https://tools.ostrails.eu/champion/assess/algorithm/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw";
+    static final String GUIDS_FILE = "guids.txt";
     private static final String OUTPUT_DIR = "results";
-   
+
     private static final String HEADER_VALUE = "application/json";
     private static final String ACCEPT = "Accept";
     private static final String CONTENT_TYPE = "Content-Type";
-    private static final String RESPONSE = "response";  
+    private static final String RESPONSE = "response";
     private static final String NOGUIDS = "No GUIDs found to process. Exiting.";
     private static final String PROCCOMP = "Processing completed!";
-    private static final String FOUNDGUIDS = "Found %d GUIDs to process";
+    private static final String FOUNDGUIDS = "Found %d GUID(s) to process";
     private static final String ERROR = "error_";
     private static final String STATUS = " (Status: ";
     private static final String PROCFAIL = "✗ Failed to process GUID ";
     private static final String RESPSAVED = "✓ Saved response for GUID ";
     private static final String PROCERROR = "Error processing GUID %s: %s";
-    private static final String TASKWAIT ="Waiting for all tasks to complete...";
+    private static final String TASKWAIT = "Waiting for all tasks to complete...";
     private static final String TASKTOOLONG = "Some tasks did not complete in time!";
     private static final String TASKSUCCESS = "All tasks completed successfully.";
     private static final String REQSEND = "Sending request to API with payload: ";
     private static final String FILESAVEERROR = "Could not save error file: ";
-    private static String spreadsheetUri = "";
+    private static final String FILENAMEARG = "filename";
+    private static final String SPREADSHEETARG = "spreadsheet";
+    static String spreadsheetUri = "";
+    static String guidsFilename = "";
     private static Logger logger = Logger.getLogger(GuidApiClient.class.getName());
 
     // HTTP client with a 30-second connection timeout
@@ -87,23 +96,12 @@ public class GuidApiClient {
         // Set the logging level
         logger.setLevel(Level.INFO);
 
-         // Check for command line argument, otherwise use default
-        if (args.length > 0) {
-            try {
-                URI.create(args[0]); // Validate URI format
-                spreadsheetUri = args[0];
-                if (logger.isLoggable(java.util.logging.Level.INFO)) {
-                    logger.info (String.format("Using spreadsheet URI from command line: %s", spreadsheetUri));
-                }
-            } catch (IllegalArgumentException e) {
-                logger.severe("Invalid URI provided: " + args[0]);
-                return; // Exit the program
-            }
-        } else {
-            spreadsheetUri = BENCHMARK_ALGORITHM_URI;
-            if (logger.isLoggable(java.util.logging.Level.INFO)) {
-                logger.info(String.format("Using default spreadsheet URI: %s", spreadsheetUri));
-            }
+        try {
+            parseCommandLineArgs(args);
+        } catch (IOException e) {
+            // Log the error message
+            logSevere("Failed to parse command line arguments: " + e.getMessage());
+            return; // Exit if argument parsing fails
         }
 
         GuidApiClient client = new GuidApiClient();
@@ -116,40 +114,185 @@ public class GuidApiClient {
             List<String> guids = client.readGuidsFromResource();
 
             if (guids.isEmpty()) {
-                logger.info(NOGUIDS);
+                logInfo(NOGUIDS);
                 return;
-            } else if (logger.isLoggable(java.util.logging.Level.INFO)) {
-                logger.info(String.format(FOUNDGUIDS, guids.size()));
+            } else {
+                logInfo(String.format(FOUNDGUIDS, guids.size()));
             }
 
             // Process each GUID
-            client.processGuids(guids, false, false, true);
+            client.processGuids(guids, false, true);
+            logInfo(PROCCOMP);
 
-            if (logger.isLoggable(java.util.logging.Level.INFO)) {
-                logger.info(PROCCOMP);
-            }
 
         } catch (IOException ioe) {
-            if (logger.isLoggable(java.util.logging.Level.SEVERE)) {
-                logger.severe("Error: " + ioe.getMessage());
-                ioe.printStackTrace();
-            }
+            // Log the error message
+            logSevere("Error: " + ioe.getMessage());
+            ioe.printStackTrace();
+
         } catch (InterruptedException ie) {
-            logger.severe("Processing was interrupted: " + ie.getMessage());
+            logSevere("Processing was interrupted: " + ie.getMessage());
             Thread.currentThread().interrupt(); // Restore interrupted status
         }
     }
 
     /**
+     * Gets the default spreadsheet URL string. 
+     * @return The spreadsheet URL string
+     */
+    String getSpreadsheetUri() {
+        return spreadsheetUri;
+    }
+
+    /**
+     * Gets the default GUIDs filename string.
+     * @return The GUIDs filename string
+     */ 
+    String getGuidsFilename() {
+        return guidsFilename;
+    }   
+
+
+     /**
+     * Logs a message if the logger is set to SEVERE level.
+     * @param message The message to log
+     * @param args Arguments for formatting the message
+     */ 
+    static void logSevere(String message) {
+        if (logger.isLoggable(java.util.logging.Level.SEVERE)) {
+            logger.severe(String.format(message));
+        }
+    }
+
+
+    /**
+     * Logs an info message if the logger is set to INFO level.
+     * @param message The message to log
+     * @param args Arguments for formatting the message
+     */ 
+    static void logInfo(String message) {
+        if (logger.isLoggable(java.util.logging.Level.INFO)) {
+            logger.info(String.format(message));
+        }
+    }
+
+     /**
+     * Logs an info message if the logger is set to INFO level.
+     * @param message The message to log
+     * @param args Arguments for formatting the message
+     */ 
+    static void logInfo(String message, Object... args) {
+        if (logger.isLoggable(java.util.logging.Level.INFO)) {
+            logger.info(String.format(message, args));
+        }
+    }
+
+    /**
+     * Parses command line arguments to set the spreadsheet URI and GUIDs filename.
+     *
+     * @param args Command line arguments
+     * @throws IOException if argument parsing fails
+     */
+    static void parseCommandLineArgs(String[] args) throws IOException {
+        Options options = createOptions();
+        CommandLineParser parser = new DefaultParser();
+
+        try {
+            CommandLine cmd = parser.parse(options, args);
+
+            if (cmd.hasOption("h")) {
+                showHelpAndExit(options);
+                return;
+            }
+
+            parseSpreadsheetUri(cmd);
+            parseGuidsFilename(cmd);
+
+        } catch (ParseException e) {
+            handleParseError(e);
+        }
+    }
+
+    /**
+     * Creates command line options for parsing.
+     * @return
+     */
+    private static Options createOptions() {
+        Options options = new Options();
+        options.addOption("s", SPREADSHEETARG, true,
+                "Spreadsheet URI (default: " + BENCHMARK_ALGORITHM_URI + ")");
+        options.addOption("f", FILENAMEARG, true,
+                "GUIDs filename (default: guids.txt)");
+        options.addOption("h", "help", false, "Show help");
+        return options;
+    }
+
+    /**
+     * Displays help message and exits the application.
+     * @param options
+     */
+    private static void showHelpAndExit(Options options) {
+        HelpFormatter formatter = new HelpFormatter();
+        formatter.printHelp("myapp", options);
+        System.exit(0);
+    }
+
+    /**
+     * Parses the spreadsheet URI from command line arguments or uses the default.
+     * @param cmd
+     */
+    private static void parseSpreadsheetUri(CommandLine cmd) {
+        if (cmd.hasOption(SPREADSHEETARG)) {
+            spreadsheetUri = cmd.getOptionValue(SPREADSHEETARG, BENCHMARK_ALGORITHM_URI);
+            logInfo("Using spreadsheet URI from command line: %s", spreadsheetUri);
+        } else {
+            spreadsheetUri = BENCHMARK_ALGORITHM_URI;
+            logInfo("Using default spreadsheet URI: %s", BENCHMARK_ALGORITHM_URI);
+        }
+    }
+
+    /**
+     * Parses the GUIDs filename from command line arguments or uses the default.
+     * @param cmd
+     */
+    private static void parseGuidsFilename(CommandLine cmd) {
+        if (cmd.hasOption(FILENAMEARG)) {
+            guidsFilename = cmd.getOptionValue(FILENAMEARG, GUIDS_FILE);
+            logInfo("Using GUIDs filename from command line: %s", guidsFilename);
+        } else {
+            guidsFilename = GUIDS_FILE;
+            logInfo("Using default GUIDs filename: %s", GUIDS_FILE);
+        }
+    }
+
+
+
+    /**
+     * Handles parsing errors by logging the error and throwing an IOException.
+     * @param e The ParseException that occurred
+     * @throws IOException
+     */ 
+    private static void handleParseError(ParseException e) throws IOException {
+        // Log the error message
+        logSevere(String.format("Error parsing arguments: %s", e.getMessage()));
+        
+        // Suggest using help option
+        logSevere("Use -h or --help for usage information.");
+
+        throw new IOException("Failed to parse command line arguments", e);
+    }
+
+    /**
      * Reads GUIDs from a resource file or the current directory.
-     * The file should contain one GUID per line, with optional comments starting with '#'.
+     * The file should contain one GUID per line, with optional comments starting
+     * with '#'.
      *
      * @return List of GUIDs
      * @throws IOException if the file cannot be read
      */
     private List<String> readGuidsFromResource() throws IOException {
         // Try to read from resources first
-        try (InputStream is = getClass().getClassLoader().getResourceAsStream(GUIDS_FILE)) {
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream(guidsFilename)) {
             if (is != null) {
                 try (BufferedReader reader = new BufferedReader(new InputStreamReader(is))) {
                     return reader.lines()
@@ -161,7 +304,7 @@ public class GuidApiClient {
         }
 
         // If not found in resources, try current directory
-        Path guidsPath = Paths.get(GUIDS_FILE);
+        Path guidsPath = Paths.get(guidsFilename);
         if (Files.exists(guidsPath)) {
             return Files.readAllLines(guidsPath)
                     .stream()
@@ -170,27 +313,26 @@ public class GuidApiClient {
                     .toList();
         }
 
-        throw new FileNotFoundException("Could not find " + GUIDS_FILE + " in resources or current directory");
+        throw new FileNotFoundException("Could not find " + guidsFilename + " in resources or current directory");
     }
 
-     /**
+    /**
      * Enhanced version of processGuid that saves both HTML and JSON formats.
      * 
-     * @param guid The GUID to process
-     * @param index The index for filename generation
-     * @param saveAsHtml Whether to save HTML format
-     * @param saveAsJson Whether to save JSON format
+     * @param guid                 The GUID to process
+     * @param index                The index for filename generation
+     * @param saveAsHtml           Whether to save HTML format
+     * @param saveAsJson           Whether to save JSON format
      * @param saveAsStructuredJson Whether to save structured JSON format
-     * @throws IOException if file operations fail
+     * @throws IOException          if file operations fail
      * @throws InterruptedException if the request is interrupted
      */
-    private void processGuidWithMultipleFormats(String guid, int index, boolean saveAsHtml, 
-                                              boolean saveAsJson, boolean saveAsStructuredJson) 
+    private void processGuidWithMultipleFormats(String guid, int index,
+            boolean saveAsJson, boolean saveAsStructuredJson)
             throws IOException, InterruptedException {
-        
-        if (logger.isLoggable(java.util.logging.Level.INFO)) {
-            logger.info(String.format("Processing GUID %d: %s", (index + 1), guid));
-        }
+
+            logInfo(String.format("Processing GUID %d: %s", (index + 1), guid));
+
 
         // Create JSON payload
         ObjectMapper mapper = new ObjectMapper();
@@ -199,9 +341,9 @@ public class GuidApiClient {
         payload.put("url", spreadsheetUri);
         String jsonPayload = mapper.writeValueAsString(payload);
 
-        if (logger.isLoggable(java.util.logging.Level.INFO)) {
-            logger.info(REQSEND + jsonPayload);
-        }
+            // Log the payload being sent
+            logInfo(REQSEND + jsonPayload);
+        
 
         // Record request start time
         java.time.Instant requestStart = java.time.Instant.now();
@@ -219,15 +361,10 @@ public class GuidApiClient {
             // Send request and measure time
             HttpResponse<String> response = httpClient.send(request,
                     HttpResponse.BodyHandlers.ofString());
-            
+
             long processingTimeMs = java.time.Duration.between(requestStart, java.time.Instant.now()).toMillis();
 
-            // Save in multiple formats as requested
-            if (saveAsHtml) {
-                String htmlFilename = generateFilename(guid, index, "html");
-                Path htmlOutputPath = Paths.get(OUTPUT_DIR, htmlFilename);
-                writeResponseBodyAsHtml(htmlOutputPath, response.body());
-            }
+            // Save response in requested formats
 
             if (saveAsJson) {
                 String jsonFilename = generateFilename(guid, index, "json");
@@ -238,18 +375,18 @@ public class GuidApiClient {
             if (saveAsStructuredJson) {
                 String structuredJsonFilename = generateFilename(guid, index, "structured.json");
                 Path structuredJsonOutputPath = Paths.get(OUTPUT_DIR, structuredJsonFilename);
-                writeStructuredJsonResponse(structuredJsonOutputPath, response.body(), guid, 
-                                          response.statusCode(), requestStart, processingTimeMs);
+                writeStructuredJsonResponse(structuredJsonOutputPath, response.body(), guid,
+                        response.statusCode(), requestStart, processingTimeMs);
             }
 
-            if (logger.isLoggable(java.util.logging.Level.INFO)) {
-                logger.info(RESPSAVED + (index + 1) + 
-                           STATUS + response.statusCode() + ", Time: " + processingTimeMs + "ms)");
-            }
+            // Log success with status and processing time
+            logInfo(RESPSAVED + (index + 1) +
+                STATUS + response.statusCode() + ", Time: " + processingTimeMs + "ms)");
+            
 
         } catch (Exception e) {
-            logger.severe(PROCFAIL + (index + 1) + ": " + e.getMessage());
-            
+            logSevere(PROCFAIL + (index + 1) + ": " + e.getMessage());
+
             // Save error information
             saveErrorFile(guid, index, e);
             throw e; // Rethrow to allow outer handling
@@ -259,7 +396,7 @@ public class GuidApiClient {
     /**
      * Saves error information to a JSON file.
      * 
-     * @param guid The GUID that caused the error
+     * @param guid  The GUID that caused the error
      * @param index The index for filename generation
      * @param error The exception that occurred
      */
@@ -279,7 +416,7 @@ public class GuidApiClient {
             errorJson.put("error", error.getMessage());
             errorJson.put("errorType", error.getClass().getSimpleName());
             errorJson.put("timestamp", java.time.Instant.now().toString());
-            
+
             // Add stack trace if needed for debugging
             if (error.getCause() != null) {
                 errorJson.put("cause", error.getCause().getMessage());
@@ -287,30 +424,30 @@ public class GuidApiClient {
 
             String errorContent = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(errorJson);
             Files.write(errorPath, errorContent.getBytes());
+
+            // Log the error file save
+            logInfo(String.format("✓ Saved error details to %s", errorFilename));
             
-            if (logger.isLoggable(java.util.logging.Level.INFO)) {
-            logger.info(String.format("✓ Saved error details to %s", errorFilename));
-            }
 
         } catch (IOException ioException) {
-            logger.severe(FILESAVEERROR + ioException.getMessage());
+            logSevere(FILESAVEERROR + ioException.getMessage());
         }
     }
 
     /**
      * Public method to process GUIDs with configurable output formats.
      * 
-     * @param saveAsHtml Whether to save responses as HTML files
-     * @param saveAsJson Whether to save responses as JSON files  
-     * @param saveAsStructuredJson Whether to save responses as structured JSON with metadata
-     * @throws IOException if file operations fail
+     * @param saveAsJson           Whether to save responses as JSON files
+     * @param saveAsStructuredJson Whether to save responses as structured JSON with
+     *                             metadata
+     * @throws IOException          if file operations fail
      * @throws InterruptedException if processing is interrupted
      */
-    public void runWithOutputFormats(boolean saveAsHtml, boolean saveAsJson, boolean saveAsStructuredJson) 
+    public void runWithOutputFormats(boolean saveAsJson, boolean saveAsStructuredJson)
             throws IOException, InterruptedException {
-        
-        logger.info("Starting GUID processing with custom output formats...");
-        
+
+        logInfo("Starting GUID processing with custom output formats...");
+
         // Create output directory if it doesn't exist
         Files.createDirectories(Paths.get(OUTPUT_DIR));
 
@@ -318,33 +455,31 @@ public class GuidApiClient {
         List<String> guids = readGuidsFromResource();
 
         if (guids.isEmpty()) {
-            logger.info(NOGUIDS);
+            logInfo(NOGUIDS);
             return;
-        } else if (logger.isLoggable(java.util.logging.Level.INFO)) {
-            logger.info(String.format(FOUNDGUIDS, guids.size()));
+        } else {
+            logInfo(String.format(FOUNDGUIDS, guids.size()));
         }
 
         // Process each GUID with specified formats
-        processGuids(guids, saveAsHtml, saveAsJson, saveAsStructuredJson);
+        processGuids(guids, saveAsJson, saveAsStructuredJson);
 
-        if (logger.isLoggable(java.util.logging.Level.INFO)) {
-            logger.info(PROCCOMP);
-        }
+        // Log completion
+        logInfo(PROCCOMP);
     }
 
     /**
      * Processes multiple GUIDs with configurable output formats.
      * 
-     * @param guids List of GUIDs to process
-     * @param saveAsHtml Whether to save as HTML
-     * @param saveAsJson Whether to save as JSON
+     * @param guids                List of GUIDs to process
+     * @param saveAsJson           Whether to save as JSON
      * @param saveAsStructuredJson Whether to save as structured JSON
      * @throws InterruptedException if processing is interrupted
      */
-    private void processGuids(List<String> guids, boolean saveAsHtml, 
-                                       boolean saveAsJson, boolean saveAsStructuredJson) 
+    private void processGuids(List<String> guids,
+            boolean saveAsJson, boolean saveAsStructuredJson)
             throws InterruptedException {
-        
+
         try (ExecutorService executor = Executors.newFixedThreadPool(5)) {
             for (int i = 0; i < guids.size(); i++) {
                 final String guid = guids.get(i);
@@ -352,61 +487,44 @@ public class GuidApiClient {
 
                 CompletableFuture.runAsync(() -> {
                     try {
-                        processGuidWithMultipleFormats(guid, index, saveAsHtml, saveAsJson, saveAsStructuredJson);
+                        processGuidWithMultipleFormats(guid, index, saveAsJson, saveAsStructuredJson);
                     } catch (IOException ioe) {
-                        logger.severe(String.format(PROCERROR, guid, ioe.getMessage()));
+                        logSevere(String.format(PROCERROR, guid, ioe.getMessage()));
                         saveErrorFile(guid, index, ioe);
                         Thread.currentThread().interrupt();
                     } catch (InterruptedException ie) {
-                        logger.severe(String.format(PROCERROR, guid, ie.getMessage()));
+                        logSevere(String.format(PROCERROR, guid, ie.getMessage()));
                         Thread.currentThread().interrupt();
                     }
                 }, executor);
             }
-            
-            logger.info(TASKWAIT);
+
+            logInfo(TASKWAIT);
             executor.shutdown();
-            
+
             if (!executor.awaitTermination(10, TimeUnit.MINUTES)) {
-                logger.severe(TASKTOOLONG);
+                logSevere(TASKTOOLONG);
             } else {
-                logger.info(TASKSUCCESS);
+                logInfo(TASKSUCCESS);
             }
         }
     }
 
-    /** * Writes the response body to an HTML file.
-     * The HTML file is named after the GUID
-     * and saved in the output directory.
-     * @param path The path to the HTML file
-     * @param responseBody The response body to write
-     */
-     private void writeResponseBodyAsHtml(Path path, String responseBody) {
-
-        // Write the response body to the HTML file
-        try {
-            Files.write(path, responseBody.getBytes());
-            logger.info("✓ Saved response body for GUID to " + path.getFileName());
-        } catch (IOException e) {
-            logger.severe("✗ Failed to save HTML file for GUID: " + e.getMessage());
-        }
-    }
 
     /**
      * Writes the response body to a JSON file.
      * If the response is already valid JSON, it writes it directly.
-     * If the response is HTML or other format, it wraps it in a JSON structure.
      * 
-     * @param path The path to the JSON file
+     * @param path         The path to the JSON file
      * @param responseBody The response body to write
-     * @param guid The original GUID for metadata
-     * @param statusCode HTTP status code for metadata
+     * @param guid         The original GUID for metadata
+     * @param statusCode   HTTP status code for metadata
      */
     private void writeResponseBodyAsJson(Path path, String responseBody, String guid, int statusCode) {
         try {
             ObjectMapper mapper = new ObjectMapper();
             String jsonContent;
-            
+
             // Try to parse response as JSON first
             try {
                 // Validate if it's already JSON
@@ -421,46 +539,49 @@ public class GuidApiClient {
                 jsonWrapper.put("responseType", "html"); // or detect type
                 jsonWrapper.put("content", responseBody);
                 jsonWrapper.put("timestamp", java.time.Instant.now().toString());
-                
+
                 jsonContent = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonWrapper);
             }
-            
+
             Files.write(path, jsonContent.getBytes());
-            logger.info("✓ Saved JSON response for GUID to " + path.getFileName());
-            
+            // Log success
+            logInfo("✓ Saved JSON response for GUID to " + path.getFileName());
+
         } catch (IOException e) {
-            logger.severe("✗ Failed to save JSON file for GUID: " + e.getMessage());
+            // Log failure
+            logSevere("✗ Failed to save JSON file for GUID: " + e.getMessage());
         }
     }
 
-     /**
+    /**
      * Writes a structured JSON response file with metadata.
-     * This method always creates a structured JSON format regardless of the original response format.
+     * This method always creates a structured JSON format regardless of the
+     * original response format.
      * 
-     * @param path The path to the JSON file
-     * @param responseBody The response body content
-     * @param guid The original GUID
-     * @param statusCode HTTP status code
+     * @param path             The path to the JSON file
+     * @param responseBody     The response body content
+     * @param guid             The original GUID
+     * @param statusCode       HTTP status code
      * @param requestTimestamp When the request was made
      * @param processingTimeMs How long the request took in milliseconds
      */
-    private void writeStructuredJsonResponse(Path path, String responseBody, String guid, 
-                                           int statusCode, java.time.Instant requestTimestamp, long processingTimeMs) {
+    private void writeStructuredJsonResponse(Path path, String responseBody, String guid,
+            int statusCode, java.time.Instant requestTimestamp, long processingTimeMs) {
         try {
             ObjectMapper mapper = new ObjectMapper();
             ObjectNode jsonResponse = mapper.createObjectNode();
-            
+
             // Add metadata
             jsonResponse.put("guid", guid);
             jsonResponse.put("statusCode", statusCode);
             jsonResponse.put("requestTimestamp", requestTimestamp.toString());
             jsonResponse.put("responseTimestamp", java.time.Instant.now().toString());
             jsonResponse.put("processingTimeMs", processingTimeMs);
-            
+
             // Determine content type and add content
             String contentType = detectContentType(responseBody);
             jsonResponse.put("contentType", contentType);
-            
+
             if ("json".equals(contentType)) {
                 // If response is JSON, parse it and add as object
                 try {
@@ -475,20 +596,22 @@ public class GuidApiClient {
                 // For HTML, XML, or other formats, store as string
                 jsonResponse.put(RESPONSE, responseBody);
             }
-            
+
             // Add request details
             ObjectNode requestDetails = mapper.createObjectNode();
             requestDetails.put("endpoint", spreadsheetUri);
             requestDetails.put("method", "POST");
             jsonResponse.set("requestDetails", requestDetails);
-            
+
             String jsonContent = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonResponse);
             Files.write(path, jsonContent.getBytes());
-            
-            logger.info("✓ Saved structured JSON response for GUID to " + path.getFileName());
-            
+
+            // Log success
+            logInfo("✓ Saved structured JSON response for GUID to " + path.getFileName());
+
         } catch (IOException e) {
-            logger.severe("✗ Failed to save structured JSON file for GUID: " + e.getMessage());
+            // Log failure
+            logSevere("✗ Failed to save structured JSON file for GUID: " + e.getMessage());
         }
     }
 
@@ -502,9 +625,9 @@ public class GuidApiClient {
         if (responseBody == null || responseBody.trim().isEmpty()) {
             return "empty";
         }
-        
+
         String trimmed = responseBody.trim();
-        
+
         if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
             return "json";
         } else if (trimmed.startsWith("<!DOCTYPE html") || trimmed.startsWith("<html")) {
@@ -521,9 +644,9 @@ public class GuidApiClient {
      * The filename is formatted as "response_001_guid.json" where
      * "guid" is a sanitised version of the GUID.
      *
-     * @param guid  The GUID to base the filename on
-     * @param index The index of the GUID in the list
-     * @param suffix The file extension to use (e.g., "json", "html")
+     * @param guid   The GUID to base the filename on
+     * @param index  The index of the GUID in the list
+     * @param suffix The file extension to use (e.g., "json")
      * @throws IllegalArgumentException if the GUID is null or empty
      * @return A sanitized filename for saving the response
      */
@@ -554,12 +677,14 @@ public class GuidApiClient {
      * This is a convenience method that wraps the main method functionality
      * and can be called from other parts of the application or tests.
      * 
-     * @throws IOException if file operations fail
+     * @throws IOException          if file operations fail
      * @throws InterruptedException if processing is interrupted
      */
     public void run() throws IOException, InterruptedException {
-        logger.info("Starting GUID processing workflow...");
         
+        // Log start of processing
+        logInfo("Starting GUID processing workflow...");
+
         // Create output directory if it doesn't exist
         Files.createDirectories(Paths.get(OUTPUT_DIR));
 
@@ -567,18 +692,18 @@ public class GuidApiClient {
         List<String> guids = readGuidsFromResource();
 
         if (guids.isEmpty()) {
-            logger.info(NOGUIDS);
+            // Log no GUIDs found and exit
+            logInfo(NOGUIDS);
             return;
-        } else if (logger.isLoggable(java.util.logging.Level.INFO)) {
-            logger.info(String.format(FOUNDGUIDS, guids.size()));
+        } else {
+            // Log number of GUIDs found
+            logInfo(String.format(FOUNDGUIDS, guids.size()));
         }
 
         // Process all GUID, saving only structured JSON format
-        processGuids(guids, false, false, true);
+        processGuids(guids, false, true);
 
-
-        if (logger.isLoggable(java.util.logging.Level.INFO)) {
-            logger.info(PROCCOMP);
-        }
+        // Log completion
+        logInfo(PROCCOMP);
     }
 }
