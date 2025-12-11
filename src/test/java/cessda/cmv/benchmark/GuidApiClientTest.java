@@ -1,8 +1,8 @@
 package cessda.cmv.benchmark;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -60,7 +60,7 @@ class GuidApiClientTest {
     private GuidApiClient client;
     private Path testGuidsFile;
     private Path testOutputDir;
-    private static final String DEFAULT_SPREADSHEET_URI = "https://tools.ostrails.eu/champion/assess/algorithm/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw";
+    private static final String DEFAULT_SPREADSHEET_URI = "https://tools.ostrails.eu/champion/assess/algorithm/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw";
     private static final String DEFAULT_GUIDS_FILE = "guids.txt";
     
     private ByteArrayOutputStream logOutput;

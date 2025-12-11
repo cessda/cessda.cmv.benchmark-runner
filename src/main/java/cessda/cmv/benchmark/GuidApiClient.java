@@ -39,7 +39,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  */
 public class GuidApiClient {
 
-    static final String BENCHMARK_ALGORITHM_URI = "https://tools.ostrails.eu/champion/assess/algorithm/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw";
+    static final String BENCHMARK_ALGORITHM_URI = "https://tools.ostrails.eu/champion/assess/algorithm/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw";
     static final String GUIDS_FILE = "guids.txt";
     private static final String OUTPUT_DIR = "results";
 
