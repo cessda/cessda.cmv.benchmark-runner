@@ -40,8 +40,8 @@ Note this must be the URL of spreadsheet that is registered in FAIR Champion.
 You can register a new Google spreadsheet with [FAIR Champion](https://tools.ostrails.eu/champion/algorithms/new).
 You must publish the spreadsheet to the web and use the resulting URL to register it.
 
-2 Use a different filename for the list of GUID to test, by providing it as a command line argument,
-(file must be located in `resources` directory) for example:
+2 Use a different filename for the list of GUIDs to test, by providing it as a command line argument,
+(file must be located in the `resources` directory), for example:
 
 `mvn exec:java -Dexec.args="--filename guids2.txt"`
 
