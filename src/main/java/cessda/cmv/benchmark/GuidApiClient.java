@@ -555,6 +555,89 @@ public class GuidApiClient {
 
     /**
      * Writes a structured JSON response file with metadata.
+     * This method attempts to parse embedded JSON-LD from the response if present.
+     * 
+     * @param path         The path to the JSON file
+     * @param responseBody The response body to write
+     * @param guid         The original GUID for metadata
+     * @param statusCode   HTTP status code for metadata
+     * @param requestTimestamp When the request was made
+     * @param processingTimeMs How long the request took in milliseconds
+     */
+    private void writeStructuredJsonResponse(Path path, String responseBody, String guid,
+            int statusCode, java.time.Instant requestTimestamp, long processingTimeMs) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            ObjectNode jsonResponse = mapper.createObjectNode();
+
+            // Add metadata
+            jsonResponse.put("guid", guid);
+            jsonResponse.put("statusCode", statusCode);
+            jsonResponse.put("requestTimestamp", requestTimestamp.toString());
+            jsonResponse.put("responseTimestamp", java.time.Instant.now().toString());
+            jsonResponse.put("processingTimeMs", processingTimeMs);
+
+            // Determine content type and add content
+            String contentType = detectContentType(responseBody);
+            jsonResponse.put("contentType", contentType);
+
+            if ("json".equals(contentType)) {
+                // If response is JSON, parse it and add as object
+                try {
+                    JsonNode responseJson = mapper.readTree(responseBody);
+                    
+                    // Check if the response contains a "resultset" field with JSON-LD string
+                    if (responseJson.has("resultset")) {
+                        JsonNode resultsetNode = responseJson.get("resultset");
+                        
+                        // If resultset is a string (escaped JSON-LD), parse it into an object
+                        if (resultsetNode.isTextual()) {
+                            try {
+                                String resultsetString = resultsetNode.asText();
+                                JsonNode parsedResultset = mapper.readTree(resultsetString);
+                                
+                                // Replace the string with the parsed JSON-LD object
+                                ((ObjectNode) responseJson).set("resultset", parsedResultset);
+                                
+                                logInfo("✓ Parsed embedded JSON-LD from resultset field");
+                            } catch (Exception e) {
+                                // If parsing fails, keep the original string
+                                logInfo("⚠ Could not parse resultset as JSON-LD, keeping as string: " + e.getMessage());
+                            }
+                        }
+                    }
+                    
+                    jsonResponse.set(RESPONSE, responseJson);
+                } catch (Exception e) {
+                    // Fallback to string if JSON parsing fails
+                    jsonResponse.put(RESPONSE, responseBody);
+                    jsonResponse.put("parseError", e.getMessage());
+                }
+            } else {
+                // For HTML, XML, or other formats, store as string
+                jsonResponse.put(RESPONSE, responseBody);
+            }
+
+            // Add request details
+            ObjectNode requestDetails = mapper.createObjectNode();
+            requestDetails.put("endpoint", spreadsheetUri);
+            requestDetails.put("method", "POST");
+            jsonResponse.set("requestDetails", requestDetails);
+
+            String jsonContent = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonResponse);
+            Files.write(path, jsonContent.getBytes());
+
+            // Log success
+            logInfo("✓ Saved structured JSON response for GUID to " + path.getFileName());
+
+        } catch (IOException e) {
+            // Log failure
+            logSevere("✗ Failed to save structured JSON file for GUID: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Writes a structured JSON response file with metadata.
      * This method always creates a structured JSON format regardless of the
      * original response format.
      * 
@@ -565,7 +648,7 @@ public class GuidApiClient {
      * @param requestTimestamp When the request was made
      * @param processingTimeMs How long the request took in milliseconds
      */
-    private void writeStructuredJsonResponse(Path path, String responseBody, String guid,
+    private void writeStructuredJson(Path path, String responseBody, String guid,
             int statusCode, java.time.Instant requestTimestamp, long processingTimeMs) {
         try {
             ObjectMapper mapper = new ObjectMapper();
