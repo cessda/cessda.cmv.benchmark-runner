@@ -14,60 +14,129 @@ Java 21 or greater is required to build and run this application.
 
 1. Check prerequisites and install any required software.
 2. Clone the repository to your local workspace.
-3. Add the GUIDs of the digital objects to test in the src/main/resources/guids.txt file
+3. Add the GUIDs of the digital objects to test in the `src/main/resources/guids.txt` file.
 4. Build the application using `mvn compile`.
 5. Run the application using the following command: `mvn exec:java`
-    (this uses the QA algorithm configuration spreadsheet specified by `BENCHMARK_ALGORITHM_URI`).
+   (this uses the QA algorithm configuration spreadsheet specified by `BENCHMARK_ALGORITHM_URI`).
 6. The assessment results file for each GUID is written to the `results` directory.
+
+## Fetching Identifiers from OAI-PMH
+
+Instead of (or in addition to) maintaining a `guids.txt` file manually, the application can fetch
+lists of identifiers directly from the CESSDA data catalogue OAI-PMH endpoint. Identifiers are
+retrieved for the following language sets: `de`, `el`, `en`, `fi`, `fr`, `hr`, `nl`, `sl`,
+`sl-SI`, and `sv`.
+
+Each language produces a separate file, for example `guids_de.txt`, written to the
+`src/main/resources` directory (or the current working directory when running from a JAR).
+These files are then available for processing in the same way as `guids.txt`.
+
+To fetch all identifier lists and immediately process them, run:
+
+```text
+mvn exec:java -Dexec.args="-A"
+```
+
+or equivalently:
+
+```text
+mvn exec:java -Dexec.args="--fetch-and-process"
+```
+
+To fetch the identifier lists without processing them:
+
+```text
+mvn exec:java -Dexec.args="-F"
+```
+
+To process all previously fetched language files without re-fetching:
+
+```text
+mvn exec:java -Dexec.args="-P"
+```
+
+To process a single named file:
+
+```text
+mvn exec:java -Dexec.args="-p guids_de.txt"
+```
 
 ## Customisation
 
-In the top level directory (i.e. where the pom.xml file is located)
-you can do the following:
+The following options can be combined with any of the modes described above.
+All commands should be run from the top-level directory (i.e. where the `pom.xml` file is located).
 
-1 Use a different QA algorithm configuration spreadsheet, by providing it as a command line argument, for example:
+### Use a different QA algorithm configuration spreadsheet
 
-`mvn exec:java -Dexec.args="-s https://tools.ostrails.eu/champion/algorithms/16s2klErdtZck2b6i2Zp_PjrgpBBnnrBKaAvTwrnMB4w"
-`
+```text
+mvn exec:java -Dexec.args="-s https://tools.ostrails.eu/champion/algorithms/16s2klErdtZck2b6i2Zp_PjrgpBBnnrBKaAvTwrnMB4w"
+```
 
-or
+or:
 
-`mvn exec:java -Dexec.args="--spreadsheet https://tools.ostrails.eu/champion/algorithms/16s2klErdtZck2b6i2Zp_PjrgpBBnnrBKaAvTwrnMB4w"
-`
+```text
+mvn exec:java -Dexec.args="--spreadsheet https://tools.ostrails.eu/champion/algorithms/16s2klErdtZck2b6i2Zp_PjrgpBBnnrBKaAvTwrnMB4w"
+```
 
-Note this must be the URL of spreadsheet that is registered in FAIR Champion.
-
+Note: this must be the URL of a spreadsheet that is registered in FAIR Champion.
 You can register a new Google spreadsheet with [FAIR Champion](https://tools.ostrails.eu/champion/algorithms/new).
 You must publish the spreadsheet to the web and use the resulting URL to register it.
 
-2 Use a different filename for the list of GUIDs to test, by providing it as a command line argument,
-(file must be located in the `resources` directory), for example:
+### Use a different filename for the list of GUIDs
 
-`mvn exec:java -Dexec.args="--filename guids2.txt"`
+The file must be located in the `src/main/resources` directory or the current working directory.
 
-or
+```text
+mvn exec:java -Dexec.args="--filename guids2.txt"
+```
 
-`mvn exec:java -Dexec.args="-f guids2.txt"`
+or:
 
-3 Get help with the command line arguments
+```text
+mvn exec:java -Dexec.args="-f guids2.txt"
+```
 
-`mvn exec:java -Dexec.args="--help"`
+### Get help with the command line arguments
 
-or
+```text
+mvn exec:java -Dexec.args="--help"
+```
 
-`mvn exec:java -Dexec.args="-h"`
+or:
+
+```text
+mvn exec:java -Dexec.args="-h"
+```
+
+## Command Line Reference
+
+The following flags are available:
+
+```text
+ -A,--fetch-and-process        Fetch all identifier lists from OAI-PMH then process all
+                               resulting files (equivalent to -F -P)
+ -F,--fetch-all                Fetch identifier lists for all languages from OAI-PMH and
+                               write guids_XX.txt files
+ -f,--filename <file>          GUIDs filename (default: guids.txt) – used in legacy
+                               single-file mode
+ -h,--help                     Show help
+ -P,--process-all              Process all guids_XX.txt files found in resources or
+                               current directory
+ -p,--process-file <file>      Process a single named GUID file
+ -s,--spreadsheet <uri>        Spreadsheet URI (default: BENCHMARK_ALGORITHM_URI)
+```
 
 ## Project Structure
 
 This project uses the standard Maven project structure.
 
-``` text
+```text
 <ROOT>
 ├── .mvn                # Maven wrapper.
 ├── src                 # Contains all source code and assets for the application.
 |   ├── main
 |   |   ├── java        # Contains release source code of the application.
-|   |   └── resources   # Contains release resources assets.
+|   |   └── resources   # Contains release resource assets.
 |   └── test
 |       ├── java        # Contains test source code.
 |       └── resources   # Contains test resource assets.
@@ -90,6 +159,6 @@ You can find the list of contributors in the [CONTRIBUTORS](CONTRIBUTORS.md) fil
 
 See the [LICENSE](LICENSE.txt) file.
 
-## CITING
+## Citing
 
 See the [CITATION](CITATION.cff) file.
