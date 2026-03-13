@@ -40,6 +40,7 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -59,7 +60,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  *   -p, --process-file &lt;f&gt;   Process a single named GUID file
  *   -A, --fetch-and-process   Fetch all identifiers then process all resulting files
  *   -s, --spreadsheet &lt;uri&gt;  Spreadsheet URI (default: BENCHMARK_ALGORITHM_URI)
- *   -f, --filename &lt;file&gt;    Single GUIDs filename (default: guids_hr.txt) – legacy mode
+ *   -f, --filename &lt;file&gt;    Single GUIDs filename (default: guids.txt) – legacy mode
  *   -h, --help               Show help
  * </pre>
  *
@@ -430,11 +431,11 @@ public class GuidApiClient {
      * @throws IOException          if file operations fail
      * @throws InterruptedException if processing is interrupted
      */
-    public void processSingleGuid(String identifier)
+    public void processSingleGuid(String guid)
             throws IOException, InterruptedException {
-        logInfo("Processing single GUID: %s", identifier);
+        logInfo("Processing single GUID: %s", guid);
         Files.createDirectories(Paths.get(OUTPUT_DIR));
-        processGuids(List.of(identifier), null, false, true);
+        processGuidWithMultipleFormats(guid, 0, null, false, true);
         logInfo(PROCCOMP);
     }
 
@@ -474,18 +475,32 @@ public class GuidApiClient {
     /** @return the GUIDs filename currently in use */
     String getGuidsFilename() { return guidsFilename; }
 
+    /** 
+     * @param message
+     */
     static void logSevere(String message) {
         if (logger.isLoggable(Level.SEVERE)) logger.severe(message);
     }
 
+    /** 
+     * @param message
+     * @param args
+     */
     static void logSevere(String message, Object... args) {
         if (logger.isLoggable(Level.SEVERE)) logger.severe(String.format(message, args));
     }
 
+    /** 
+     * @param message
+     */
     static void logInfo(String message) {
         if (logger.isLoggable(Level.INFO)) logger.info(message);
     }
 
+    /** 
+     * @param message
+     * @param args
+     */
     static void logInfo(String message, Object... args) {
         if (logger.isLoggable(Level.INFO)) logger.info(String.format(message, args));
     }
@@ -518,6 +533,9 @@ public class GuidApiClient {
         }
     }
 
+    /** 
+     * @return Options
+     */
     private static Options createOptions() {
         Options options = new Options();
         options.addOption("s", SPREADSHEETARG, true,
@@ -538,11 +556,17 @@ public class GuidApiClient {
         return options;
     }
 
+    /** 
+     * @param options
+     */
     private static void showHelpAndExit(Options options) {
         new HelpFormatter().printHelp("java -jar cessda-cmv-benchmark.jar", options, true);
         System.exit(0);
     }
 
+    /** 
+     * @param cmd
+     */
     private static void parseSpreadsheetUri(CommandLine cmd) {
         if (cmd.hasOption(SPREADSHEETARG)) {
             spreadsheetUri = cmd.getOptionValue(SPREADSHEETARG, BENCHMARK_ALGORITHM_URI);
@@ -553,6 +577,9 @@ public class GuidApiClient {
         }
     }
 
+    /** 
+     * @param cmd
+     */
     private static void parseGuidsFilename(CommandLine cmd) {
         if (cmd.hasOption(FILENAMEARG)) {
             guidsFilename = cmd.getOptionValue(FILENAMEARG, GUIDS_FILE);
@@ -563,6 +590,10 @@ public class GuidApiClient {
         }
     }
 
+    /** 
+     * @param e
+     * @throws IOException
+     */
     private static void handleParseError(ParseException e) throws IOException {
         logSevere("Error parsing arguments: %s", e.getMessage());
         logSevere("Use -h or --help for usage information.");
@@ -608,6 +639,15 @@ public class GuidApiClient {
                 "Could not find " + guidsFilename + " in resources or current directory");
     }
 
+    /** 
+     * @param guid
+     * @param index
+     * @param lang
+     * @param saveAsJson
+     * @param saveAsStructuredJson
+     * @throws IOException
+     * @throws InterruptedException
+     */
     // -----------------------------------------------------------------------
     // GUID processing (unchanged logic)
     // -----------------------------------------------------------------------
@@ -620,7 +660,7 @@ public class GuidApiClient {
 
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode payload = mapper.createObjectNode();
-        payload.put("guid", buildRecordUrl(guid));
+        payload.put("guid", guid);
         payload.put("url", spreadsheetUri);
         String jsonPayload = mapper.writeValueAsString(payload);
         logInfo(REQSEND + jsonPayload);
@@ -658,6 +698,11 @@ public class GuidApiClient {
         }
     }
 
+    /** 
+     * @param guid
+     * @param lang
+     * @param error
+     */
     private void saveErrorFile(String guid, String lang, Exception error) {
         try {
             String errorFilename = ERROR + generateFilename(guid, lang, "json");
@@ -707,13 +752,20 @@ public class GuidApiClient {
         logInfo(PROCCOMP);
     }
 
+    /** 
+     * @param guids
+     * @param lang
+     * @param saveAsJson
+     * @param saveAsStructuredJson
+     * @throws InterruptedException
+     */
     private void processGuids(List<String> guids,
             String lang, boolean saveAsJson, boolean saveAsStructuredJson)
             throws InterruptedException {
 
         try (ExecutorService executor = Executors.newFixedThreadPool(5)) {
             for (int i = 0; i < guids.size(); i++) {
-                final String guid = guids.get(i);
+                final String guid = buildRecordUrl(guids.get(i));
                 final int index = i;
 
                 CompletableFuture.runAsync(() -> {
@@ -741,6 +793,12 @@ public class GuidApiClient {
         }
     }
 
+    /** 
+     * @param path
+     * @param responseBody
+     * @param guid
+     * @param statusCode
+     */
     // -----------------------------------------------------------------------
     // Response writing helpers (unchanged)
     // -----------------------------------------------------------------------
@@ -768,6 +826,82 @@ public class GuidApiClient {
         } catch (IOException e) {
             logSevere("✗ Failed to save JSON file for GUID: %s", e.getMessage());
         }
+    }
+
+    /** 
+     * @param path
+     * @param responseBody
+     * @param guid
+     * @param statusCode
+     * @param requestTimestamp
+     * @param processingTimeMs
+     */
+    private void writeStructuredJsonResponse(Path path, String responseBody, String guid,
+            int statusCode, java.time.Instant requestTimestamp, long processingTimeMs) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            ObjectNode jsonResponse = mapper.createObjectNode();
+
+            jsonResponse.put("guid", guid);
+            jsonResponse.put("statusCode", statusCode);
+            jsonResponse.put("requestTimestamp", requestTimestamp.toString());
+            jsonResponse.put("responseTimestamp", java.time.Instant.now().toString());
+            jsonResponse.put("processingTimeMs", processingTimeMs);
+
+            String contentType = detectContentType(responseBody);
+            jsonResponse.put("contentType", contentType);
+
+            if ("json".equals(contentType)) {
+                try {
+                    JsonNode responseJson = mapper.readTree(responseBody);
+                    if (responseJson.has("resultset")) {
+                        JsonNode resultsetNode = responseJson.get("resultset");
+                        if (resultsetNode.isTextual()) {
+                            try {
+                                JsonNode parsedResultset = mapper.readTree(resultsetNode.asText());
+                                ((ObjectNode) responseJson).set("resultset", parsedResultset);
+                                logInfo("✓ Parsed embedded JSON-LD from resultset field");
+                            } catch (Exception e) {
+                                logInfo("⚠ Could not parse resultset as JSON-LD, keeping as string: "
+                                        + e.getMessage());
+                            }
+                        }
+                    }
+                    jsonResponse.set(RESPONSE, responseJson);
+                } catch (Exception e) {
+                    jsonResponse.put(RESPONSE, responseBody);
+                    jsonResponse.put("parseError", e.getMessage());
+                }
+            } else {
+                jsonResponse.put(RESPONSE, responseBody);
+            }
+
+            ObjectNode requestDetails = mapper.createObjectNode();
+            requestDetails.put("endpoint", spreadsheetUri);
+            requestDetails.put("method", "POST");
+            jsonResponse.set("requestDetails", requestDetails);
+
+            Files.write(path,
+                    mapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonResponse)
+                            .getBytes(StandardCharsets.UTF_8));
+            logInfo("✓ Saved structured JSON response for GUID to %s", path.getFileName());
+
+        } catch (IOException e) {
+            logSevere("✗ Failed to save structured JSON file for GUID: %s", e.getMessage());
+        }
+    }
+
+    /** 
+     * @param responseBody
+     * @return String
+     */
+    private String detectContentType(String responseBody) {
+        if (responseBody == null || responseBody.trim().isEmpty()) return "empty";
+        String trimmed = responseBody.trim();
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) return "json";
+        if (trimmed.startsWith("<!DOCTYPE html") || trimmed.startsWith("<html")) return "html";
+        if (trimmed.startsWith("<?xml") || trimmed.startsWith("<")) return "xml";
+        return "text";
     }
 
     /**

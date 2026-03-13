@@ -4,6 +4,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -171,6 +172,10 @@ class GuidApiClientTest {
         }
     }
 
+    /** 
+     * @return GuidApiClient
+     * @throws Exception
+     */
     private GuidApiClient newClientWithMockedHttp() throws Exception {
         GuidApiClient client = new GuidApiClient();
         // Inject the mock HTTP client via reflection
@@ -475,6 +480,51 @@ class GuidApiClientTest {
                     new Class[]{String.class}, body);
         }
 
+        @Test
+        void nullReturnsEmpty() throws Exception {
+            assertEquals("empty", detect(null));
+        }
+
+        @Test
+        void blankStringReturnsEmpty() throws Exception {
+            assertEquals("empty", detect("   "));
+        }
+
+        @Test
+        void jsonObjectDetected() throws Exception {
+            assertEquals("json", detect("{\"key\":\"value\"}"));
+        }
+
+        @Test
+        void jsonArrayDetected() throws Exception {
+            assertEquals("json", detect("[1,2,3]"));
+        }
+
+        @Test
+        void doctypeHtmlDetected() throws Exception {
+            assertEquals("html", detect("<!DOCTYPE html><html><body></body></html>"));
+        }
+
+        @Test
+        void htmlTagDetected() throws Exception {
+            assertEquals("html", detect("<html><head></head></html>"));
+        }
+
+        @Test
+        void xmlDeclarationDetected() throws Exception {
+            assertEquals("xml", detect("<?xml version=\"1.0\"?><root/>"));
+        }
+
+        @Test
+        void xmlTagWithoutDeclarationDetected() throws Exception {
+            assertEquals("xml", detect("<root><child/></root>"));
+        }
+
+        @Test
+        void plainTextReturnsText() throws Exception {
+            assertEquals("text", detect("plain text content"));
+        }
+    }
 
     // =======================================================================
     @Nested
@@ -854,6 +904,94 @@ class GuidApiClientTest {
                             int.class, java.time.Instant.class, long.class},
                     out, body, "test-guid", 200, timestamp, 123L);
         }
+
+        @Test
+        @DisplayName("Metadata fields are present in output")
+        void metadataFieldsPresent() throws Exception {
+            Path outFile = tempDir.resolve("structured.json");
+            callWriteStructured(outFile, "{\"data\":1}");
+
+            JsonNode node = new ObjectMapper().readTree(outFile.toFile());
+            assertEquals("test-guid", node.get("guid").asText());
+            assertEquals(200, node.get("statusCode").asInt());
+            assertEquals(123L, node.get("processingTimeMs").asLong());
+            assertNotNull(node.get("requestTimestamp"));
+            assertNotNull(node.get("responseTimestamp"));
+        }
+
+        @Test
+        @DisplayName("JSON body is parsed and embedded as object, not string")
+        void jsonBodyEmbeddedAsObject() throws Exception {
+            Path outFile = tempDir.resolve("structured.json");
+            callWriteStructured(outFile, "{\"score\":99}");
+
+            JsonNode node = new ObjectMapper().readTree(outFile.toFile());
+            assertTrue(node.get("response").isObject());
+            assertEquals(99, node.get("response").get("score").asInt());
+        }
+
+        @Test
+        @DisplayName("Embedded JSON-LD string in resultset is parsed into object")
+        void embeddedJsonLdParsed() throws Exception {
+            Path outFile = tempDir.resolve("structured.json");
+            String inner = "{\"@context\":\"https://schema.org\",\"@type\":\"Dataset\"}";
+            String body = "{\"resultset\":\"" + inner.replace("\"", "\\\"") + "\"}";
+            callWriteStructured(outFile, body);
+
+            JsonNode node = new ObjectMapper().readTree(outFile.toFile());
+            JsonNode resultset = node.get("response").get("resultset");
+            assertTrue(resultset.isObject(), "resultset should be parsed to an object");
+            assertEquals("https://schema.org", resultset.get("@context").asText());
+        }
+
+        @Test
+        @DisplayName("resultset that is already an object is left unchanged")
+        void resultsetAlreadyObjectUnchanged() throws Exception {
+            Path outFile = tempDir.resolve("structured.json");
+            String body = "{\"resultset\":{\"@type\":\"Dataset\"}}";
+            callWriteStructured(outFile, body);
+
+            JsonNode node = new ObjectMapper().readTree(outFile.toFile());
+            JsonNode resultset = node.get("response").get("resultset");
+            assertTrue(resultset.isObject());
+            assertEquals("Dataset", resultset.get("@type").asText());
+        }
+
+        @Test
+        @DisplayName("HTML body is stored as string under 'response'")
+        void htmlBodyStoredAsString() throws Exception {
+            Path outFile = tempDir.resolve("structured.json");
+            callWriteStructured(outFile, "<html><body>test</body></html>");
+
+            JsonNode node = new ObjectMapper().readTree(outFile.toFile());
+            assertTrue(node.get("response").isTextual());
+            assertTrue(node.get("response").asText().contains("<html>"));
+            assertEquals("html", node.get("contentType").asText());
+        }
+
+        @Test
+        @DisplayName("Empty body results in 'empty' contentType")
+        void emptyBodyContentType() throws Exception {
+            Path outFile = tempDir.resolve("structured.json");
+            callWriteStructured(outFile, "");
+
+            JsonNode node = new ObjectMapper().readTree(outFile.toFile());
+            assertEquals("empty", node.get("contentType").asText());
+        }
+
+        @Test
+        @DisplayName("requestDetails block contains endpoint and method")
+        void requestDetailsBlock() throws Exception {
+            Path outFile = tempDir.resolve("structured.json");
+            GuidApiClient.spreadsheetUri = "https://example.com/endpoint";
+            callWriteStructured(outFile, "{}");
+
+            JsonNode node = new ObjectMapper().readTree(outFile.toFile());
+            JsonNode details = node.get("requestDetails");
+            assertNotNull(details);
+            assertEquals("https://example.com/endpoint", details.get("endpoint").asText());
+            assertEquals("POST", details.get("method").asText());
+        }
     }
 
     // =======================================================================
@@ -948,39 +1086,42 @@ class GuidApiClientTest {
     class ProcessSingleGuidTest {
 
         @Test
-        @DisplayName("processSingleGuid POSTs the identifier and saves a result file")
-        void processesSingleIdentifier() throws Exception {
+        @DisplayName("processSingleGuid POSTs the GUID as-is and saves a result file without language suffix")
+        void processesSingleGuid() throws Exception {
             doReturn(mockHttpResponse).when(mockHttpClient).send(any(), any());
             when(mockHttpResponse.statusCode()).thenReturn(200);
             when(mockHttpResponse.body()).thenReturn("{\"status\":\"ok\"}");
 
             GuidApiClient client = newClientWithMockedHttp();
-            String identifier = "ab3035656480d6184f7a44c9951c5d49";
-            assertDoesNotThrow(() -> client.processSingleGuid(identifier));
+            // -g receives a complete GUID URL, not a bare identifier
+            String guid = GuidApiClient.OAI_PMH_GET_RECORD_URL + "ab3035656480d6184f7a44c9951c5d49";
+            assertDoesNotThrow(() -> client.processSingleGuid(guid));
 
-            // Result file should be named by the first 12 chars of the identifier
-            Path expected = Paths.get("results", identifier.substring(0, 12) + ".json");
+            // Result file named by first 12 chars of the GUID, no language suffix
+            String sanitized = guid.replaceAll("[^a-zA-Z0-9._-]", "_");
+            Path expected = Paths.get("results", sanitized.substring(0, 12) + ".json");
             assertTrue(Files.exists(expected),
                     "Expected result file at " + expected);
             Files.deleteIfExists(expected);
         }
 
         @Test
-        @DisplayName("processSingleGuid logs the identifier and completion message")
-        void logsIdentifierAndCompletion() throws Exception {
+        @DisplayName("processSingleGuid logs the GUID and completion message")
+        void logsGuidAndCompletion() throws Exception {
             doReturn(mockHttpResponse).when(mockHttpClient).send(any(), any());
             when(mockHttpResponse.statusCode()).thenReturn(200);
             when(mockHttpResponse.body()).thenReturn("{\"status\":\"ok\"}");
 
             GuidApiClient client = newClientWithMockedHttp();
-            String identifier = "ab3035656480d6184f7a44c9951c5d49";
-            client.processSingleGuid(identifier);
+            String guid = GuidApiClient.OAI_PMH_GET_RECORD_URL + "ab3035656480d6184f7a44c9951c5d49";
+            client.processSingleGuid(guid);
 
             logHandler.flush();
             String log = logOutput.toString();
-            assertTrue(log.contains(identifier), "Log should mention the identifier");
+            assertTrue(log.contains(guid), "Log should mention the GUID");
 
-            Path expected = Paths.get("results", identifier.substring(0, 12) + ".json");
+            String sanitized = guid.replaceAll("[^a-zA-Z0-9._-]", "_");
+            Path expected = Paths.get("results", sanitized.substring(0, 12) + ".json");
             Files.deleteIfExists(expected);
         }
     }
@@ -991,22 +1132,20 @@ class GuidApiClientTest {
     class JsonPayloadTest {
 
         @Test
-        @DisplayName("guid field is the full OAI-PMH GetRecord URL for the identifier")
-        void guidIsGetRecordUrl() throws Exception {
+        @DisplayName("guid field is sent as-is; url field is the spreadsheet URI")
+        void payloadFields() throws Exception {
             ObjectMapper mapper = new ObjectMapper();
-            String identifier = "ab3035656480d6184f7a44c9951c5d49";
-            String expectedGuid = GuidApiClient.OAI_PMH_GET_RECORD_URL
-                    + java.net.URLEncoder.encode(identifier, java.nio.charset.StandardCharsets.UTF_8);
+            // For file-based processing, buildRecordUrl() constructs this before
+            // it reaches the payload; for -g it arrives already complete.
+            String guid = GuidApiClient.OAI_PMH_GET_RECORD_URL + "ab3035656480d6184f7a44c9951c5d49";
 
             var payload = mapper.createObjectNode();
-            payload.put("guid", expectedGuid);
+            payload.put("guid", guid);
             payload.put("url", GuidApiClient.BENCHMARK_ALGORITHM_URI);
             String json = mapper.writeValueAsString(payload);
 
             JsonNode parsed = mapper.readTree(json);
-            assertEquals(expectedGuid, parsed.get("guid").asText());
-            assertTrue(parsed.get("guid").asText()
-                    .contains("verb=GetRecord&metadataPrefix=oai_ddi25&identifier="));
+            assertEquals(guid, parsed.get("guid").asText());
             assertEquals(GuidApiClient.BENCHMARK_ALGORITHM_URI, parsed.get("url").asText());
             assertEquals(2, parsed.size());
         }
@@ -1157,5 +1296,4 @@ class GuidApiClientTest {
                     "Expected SEVERE log entry naming the missing file");
         }
     }
-}
 }
