@@ -61,6 +61,12 @@ To process a single named file:
 mvn exec:java -Dexec.args="-p guids_de.txt"
 ```
 
+To process a single GUID:
+
+```text
+mvn exec:java -Dexec.args="-g <GUID>"
+```
+
 ## Customisation
 
 The following options can be combined with any of the modes described above.

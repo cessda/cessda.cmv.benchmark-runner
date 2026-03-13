@@ -40,7 +40,6 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -60,7 +59,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  *   -p, --process-file &lt;f&gt;   Process a single named GUID file
  *   -A, --fetch-and-process   Fetch all identifiers then process all resulting files
  *   -s, --spreadsheet &lt;uri&gt;  Spreadsheet URI (default: BENCHMARK_ALGORITHM_URI)
- *   -f, --filename &lt;file&gt;    Single GUIDs filename (default: guids.txt) – legacy mode
+ *   -f, --filename &lt;file&gt;    Single GUIDs filename (default: guids_hr.txt) – legacy mode
  *   -h, --help               Show help
  * </pre>
  *
@@ -120,6 +119,7 @@ public class GuidApiClient {
     private static final String PROCESS_ALL_ARG = "process-all";
     private static final String PROCESS_FILE_ARG = "process-file";
     private static final String FETCH_AND_PROCESS_ARG = "fetch-and-process";
+    private static final String GUID_ARG = "guid";
 
     static String spreadsheetUri = "";
     static String guidsFilename = "";
@@ -170,6 +170,7 @@ public class GuidApiClient {
             boolean processAll      = cmd.hasOption(PROCESS_ALL_ARG);
             boolean fetchAndProcess = cmd.hasOption(FETCH_AND_PROCESS_ARG);
             boolean processFile     = cmd.hasOption(PROCESS_FILE_ARG);
+            boolean singleGuid      = cmd.hasOption(GUID_ARG);
 
             if (fetchAll || fetchAndProcess) {
                 // Fetch identifier lists for all languages and write to files
@@ -183,6 +184,10 @@ public class GuidApiClient {
                 // Process the single file named on the command line
                 String filename = cmd.getOptionValue(PROCESS_FILE_ARG);
                 client.processSingleFile(filename);
+            } else if (singleGuid) {
+                // Process a single identifier supplied directly on the command line
+                String identifier = cmd.getOptionValue(GUID_ARG);
+                client.processSingleGuid(identifier);
             } else if (!fetchAll && !fetchAndProcess) {
                 // Legacy behaviour: process the single file specified by -f / default
                 List<String> guids = client.readGuidsFromResource();
@@ -190,7 +195,7 @@ public class GuidApiClient {
                     logInfo(NOGUIDS);
                 } else {
                     logInfo(String.format(FOUNDGUIDS, guids.size()));
-                    client.processGuids(guids, false, true);
+                    client.processGuids(guids, null, false, true);
                     logInfo(PROCCOMP);
                 }
             }
@@ -417,6 +422,23 @@ public class GuidApiClient {
     }
 
     /**
+     * Processes a single identifier supplied directly (e.g. from the command line).
+     * The identifier is wrapped in a one-element list and passed through the
+     * normal processing pipeline so output and error handling are consistent.
+     *
+     * @param identifier the raw identifier string
+     * @throws IOException          if file operations fail
+     * @throws InterruptedException if processing is interrupted
+     */
+    public void processSingleGuid(String identifier)
+            throws IOException, InterruptedException {
+        logInfo("Processing single GUID: %s", identifier);
+        Files.createDirectories(Paths.get(OUTPUT_DIR));
+        processGuids(List.of(identifier), null, false, true);
+        logInfo(PROCCOMP);
+    }
+
+    /**
      * Reads GUIDs from the named file and processes them.
      *
      * @param filename the name of the file to read (looked up in resources then CWD)
@@ -434,7 +456,8 @@ public class GuidApiClient {
                 return;
             }
             logInfo(String.format(FOUNDGUIDS, guids.size()) + " in " + filename);
-            processGuids(guids, false, true);
+            String lang = extractLangFromFilename(filename);
+            processGuids(guids, lang, false, true);
             logInfo(PROCCOMP + " (" + filename + ")");
         } finally {
             guidsFilename = previousFilename;
@@ -509,6 +532,8 @@ public class GuidApiClient {
                 "Process a single named GUID file");
         options.addOption("A", FETCH_AND_PROCESS_ARG, false,
                 "Fetch all identifier lists and then process all resulting files (equivalent to -F -P)");
+        options.addOption("g", GUID_ARG, true,
+                "Process a single identifier supplied on the command line");
         options.addOption("h", "help", false, "Show help");
         return options;
     }
@@ -588,7 +613,7 @@ public class GuidApiClient {
     // -----------------------------------------------------------------------
 
     private void processGuidWithMultipleFormats(String guid, int index,
-            boolean saveAsJson, boolean saveAsStructuredJson)
+            String lang, boolean saveAsJson, boolean saveAsStructuredJson)
             throws IOException, InterruptedException {
 
         logInfo("Processing GUID %d: %s", (index + 1), guid);
@@ -619,7 +644,7 @@ public class GuidApiClient {
 
             // Always save the raw API JSON response, named by the first 12
             // characters of the identifier so files are easy to correlate.
-            Path jsonOutputPath = Paths.get(OUTPUT_DIR, generateFilename(guid, "json"));
+            Path jsonOutputPath = Paths.get(OUTPUT_DIR, generateFilename(guid, lang, "json"));
             writeResponseBodyAsJson(jsonOutputPath, response.body(), guid,
                     response.statusCode());
 
@@ -628,14 +653,14 @@ public class GuidApiClient {
 
         } catch (Exception e) {
             logSevere(PROCFAIL + (index + 1) + ": " + e.getMessage());
-            saveErrorFile(guid, index, e);
+            saveErrorFile(guid, lang, e);
             throw e;
         }
     }
 
-    private void saveErrorFile(String guid, int index, Exception error) {
+    private void saveErrorFile(String guid, String lang, Exception error) {
         try {
-            String errorFilename = ERROR + generateFilename(guid, "json");
+            String errorFilename = ERROR + generateFilename(guid, lang, "json");
             Path errorPath = Paths.get(OUTPUT_DIR, errorFilename);
 
             if (Files.exists(errorPath)) {
@@ -678,12 +703,12 @@ public class GuidApiClient {
             return;
         }
         logInfo(String.format(FOUNDGUIDS, guids.size()));
-        processGuids(guids, saveAsJson, saveAsStructuredJson);
+        processGuids(guids, null, saveAsJson, saveAsStructuredJson);
         logInfo(PROCCOMP);
     }
 
     private void processGuids(List<String> guids,
-            boolean saveAsJson, boolean saveAsStructuredJson)
+            String lang, boolean saveAsJson, boolean saveAsStructuredJson)
             throws InterruptedException {
 
         try (ExecutorService executor = Executors.newFixedThreadPool(5)) {
@@ -694,10 +719,10 @@ public class GuidApiClient {
                 CompletableFuture.runAsync(() -> {
                     try {
                         processGuidWithMultipleFormats(guid, index,
-                                saveAsJson, saveAsStructuredJson);
+                                lang, saveAsJson, saveAsStructuredJson);
                     } catch (IOException ioe) {
                         logSevere(String.format(PROCERROR, guid, ioe.getMessage()));
-                        saveErrorFile(guid, index, ioe);
+                        saveErrorFile(guid, lang, ioe);
                     } catch (InterruptedException ie) {
                         logSevere(String.format(PROCERROR, guid, ie.getMessage()));
                         Thread.currentThread().interrupt();
@@ -745,70 +770,6 @@ public class GuidApiClient {
         }
     }
 
-    private void writeStructuredJsonResponse(Path path, String responseBody, String guid,
-            int statusCode, java.time.Instant requestTimestamp, long processingTimeMs) {
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            ObjectNode jsonResponse = mapper.createObjectNode();
-
-            jsonResponse.put("guid", guid);
-            jsonResponse.put("statusCode", statusCode);
-            jsonResponse.put("requestTimestamp", requestTimestamp.toString());
-            jsonResponse.put("responseTimestamp", java.time.Instant.now().toString());
-            jsonResponse.put("processingTimeMs", processingTimeMs);
-
-            String contentType = detectContentType(responseBody);
-            jsonResponse.put("contentType", contentType);
-
-            if ("json".equals(contentType)) {
-                try {
-                    JsonNode responseJson = mapper.readTree(responseBody);
-                    if (responseJson.has("resultset")) {
-                        JsonNode resultsetNode = responseJson.get("resultset");
-                        if (resultsetNode.isTextual()) {
-                            try {
-                                JsonNode parsedResultset = mapper.readTree(resultsetNode.asText());
-                                ((ObjectNode) responseJson).set("resultset", parsedResultset);
-                                logInfo("✓ Parsed embedded JSON-LD from resultset field");
-                            } catch (Exception e) {
-                                logInfo("⚠ Could not parse resultset as JSON-LD, keeping as string: "
-                                        + e.getMessage());
-                            }
-                        }
-                    }
-                    jsonResponse.set(RESPONSE, responseJson);
-                } catch (Exception e) {
-                    jsonResponse.put(RESPONSE, responseBody);
-                    jsonResponse.put("parseError", e.getMessage());
-                }
-            } else {
-                jsonResponse.put(RESPONSE, responseBody);
-            }
-
-            ObjectNode requestDetails = mapper.createObjectNode();
-            requestDetails.put("endpoint", spreadsheetUri);
-            requestDetails.put("method", "POST");
-            jsonResponse.set("requestDetails", requestDetails);
-
-            Files.write(path,
-                    mapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonResponse)
-                            .getBytes(StandardCharsets.UTF_8));
-            logInfo("✓ Saved structured JSON response for GUID to %s", path.getFileName());
-
-        } catch (IOException e) {
-            logSevere("✗ Failed to save structured JSON file for GUID: %s", e.getMessage());
-        }
-    }
-
-    private String detectContentType(String responseBody) {
-        if (responseBody == null || responseBody.trim().isEmpty()) return "empty";
-        String trimmed = responseBody.trim();
-        if (trimmed.startsWith("{") || trimmed.startsWith("[")) return "json";
-        if (trimmed.startsWith("<!DOCTYPE html") || trimmed.startsWith("<html")) return "html";
-        if (trimmed.startsWith("<?xml") || trimmed.startsWith("<")) return "xml";
-        return "text";
-    }
-
     /**
      * Builds the OAI-PMH GetRecord URL for the given identifier.
      * The identifier is URL-encoded before being appended.
@@ -822,25 +783,35 @@ public class GuidApiClient {
     }
 
     /**
+     * Extracts the language code from a guids_XX.txt filename.
+     * Returns {@code null} if the filename does not match the expected pattern.
+     *
+     * @param filename e.g. {@code "guids_de.txt"} or a full path ending in same
+     * @return the language code (e.g. {@code "de"}), or {@code null}
+     */
+    private static String extractLangFromFilename(String filename) {
+        // Accept bare filename or full path — use only the final component
+        String name = Paths.get(filename).getFileName().toString();
+        if (name.startsWith("guids_") && name.endsWith(".txt")) {
+            return name.substring(6, name.length() - 4);
+        }
+        return null;
+    }
+
+    /**
      * Generates a filename from the first 12 characters of the identifier.
      * Any characters that are not safe for filenames are replaced with underscores.
-     * If the identifier is a URL containing a {@code /detail/} segment, only the
-     * hash portion is used.
      *
-     * @param guid   the identifier string (plain hash or URL)
+     * @param guid   the identifier string
+     * @param lang   the language code to append (e.g. {@code "de"}), or {@code null} for none
      * @param suffix the file extension to use, without a leading dot (e.g. {@code "json"})
-     * @return filename of the form {@code <12-char-prefix>.<suffix>}
+     * @return filename of the form {@code <12-char-prefix>[_XX].<suffix>}
      */
-    private String generateFilename(String guid, String suffix) {
-        String identifier = guid;
-        if (guid.contains("/detail/")) {
-            identifier = guid.substring(guid.indexOf("/detail/") + 8);
-            if (identifier.contains("/")) identifier = identifier.substring(0, identifier.indexOf("/"));
-            if (identifier.contains("?")) identifier = identifier.substring(0, identifier.indexOf("?"));
-        }
-        String sanitized = identifier.replaceAll("[^a-zA-Z0-9._-]", "_");
+    private String generateFilename(String guid, String lang, String suffix) {
+        String sanitized = guid.replaceAll("[^a-zA-Z0-9._-]", "_");
         String prefix = sanitized.length() >= 12 ? sanitized.substring(0, 12) : sanitized;
-        return prefix + "." + suffix;
+        String langSuffix = (lang != null && !lang.isBlank()) ? "_" + lang : "";
+        return prefix + langSuffix + "." + suffix;
     }
 
     /**
@@ -855,7 +826,7 @@ public class GuidApiClient {
             return;
         }
         logInfo(String.format(FOUNDGUIDS, guids.size()));
-        processGuids(guids, false, true);
+        processGuids(guids, null, false, true);
         logInfo(PROCCOMP);
     }
 }

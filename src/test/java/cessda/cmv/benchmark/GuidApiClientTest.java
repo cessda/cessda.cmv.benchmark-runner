@@ -1,9 +1,9 @@
 package cessda.cmv.benchmark;
 
+import static org.junit.Assert.assertNull;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -319,9 +319,18 @@ class GuidApiClientTest {
         @Test
         @DisplayName("parseCommandLineArgs returns CommandLine with process-file option")
         void processFileOption() throws IOException {
-            CommandLine cmd = GuidApiClient.parseCommandLineArgs(new String[]{"-p", "guids_xx.txt"});
+            CommandLine cmd = GuidApiClient.parseCommandLineArgs(new String[]{"-p", "guids_de.txt"});
             assertTrue(cmd.hasOption("process-file"));
-            assertEquals("guids_xx.txt", cmd.getOptionValue("process-file"));
+            assertEquals("guids_de.txt", cmd.getOptionValue("process-file"));
+        }
+
+        @Test
+        @DisplayName("parseCommandLineArgs returns CommandLine with guid option and value")
+        void guidOption() throws IOException {
+            String id = "ab3035656480d6184f7a44c9951c5d49";
+            CommandLine cmd = GuidApiClient.parseCommandLineArgs(new String[]{"-g", id});
+            assertTrue(cmd.hasOption("guid"));
+            assertEquals(id, cmd.getOptionValue("guid"));
         }
 
         @Test
@@ -355,64 +364,97 @@ class GuidApiClientTest {
             client = new GuidApiClient();
         }
 
-        private String callGenerateFilename(String guid, String suffix) throws Exception {
+        private String callGenerateFilename(String guid, String lang, String suffix) throws Exception {
             return invoke(client, "generateFilename",
-                    new Class[]{String.class, String.class}, guid, suffix);
+                    new Class[]{String.class, String.class, String.class}, guid, lang, suffix);
         }
 
         @Test
-        @DisplayName("Plain hash identifier uses first 12 characters")
-        void plainHashUsesFirst12Chars() throws Exception {
+        @DisplayName("Plain hash with language code produces <12chars>_XX.json")
+        void plainHashWithLang() throws Exception {
             String hash = "ab3035656480d6184f7a44c9951c5d49a9f9e6c5695841960e94f15e07399542";
-            String result = callGenerateFilename(hash, "json");
+            String result = callGenerateFilename(hash, "de", "json");
+            assertEquals("ab3035656480_de.json", result);
+        }
+
+        @Test
+        @DisplayName("Null lang produces <12chars>.json with no language suffix")
+        void nullLangProducesNoSuffix() throws Exception {
+            String hash = "ab3035656480d6184f7a44c9951c5d49a9f9e6c5695841960e94f15e07399542";
+            String result = callGenerateFilename(hash, null, "json");
             assertEquals("ab3035656480.json", result);
         }
 
         @Test
         @DisplayName("Suffix is appended correctly")
         void suffixAppended() throws Exception {
-            String result = callGenerateFilename("abcdefghijklmnop", "json");
+            String result = callGenerateFilename("abcdefghijklmnop", "en", "json");
             assertTrue(result.endsWith(".json"));
-        }
-
-        @Test
-        @DisplayName("GUID with /detail/ path extracts hash and uses first 12 characters")
-        void detailPathExtracted() throws Exception {
-            String guid = "https://datacatalogue.cessda.eu/detail/c67a982db2df09f49682dc622b0dd38d109b9dbddf248fbb39dd06e6bc110143/?lang=en";
-            String result = callGenerateFilename(guid, "json");
-            assertEquals("c67a982db2df.json", result);
         }
 
         @Test
         @DisplayName("Identifier shorter than 12 characters uses full identifier")
         void shortIdentifierUsedInFull() throws Exception {
-            String result = callGenerateFilename("short", "json");
+            String result = callGenerateFilename("short", null, "json");
             assertEquals("short.json", result);
         }
 
         @Test
         @DisplayName("Identifier of exactly 12 characters is used in full")
         void exactlyTwelveChars() throws Exception {
-            String result = callGenerateFilename("123456789012", "json");
-            assertEquals("123456789012.json", result);
+            String result = callGenerateFilename("123456789012", "fi", "json");
+            assertEquals("123456789012_fi.json", result);
         }
 
         @Test
         @DisplayName("Special characters in identifier are replaced with underscores")
         void specialCharsReplaced() throws Exception {
-            String result = callGenerateFilename("ab!cd efgh@ij", "json");
+            String result = callGenerateFilename("ab!cd efgh@ij", null, "json");
             assertFalse(result.contains(" "));
             assertFalse(result.contains("!"));
             assertFalse(result.contains("@"));
         }
+    }
+
+    // =======================================================================
+    @Nested
+    @DisplayName("extractLangFromFilename (private)")
+    class ExtractLangFromFilenameTest {
 
         @Test
-        @DisplayName("/detail/ GUID with query string strips query before taking prefix")
-        void queryStringStrippedBeforePrefix() throws Exception {
-            String guid = "https://example.com/detail/abcdefghijklmnop?lang=en";
-            String result = callGenerateFilename(guid, "json");
-            assertFalse(result.contains("lang"));
-            assertEquals("abcdefghijkl.json", result);
+        @DisplayName("guids_de.txt returns de")
+        void standardFilenameReturnsDe() throws Exception {
+            GuidApiClient client = new GuidApiClient();
+            String result = invoke(client, "extractLangFromFilename",
+                    new Class[]{String.class}, "guids_de.txt");
+            assertEquals("de", result);
+        }
+
+        @Test
+        @DisplayName("Full path ending in guids_en.txt returns en")
+        void fullPathReturnsLang() throws Exception {
+            GuidApiClient client = new GuidApiClient();
+            String result = invoke(client, "extractLangFromFilename",
+                    new Class[]{String.class}, "src/main/resources/guids_en.txt");
+            assertEquals("en", result);
+        }
+
+        @Test
+        @DisplayName("guids_sl-SI.txt returns sl-SI")
+        void hyphenatedLangCode() throws Exception {
+            GuidApiClient client = new GuidApiClient();
+            String result = invoke(client, "extractLangFromFilename",
+                    new Class[]{String.class}, "guids_sl-SI.txt");
+            assertEquals("sl-SI", result);
+        }
+
+        @Test
+        @DisplayName("Non-matching filename returns null")
+        void nonMatchingFilenameReturnsNull() throws Exception {
+            GuidApiClient client = new GuidApiClient();
+            String result = invoke(client, "extractLangFromFilename",
+                    new Class[]{String.class}, "identifiers.txt");
+            assertNull(result);
         }
     }
 
@@ -433,51 +475,6 @@ class GuidApiClientTest {
                     new Class[]{String.class}, body);
         }
 
-        @Test
-        void nullReturnsEmpty() throws Exception {
-            assertEquals("empty", detect(null));
-        }
-
-        @Test
-        void blankStringReturnsEmpty() throws Exception {
-            assertEquals("empty", detect("   "));
-        }
-
-        @Test
-        void jsonObjectDetected() throws Exception {
-            assertEquals("json", detect("{\"key\":\"value\"}"));
-        }
-
-        @Test
-        void jsonArrayDetected() throws Exception {
-            assertEquals("json", detect("[1,2,3]"));
-        }
-
-        @Test
-        void doctypeHtmlDetected() throws Exception {
-            assertEquals("html", detect("<!DOCTYPE html><html><body></body></html>"));
-        }
-
-        @Test
-        void htmlTagDetected() throws Exception {
-            assertEquals("html", detect("<html><head></head></html>"));
-        }
-
-        @Test
-        void xmlDeclarationDetected() throws Exception {
-            assertEquals("xml", detect("<?xml version=\"1.0\"?><root/>"));
-        }
-
-        @Test
-        void xmlTagWithoutDeclarationDetected() throws Exception {
-            assertEquals("xml", detect("<root><child/></root>"));
-        }
-
-        @Test
-        void plainTextReturnsText() throws Exception {
-            assertEquals("text", detect("plain text content"));
-        }
-    }
 
     // =======================================================================
     @Nested
@@ -857,94 +854,6 @@ class GuidApiClientTest {
                             int.class, java.time.Instant.class, long.class},
                     out, body, "test-guid", 200, timestamp, 123L);
         }
-
-        @Test
-        @DisplayName("Metadata fields are present in output")
-        void metadataFieldsPresent() throws Exception {
-            Path outFile = tempDir.resolve("structured.json");
-            callWriteStructured(outFile, "{\"data\":1}");
-
-            JsonNode node = new ObjectMapper().readTree(outFile.toFile());
-            assertEquals("test-guid", node.get("guid").asText());
-            assertEquals(200, node.get("statusCode").asInt());
-            assertEquals(123L, node.get("processingTimeMs").asLong());
-            assertNotNull(node.get("requestTimestamp"));
-            assertNotNull(node.get("responseTimestamp"));
-        }
-
-        @Test
-        @DisplayName("JSON body is parsed and embedded as object, not string")
-        void jsonBodyEmbeddedAsObject() throws Exception {
-            Path outFile = tempDir.resolve("structured.json");
-            callWriteStructured(outFile, "{\"score\":99}");
-
-            JsonNode node = new ObjectMapper().readTree(outFile.toFile());
-            assertTrue(node.get("response").isObject());
-            assertEquals(99, node.get("response").get("score").asInt());
-        }
-
-        @Test
-        @DisplayName("Embedded JSON-LD string in resultset is parsed into object")
-        void embeddedJsonLdParsed() throws Exception {
-            Path outFile = tempDir.resolve("structured.json");
-            String inner = "{\"@context\":\"https://schema.org\",\"@type\":\"Dataset\"}";
-            String body = "{\"resultset\":\"" + inner.replace("\"", "\\\"") + "\"}";
-            callWriteStructured(outFile, body);
-
-            JsonNode node = new ObjectMapper().readTree(outFile.toFile());
-            JsonNode resultset = node.get("response").get("resultset");
-            assertTrue(resultset.isObject(), "resultset should be parsed to an object");
-            assertEquals("https://schema.org", resultset.get("@context").asText());
-        }
-
-        @Test
-        @DisplayName("resultset that is already an object is left unchanged")
-        void resultsetAlreadyObjectUnchanged() throws Exception {
-            Path outFile = tempDir.resolve("structured.json");
-            String body = "{\"resultset\":{\"@type\":\"Dataset\"}}";
-            callWriteStructured(outFile, body);
-
-            JsonNode node = new ObjectMapper().readTree(outFile.toFile());
-            JsonNode resultset = node.get("response").get("resultset");
-            assertTrue(resultset.isObject());
-            assertEquals("Dataset", resultset.get("@type").asText());
-        }
-
-        @Test
-        @DisplayName("HTML body is stored as string under 'response'")
-        void htmlBodyStoredAsString() throws Exception {
-            Path outFile = tempDir.resolve("structured.json");
-            callWriteStructured(outFile, "<html><body>test</body></html>");
-
-            JsonNode node = new ObjectMapper().readTree(outFile.toFile());
-            assertTrue(node.get("response").isTextual());
-            assertTrue(node.get("response").asText().contains("<html>"));
-            assertEquals("html", node.get("contentType").asText());
-        }
-
-        @Test
-        @DisplayName("Empty body results in 'empty' contentType")
-        void emptyBodyContentType() throws Exception {
-            Path outFile = tempDir.resolve("structured.json");
-            callWriteStructured(outFile, "");
-
-            JsonNode node = new ObjectMapper().readTree(outFile.toFile());
-            assertEquals("empty", node.get("contentType").asText());
-        }
-
-        @Test
-        @DisplayName("requestDetails block contains endpoint and method")
-        void requestDetailsBlock() throws Exception {
-            Path outFile = tempDir.resolve("structured.json");
-            GuidApiClient.spreadsheetUri = "https://example.com/endpoint";
-            callWriteStructured(outFile, "{}");
-
-            JsonNode node = new ObjectMapper().readTree(outFile.toFile());
-            JsonNode details = node.get("requestDetails");
-            assertNotNull(details);
-            assertEquals("https://example.com/endpoint", details.get("endpoint").asText());
-            assertEquals("POST", details.get("method").asText());
-        }
     }
 
     // =======================================================================
@@ -1030,6 +939,49 @@ class GuidApiClientTest {
                 assertTrue(foundInResources || foundInCwd,
                         "Expected " + filename + " in " + resourcesDir + " or " + cwd);
             }
+        }
+    }
+
+    // =======================================================================
+    @Nested
+    @DisplayName("processSingleGuid")
+    class ProcessSingleGuidTest {
+
+        @Test
+        @DisplayName("processSingleGuid POSTs the identifier and saves a result file")
+        void processesSingleIdentifier() throws Exception {
+            doReturn(mockHttpResponse).when(mockHttpClient).send(any(), any());
+            when(mockHttpResponse.statusCode()).thenReturn(200);
+            when(mockHttpResponse.body()).thenReturn("{\"status\":\"ok\"}");
+
+            GuidApiClient client = newClientWithMockedHttp();
+            String identifier = "ab3035656480d6184f7a44c9951c5d49";
+            assertDoesNotThrow(() -> client.processSingleGuid(identifier));
+
+            // Result file should be named by the first 12 chars of the identifier
+            Path expected = Paths.get("results", identifier.substring(0, 12) + ".json");
+            assertTrue(Files.exists(expected),
+                    "Expected result file at " + expected);
+            Files.deleteIfExists(expected);
+        }
+
+        @Test
+        @DisplayName("processSingleGuid logs the identifier and completion message")
+        void logsIdentifierAndCompletion() throws Exception {
+            doReturn(mockHttpResponse).when(mockHttpClient).send(any(), any());
+            when(mockHttpResponse.statusCode()).thenReturn(200);
+            when(mockHttpResponse.body()).thenReturn("{\"status\":\"ok\"}");
+
+            GuidApiClient client = newClientWithMockedHttp();
+            String identifier = "ab3035656480d6184f7a44c9951c5d49";
+            client.processSingleGuid(identifier);
+
+            logHandler.flush();
+            String log = logOutput.toString();
+            assertTrue(log.contains(identifier), "Log should mention the identifier");
+
+            Path expected = Paths.get("results", identifier.substring(0, 12) + ".json");
+            Files.deleteIfExists(expected);
         }
     }
 
@@ -1205,4 +1157,5 @@ class GuidApiClientTest {
                     "Expected SEVERE log entry naming the missing file");
         }
     }
+}
 }
