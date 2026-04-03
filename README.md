@@ -73,6 +73,15 @@ To process a single GUID:
 mvn exec:java -Dexec.args="-g <GUID>"
 ```
 
+## Dashboard
+
+There is a dashboard for displaying the results.
+Before viewing the dashboard, run
+`mvn exec:java -Dexec.mainClass="cessda.cmv.benchmark.GenerateManifest"`
+to index the results. It should be run locally (as the application is not
+structured for Web deployment at present) using `npx serve .` then go to
+`http://localhost:3000` view it.
+
 ## Customisation
 
 The following options can be combined with any of the modes described above.
