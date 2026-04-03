@@ -49,6 +49,12 @@ To fetch the identifier lists without processing them:
 mvn exec:java -Dexec.args="-F"
 ```
 
+To fetch the identifier list for a specified language without processing them:
+
+```text
+mvn exec:java -Dexec.args="-L en"
+```
+
 To process all previously fetched language files without re-fetching:
 
 ```text
@@ -123,6 +129,8 @@ The following flags are available:
                                resulting files (equivalent to -F -P)
  -F,--fetch-all                Fetch identifier lists for all languages from OAI-PMH and
                                write guids_XX.txt files
+ -L,--fetch-language <lang>    Fetch identifier list for specified language from OAI-PMH and
+                               write guids_XX.txt file
  -f,--filename <file>          GUIDs filename (default: guids.txt) – used in legacy
                                single-file mode
  -h,--help                     Show help
