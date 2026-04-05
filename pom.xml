@@ -17,6 +17,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
+    <exec.mainClass>cessda.cmv.benchmark.GuidApiClient</exec.mainClass>
   </properties>
 
   <dependencies>
@@ -107,7 +108,7 @@
             <artifactId>exec-maven-plugin</artifactId>
             <version>3.1.0</version>
             <configuration>
-                <mainClass>cessda.cmv.benchmark.GuidApiClient</mainClass>
+                <mainClass>${exec.mainClass}</mainClass>
             </configuration>
         </plugin>
         <!-- clean lifecycle, see https://maven.apache.org/ref/current/maven-core/lifecycles.html#clean_Lifecycle -->
