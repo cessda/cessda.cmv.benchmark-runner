@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FAIR Benchmark · Language Detail</title>
+  <title>FAIR Benchmark · Set Detail</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
   <style>
@@ -526,7 +526,7 @@
 <header>
   <a href="index.html" class="back-btn">← Dashboard</a>
   <span class="lang-badge" id="hdr-lang">—</span>
-  <h1 id="hdr-title">Language Detail</h1>
+  <h1 id="hdr-title">Set Detail</h1>
   <div class="header-right" id="hdr-count"></div>
 </header>
 
@@ -675,7 +675,7 @@
 
   // ── State ─────────────────────────────────────────────────────────────────
   let lang       = '';
-  let pageCount  = 0;    // total pages for this language (from summary.json)
+  let pageCount  = 0;    // total pages for this set (from summary.json)
   let currentPage = 1;   // 1-based, current page displayed
   let searchMode = false; // true when filtering across all pages
   let searchCache = [];   // all records loaded for search
@@ -689,7 +689,7 @@
   })();
 
   if (!lang) {
-    showError('No language specified. Return to the dashboard and click a language row.');
+    showError('No set specified. Return to the dashboard and click a set row.');
   } else {
     document.getElementById('hdr-lang').textContent     = lang;
     document.getElementById('hdr-title').textContent    = LANG_NAMES[lang] || lang;
@@ -725,7 +725,7 @@
 
     const ls = summary.languages && summary.languages[lang];
     if (!ls) {
-      showError(`No data found for language "${lang}" in summary.json.`);
+      showError(`No data found for set "${lang}" in summary.json.`);
       return;
     }
 

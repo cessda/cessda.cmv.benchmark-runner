@@ -101,6 +101,10 @@ public class GenerateManifest {
 
     private static final Logger LOG = Logger.getLogger(GenerateManifest.class.getName());
 
+    /** 
+     * @param args
+     * @throws IOException
+     */
     // ── Entry point ──────────────────────────────────────────────────────────
 
     public static void main(String[] args) throws IOException {
@@ -128,6 +132,9 @@ public class GenerateManifest {
         this.resultsDir = resultsDir;
     }
 
+    /** 
+     * @throws IOException
+     */
     // ── Main processing ──────────────────────────────────────────────────────
 
     public void run() throws IOException {
@@ -145,6 +152,11 @@ public class GenerateManifest {
         LOG.info(String.format("Done. %d language(s), %d total records.", langStats.size(), totalRecords));
     }
 
+    /** 
+     * @param lang
+     * @param langDir
+     * @throws IOException
+     */
     // ── Per-language processing ──────────────────────────────────────────────
 
     private void processLanguage(String lang, Path langDir) throws IOException {
@@ -233,6 +245,12 @@ public class GenerateManifest {
         LOG.info(String.format("  -> %d page(s) written (%d records)", stats.pageCount, stats.records));
     }
 
+    /** 
+     * @param pagesDir
+     * @param pageNumber
+     * @param records
+     * @throws IOException
+     */
     // ── Output writers ───────────────────────────────────────────────────────
 
     private void writePage(Path pagesDir, int pageNumber, List<ObjectNode> records) throws IOException {
@@ -294,6 +312,11 @@ public class GenerateManifest {
         LOG.info("Wrote " + out);
     }
 
+    /** 
+     * @param s
+     * @param includePageCount
+     * @return ObjectNode
+     */
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private ObjectNode statsToJson(LangStats s, boolean includePageCount) {
@@ -340,6 +363,10 @@ public class GenerateManifest {
         return amp >= 0 ? after.substring(0, amp) : after;
     }
 
+    /** 
+     * @param testId
+     * @return String
+     */
     static String fairCategory(String testId) {
         String t = testId.trim();
         String cat = FAIR_MAP.get(t);
@@ -354,7 +381,7 @@ public class GenerateManifest {
     // ── Inner class ──────────────────────────────────────────────────────────
 
     private static class LangStats {
-        final String lang;
+        private String set = null;
         int records   = 0;
         int pass      = 0;
         int fail      = 0;
@@ -366,8 +393,8 @@ public class GenerateManifest {
         /** test ID -> [pass, fail, indet] */
         final Map<String, int[]> tests = new LinkedHashMap<>();
 
-        LangStats(String lang) {
-            this.lang = lang;
+        LangStats(String set) {
+            this.set = set;
             for (String cat : List.of("F","A","I","R")) fair.put(cat, new int[2]);
         }
 

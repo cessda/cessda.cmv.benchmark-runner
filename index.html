@@ -358,7 +358,7 @@
       <div class="kpi-cell">
         <p class="kpi-label">Total Records</p>
         <p class="kpi-value" id="kpi-total">—</p>
-        <p class="kpi-sub">across all languages</p>
+        <p class="kpi-sub">across all sets</p>
       </div>
       <div class="kpi-cell">
         <p class="kpi-label">Pass Rate</p>
@@ -371,9 +371,9 @@
         <p class="kpi-sub" id="kpi-fail-sub"></p>
       </div>
       <div class="kpi-cell">
-        <p class="kpi-label">Languages</p>
+        <p class="kpi-label">Sets</p>
         <p class="kpi-value" id="kpi-langs">—</p>
-        <p class="kpi-sub">language sets</p>
+        <p class="kpi-sub">sets</p>
       </div>
     </div>
 
@@ -412,12 +412,12 @@
     </div>
 
     <div class="lang-section fade-in stagger-3">
-      <p class="section-label" id="lang-label">By Language</p>
+      <p class="section-label" id="lang-label">By Set</p>
       <div class="table-wrap">
         <table aria-labelledby="lang-label">
           <thead>
             <tr>
-              <th scope="col">Language</th>
+              <th scope="col">Set name</th>
               <th scope="col" class="num">Records</th>
               <th scope="col">Result Distribution</th>
               <th scope="col" class="num">Pass</th>
@@ -548,7 +548,7 @@
         </td>
         <td class="view-arrow" aria-hidden="true">→</td>`;
       const go = () => {
-        window.location.href = `language.html?lang=${encodeURIComponent(lang)}#lang=${encodeURIComponent(lang)}`;
+        window.location.href = `detail.html?lang=${encodeURIComponent(lang)}#lang=${encodeURIComponent(lang)}`;
       };
       tr.addEventListener('click', go);
       tr.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }});

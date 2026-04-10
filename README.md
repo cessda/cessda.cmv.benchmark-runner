@@ -3,167 +3,125 @@
 [![SQAaaS badge](https://github.com/EOSC-synergy/SQAaaS/raw/master/badges/badges_150x116/badge_software_silver.png)](https://api.eu.badgr.io/public/assertions/rxEEBuR9QoadzMDHXT4PmQ "SQAaaS silver badge achieved")
 
 This repository contains the source code for assessing digital objects in bulk
-against the [CESSDA QA algorithm configuration spreadsheet](https://tools.ostrails.eu/champion/algorithms/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw),
+against a  [CESSDA QA algorithm configuration spreadsheet](https://tools.ostrails.eu/champion/algorithms/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw),
 using the [FAIR Champion Benchmark Assessment tool](https://tools.ostrails.eu/champion/assess/algorithms/new).
 
 ## Prerequisites
 
 Java 21 or greater is required to build and run this application.
 
-## Quick Start
+## Dependencies
 
-1. Check prerequisites and install any required software.
-2. Clone the repository to your local workspace.
-3. Add the GUIDs of the digital objects to test in the `src/main/resources/guids.txt` file.
-4. Build the application using `mvn compile`.
-5. Run the application using the following command: `mvn exec:java`
-   (this uses the QA algorithm configuration spreadsheet specified by `BENCHMARK_ALGORITHM_URI`).
-6. The assessment results file for each GUID is written to the `results` directory.
+- Java standard library (`java.net.http`, `java.nio.file`,
+  `javax.xml.parsers`, `java.util.concurrent`)
+- Apache Commons CLI — command-line argument parsing
+- Jackson Databind — JSON reading and writing
 
-## Fetching Identifiers from OAI-PMH
+## Overview
 
-Instead of (or in addition to) maintaining a `guids.txt` file manually, the application can fetch
-lists of identifiers directly from the CESSDA data catalogue OAI-PMH endpoint. Identifiers are
-retrieved for the following language sets: `de`, `el`, `en`, `fi`, `fr`, `hr`, `nl`, `sl`,
-`sl-SI`, and `sv`.
+A three-class Java pipeline that fetches OAI-PMH record identifiers,
+submits them to a FAIR Champion benchmark assessment API, and
+pre-processes the results into a form ready for an HTML dashboard.
 
-Each language produces a separate file, for example `guids_de.txt`, written to the
-`src/main/resources` directory (or the current working directory when running from a JAR).
-These files are then available for processing in the same way as `guids.txt`.
-
-To fetch all identifier lists and immediately process them, run:
+## Pipeline overview
 
 ```text
-mvn exec:java -Dexec.args="-A"
+OAI-PMH endpoint
+      │
+      ▼
+GetOaiPmhIdentifiers   →   guids_<lang>.txt  (one per language set)
+      │
+      ▼
+RunBenchmarkAssessment →   results/guids_<lang>/<identifier>.json
+      │
+      ▼
+GenerateManifest       →   results/summary.json
+                           results/guids_<lang>/pages/page-NNN.json
 ```
 
-or equivalently:
+The three classes are intended to be run in order. The output of each
+stage is the input to the next.
 
-```text
-mvn exec:java -Dexec.args="--fetch-and-process"
-```
+## Classes
 
-To fetch the identifier lists without processing them:
+### GetOaiPmhIdentifiers
 
-```text
-mvn exec:java -Dexec.args="-F"
-```
+Queries an OAI-PMH endpoint using the `ListIdentifiers` verb,
+following resumption tokens until all pages have been retrieved. For
+each language set it writes a `guids_<lang>.txt` file in which every
+non-comment line is a complete OAI-PMH `GetRecord` URL ready for the
+next stage. By default it targets the CESSDA Data Catalogue endpoint
+and processes ten language sets (`de`, `el`, `en`, `fi`, `fr`, `hr`,
+`nl`, `sl`, `sl-SI`, `sv`).
 
-To fetch the identifier list for a specified language without processing them:
+See [GetOaiPmhIdentifiers_README.md](GetOaiPmhIdentifiers_README.md)
+for full usage and options.
 
-```text
-mvn exec:java -Dexec.args="-L en"
-```
+### RunBenchmarkAssessment
 
-To process all previously fetched language files without re-fetching:
+Reads the `guids_<lang>.txt` files produced by the previous stage and
+POSTs each `GetRecord` URL to the FAIR Champion assessment API. Results
+are saved as JSON files under `results/guids_<lang>/`. Processing is
+parallelised across five threads. Errors are captured in separate
+`error_*.json` files so that a single failure does not interrupt the
+rest of the batch.
 
-```text
-mvn exec:java -Dexec.args="-P"
-```
+See [RunBenchmarkAssessment_README.md](RunBenchmarkAssessment_README.md)
+for full usage and options.
 
-To process a single named file:
+### GenerateManifest
 
-```text
-mvn exec:java -Dexec.args="-p guids_de.txt"
-```
+Scans the `results/` directory and pre-processes the per-record JSON
+files into two artefacts used by the HTML dashboard. It writes a
+single `results/summary.json` containing aggregated pass, fail, and
+indeterminate counts broken down by language, test ID, and FAIR
+category (F, A, I, R). It also writes paginated
+`results/guids_<lang>/pages/page-NNN.json` files (200 records per
+page) containing only the fields the browser needs, keeping page
+loads small.
 
-To process a single GUID:
+See [GenerateManifest_README.md](GenerateManifest_README.md) for full
+details of the output formats.
 
-```text
-mvn exec:java -Dexec.args="-g <GUID>"
-```
+## Quick start
 
-## Dashboard
+Run each stage in turn, using Maven from the project root:
 
-There is a dashboard for displaying the results.
-Before viewing the dashboard, run
-`mvn exec:java -Dexec.mainClass="cessda.cmv.benchmark.GenerateManifest"`
-to index the results. It should be run locally (as the application is not
-structured for Web deployment at present) using `npx serve .` then go to
-`http://localhost:3000` view it.
+```bash
+# 1. Fetch identifiers for all default language sets
+mvn exec:java \
+  -Dexec.mainClass="cessda.cmv.benchmark.GetOaiPmhIdentifiers"
 
-## Customisation
+# 2. Submit all identifiers to the benchmark API
+mvn exec:java \
+  -Dexec.mainClass="cessda.cmv.benchmark.RunBenchmarkAssessment" \
+  -Dexec.args="--process-all"
 
-The following options can be combined with any of the modes described above.
-All commands should be run from the top-level directory (i.e. where the `pom.xml` file is located).
-
-### Use a different QA algorithm configuration spreadsheet
-
-```text
-mvn exec:java -Dexec.args="-s https://tools.ostrails.eu/champion/algorithms/16s2klErdtZck2b6i2Zp_PjrgpBBnnrBKaAvTwrnMB4w"
-```
-
-or:
-
-```text
-mvn exec:java -Dexec.args="--spreadsheet https://tools.ostrails.eu/champion/algorithms/16s2klErdtZck2b6i2Zp_PjrgpBBnnrBKaAvTwrnMB4w"
-```
-
-Note: this must be the URL of a spreadsheet that is registered in FAIR Champion.
-You can register a new Google spreadsheet with [FAIR Champion](https://tools.ostrails.eu/champion/algorithms/new).
-You must publish the spreadsheet to the web and use the resulting URL to register it.
-
-### Use a different filename for the list of GUIDs
-
-The file must be located in the `src/main/resources` directory or the current working directory.
-
-```text
-mvn exec:java -Dexec.args="--filename guids2.txt"
-```
-
-or:
-
-```text
-mvn exec:java -Dexec.args="-f guids2.txt"
-```
-
-### Get help with the command line arguments
-
-```text
-mvn exec:java -Dexec.args="--help"
-```
-
-or:
-
-```text
-mvn exec:java -Dexec.args="-h"
-```
-
-## Command Line Reference
-
-The following flags are available:
-
-```text
- -A,--fetch-and-process        Fetch all identifier lists from OAI-PMH then process all
-                               resulting files (equivalent to -F -P)
- -F,--fetch-all                Fetch identifier lists for all languages from OAI-PMH and
-                               write guids_XX.txt files
- -L,--fetch-language <lang>    Fetch identifier list for specified language from OAI-PMH and
-                               write guids_XX.txt file
- -f,--filename <file>          GUIDs filename (default: guids.txt) – used in legacy
-                               single-file mode
- -h,--help                     Show help
- -P,--process-all              Process all guids_XX.txt files found in resources or
-                               current directory
- -p,--process-file <file>      Process a single named GUID file
- -s,--spreadsheet <uri>        Spreadsheet URI (default: BENCHMARK_ALGORITHM_URI)
+# 3. Pre-process results for the dashboard
+mvn exec:java \
+  -Dexec.mainClass="cessda.cmv.benchmark.GenerateManifest"
 ```
 
 ## Project Structure
 
 This project uses the standard Maven project structure.
+Various non-functional files have been omitted.
 
 ```text
 <ROOT>
-├── .mvn                # Maven wrapper.
+├── README.md           # This file
+├── detail.html         # Drill down detail page of the dashboard
+├── index.html          # Landing page of the dashboard
+├── results             # Outputs from running RunBenchmarkAssessment
 ├── src                 # Contains all source code and assets for the application.
 |   ├── main
 |   |   ├── java        # Contains release source code of the application.
-|   |   └── resources   # Contains release resource assets.
+|   |── ├── resources   # Contains release resource assets.
 |   └── test
 |       ├── java        # Contains test source code.
 |       └── resources   # Contains test resource assets.
-└── target              # The output directory for the build.
+├── target              # The output directory for the build.
+└── start-dashboard.sh  # A script that runs GenerateManifest and starts a web server
 ```
 
 ## Contributing
