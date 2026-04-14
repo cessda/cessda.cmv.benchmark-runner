@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  benchmark-runner:
+    build: .
+    image: cessda/benchmark-runner:2.0.0
+    container_name: benchmark-runner
+    ports:
+      - "8080:8080"
+    volumes:
+      # Named volume for guids_*.txt files (written by fetch-identifiers, read by run-assessment)
+      - benchmark-data:/data
+      # Named volume for JSON result files and the dashboard manifest (summary.json, page files)
+      - benchmark-results:/results
+    environment:
+      # Override volume paths if needed (these match application.properties defaults)
+      - benchmark.data-dir=/data
+      - benchmark.results-dir=/results
+    restart: unless-stopped
+
+volumes:
+  benchmark-data:
+    name: benchmark-data
+  benchmark-results:
+    name: benchmark-results

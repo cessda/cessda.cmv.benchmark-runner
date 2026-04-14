@@ -1,0 +1,5 @@
+# Identifiers for language: hr
+# Fetched: 2026-04-09T16:12:13.175148Z
+# Count: 2
+https://datacatalogue.cessda.eu/oai-pmh/v0/oai?verb=GetRecord&metadataPrefix=oai_ddi25&identifier=a9fb7a215949baf809d606b105597dd49801f58bc1165413fcfb13c2fd97c7c9
+https://datacatalogue.cessda.eu/oai-pmh/v0/oai?verb=GetRecord&metadataPrefix=oai_ddi25&identifier=6ab7ce81564146d42083708ab022f43e8cce12eda2c3043f85279338dacc85c1

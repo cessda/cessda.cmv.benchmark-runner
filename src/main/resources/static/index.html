@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CESSDA FAIR Benchmark Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
+  <style>
+    /*
+      WCAG 2.1 AAA contrast (≥7:1 normal text, ≥4.5:1 large/bold text)
+      --text   #1c1917 on --bg    #f5f3ee  → 16.1:1 ✓
+      --text   #1c1917 on --surface #fff   → 18.1:1 ✓
+      --muted  #57534e on --bg    #f5f3ee  →  7.2:1 ✓
+      --muted  #57534e on --surface #fff   →  7.6:1 ✓
+      --pass   #14532d on --surface #fff   → 13.4:1 ✓
+      --pass   #14532d on --pass-bg #dcfce7→  8.1:1 ✓
+      --fail   #991b1b on --surface #fff   →  8.3:1 ✓
+      --fail   #991b1b on --fail-bg #fee2e2→  5.2:1 ✓ (large/bold only where used on bg)
+      --indet  #78350f on --surface #fff   → 10.3:1 ✓
+      --accent #1d4ed8 on --surface #fff   →  8.6:1 ✓
+      --accent #1d4ed8 on --accent-bg #eff6ff → 8.1:1 ✓
+      --acc2   #6d28d9 on --surface #fff   →  8.5:1 ✓
+      --navy   #1e40af on --surface #fff   →  9.7:1 ✓
+      Colour-only status indicators are always supplemented with text.
+      Progress bars are decorative; values are shown as text beside them.
+    */
+    :root {
+      --bg:         #f5f3ee;
+      --surface:    #ffffff;
+      --border:     #e2ddd6;
+      --border2:    #c5bcb0;
+      --text:       #1c1917;
+      --muted:      #57534e;
+      --pass:       #14532d;
+      --pass-bg:    #dcfce7;
+      --fail:       #991b1b;
+      --fail-bg:    #fee2e2;
+      --indet:      #78350f;
+      --indet-bg:   #fef3c7;
+      --accent:     #1d4ed8;
+      --accent-bg:  #eff6ff;
+      --navy:       #1e40af;
+      --purple:     #6d28d9;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* Visually hidden but screen-reader accessible */
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+
+    /* ── Focus styles ── */
+    :focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 2px;
+      border-radius: 2px;
+    }
+
+    /* ── Header ── */
+    header {
+      border-bottom: 2px solid var(--border2);
+      padding: 24px 48px;
+      display: flex;
+      align-items: baseline;
+      gap: 20px;
+      background: var(--surface);
+    }
+    header h1 {
+      font-family: 'Fraunces', serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.3px;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .header-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    #last-updated { color: var(--muted); font-size: 11px; }
+    .reload-btn {
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      color: var(--text);
+      padding: 6px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .reload-btn:hover { background: var(--border); border-color: var(--muted); }
+
+    /* ── Layout ── */
+    main { max-width: 1280px; margin: 0 auto; padding: 40px 48px; }
+
+    /* ── Loading / Error ── */
+    #loading, #error-msg {
+      text-align: center;
+      padding: 80px 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    #error-msg { color: var(--fail); display: none; }
+    .spinner {
+      display: inline-block;
+      width: 20px; height: 20px;
+      border: 2px solid var(--border2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Section labels ── */
+    .section-label {
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 16px;
+      font-weight: 500;
+    }
+
+    /* ── KPI grid ── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      background: var(--border2);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 40px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .kpi-cell { background: var(--surface); padding: 28px 32px; }
+    .kpi-label {
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 500;
+      margin-bottom: 10px;
+    }
+    .kpi-value {
+      font-family: 'Fraunces', serif;
+      font-size: 44px;
+      font-weight: 300;
+      line-height: 1;
+      color: var(--text);
+    }
+    .kpi-sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .kpi-value.pass  { color: var(--pass); }
+    .kpi-value.fail  { color: var(--fail); }
+    .kpi-value.indet { color: var(--indet); }
+
+    /* ── FAIR cards ── */
+    .fair-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    .fair-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .fair-letter {
+      font-family: 'Fraunces', serif;
+      font-size: 40px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .fair-name {
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+    .fair-bar-bg {
+      height: 5px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .fair-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.8s cubic-bezier(.4,0,.2,1);
+    }
+    .fair-pct {
+      font-size: 22px;
+      font-family: 'Fraunces', serif;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .fair-pass-count { font-size: 12px; color: var(--muted); }
+
+    .F .fair-letter { color: var(--navy); }
+    .A .fair-letter { color: var(--pass); }
+    .I .fair-letter { color: var(--purple); }
+    .R .fair-letter { color: var(--indet); }
+    .F .fair-bar-fill { background: var(--navy); }
+    .A .fair-bar-fill { background: var(--pass); }
+    .I .fair-bar-fill { background: var(--purple); }
+    .R .fair-bar-fill { background: var(--indet); }
+
+    /* ── Language table ── */
+    .lang-section { margin-bottom: 48px; }
+
+    .table-wrap {
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    table { width: 100%; border-collapse: collapse; }
+    thead tr { background: var(--bg); border-bottom: 2px solid var(--border2); }
+    thead th {
+      padding: 12px 20px;
+      text-align: left;
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    thead th.num { text-align: right; }
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      transition: background 0.1s;
+      cursor: pointer;
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--accent-bg); }
+    tbody td { padding: 16px 20px; vertical-align: middle; }
+    tbody td.num { text-align: right; }
+
+    .lang-name { display: flex; align-items: center; gap: 12px; }
+    .lang-tag {
+      background: var(--accent-bg);
+      color: var(--accent);
+      border: 1px solid #bfdbfe;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .lang-fullname { color: var(--muted); font-size: 12px; }
+
+    .pill-row { display: flex; gap: 3px; align-items: center; }
+    .pill { height: 8px; border-radius: 4px; min-width: 4px; }
+    .pill.pass  { background: var(--pass); }
+    .pill.fail  { background: var(--fail); }
+    .pill.indet { background: var(--indet); }
+
+    .count-pass  { color: var(--pass);  font-weight: 500; }
+    .count-fail  { color: var(--fail);  font-weight: 500; }
+    .count-indet { color: var(--indet); font-weight: 500; }
+
+    .mini-fair { display: flex; gap: 10px; }
+    .mini-fair-item { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+    .mini-fair-letter { font-size: 10px; font-weight: 500; color: var(--muted); }
+    .mini-fair-dot { width: 9px; height: 9px; border-radius: 50%; }
+    .mini-fair-dot.high  { background: var(--pass); }
+    .mini-fair-dot.mid   { background: var(--indet); }
+    .mini-fair-dot.low   { background: var(--fail); }
+
+    .view-arrow { color: var(--muted); font-size: 16px; text-align: right; }
+    tbody tr:hover .view-arrow { color: var(--accent); }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border2);
+      padding: 20px 48px;
+      color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      background: var(--surface);
+    }
+    footer code {
+      background: var(--bg);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: inherit;
+      border: 1px solid var(--border);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      main { padding: 24px 20px; }
+      header { padding: 20px; flex-wrap: wrap; }
+      footer { padding: 16px 20px; flex-direction: column; gap: 4px; }
+      .kpi-grid  { grid-template-columns: repeat(2, 1fr); }
+      .fair-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .fade-in { animation: fadeIn 0.35s ease forwards; opacity: 0; }
+    @keyframes fadeIn { to { opacity: 1; } }
+    .stagger-1 { animation-delay: 0.05s; }
+    .stagger-2 { animation-delay: 0.10s; }
+    .stagger-3 { animation-delay: 0.15s; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>FAIR Benchmark</h1>
+    <p class="subtitle">CESSDA Data Catalogue · Assessment Results</p>
+  </div>
+  <div class="header-right">
+    <span id="last-updated" aria-live="polite"></span>
+    <button class="reload-btn" onclick="loadData()">↻ Refresh</button>
+  </div>
+</header>
+
+<main>
+  <div id="loading">
+    <div class="spinner" role="status" aria-label="Loading data"></div>
+    <p>Loading results…</p>
+  </div>
+  <div id="error-msg" role="alert"></div>
+  <div id="dashboard" style="display:none">
+
+    <div class="section-label" id="kpi-label">Overall Summary</div>
+    <div class="kpi-grid fade-in stagger-1" role="region" aria-labelledby="kpi-label">
+      <div class="kpi-cell">
+        <p class="kpi-label">Total Records</p>
+        <p class="kpi-value" id="kpi-total">—</p>
+        <p class="kpi-sub">across all sets</p>
+      </div>
+      <div class="kpi-cell">
+        <p class="kpi-label">Pass Rate</p>
+        <p class="kpi-value pass" id="kpi-pass-rate">—</p>
+        <p class="kpi-sub" id="kpi-pass-sub"></p>
+      </div>
+      <div class="kpi-cell">
+        <p class="kpi-label">Fail Rate</p>
+        <p class="kpi-value fail" id="kpi-fail-rate">—</p>
+        <p class="kpi-sub" id="kpi-fail-sub"></p>
+      </div>
+      <div class="kpi-cell">
+        <p class="kpi-label">Sets</p>
+        <p class="kpi-value" id="kpi-langs">—</p>
+        <p class="kpi-sub">sets</p>
+      </div>
+    </div>
+
+    <p class="section-label" id="fair-label">FAIR Principle Scores
+      <span style="font-weight:400"> — % of tests passing across all records</span>
+    </p>
+    <div class="fair-grid fade-in stagger-2" role="region" aria-labelledby="fair-label">
+      <div class="fair-card F">
+        <p class="fair-letter" aria-hidden="true">F</p>
+        <p class="fair-name">Findable</p>
+        <div class="fair-bar-bg" aria-hidden="true"><div class="fair-bar-fill" id="fair-f-bar" style="width:0%"></div></div>
+        <p class="fair-pct" id="fair-f-pct">—</p>
+        <p class="fair-pass-count" id="fair-f-sub"></p>
+      </div>
+      <div class="fair-card A">
+        <p class="fair-letter" aria-hidden="true">A</p>
+        <p class="fair-name">Accessible</p>
+        <div class="fair-bar-bg" aria-hidden="true"><div class="fair-bar-fill" id="fair-a-bar" style="width:0%"></div></div>
+        <p class="fair-pct" id="fair-a-pct">—</p>
+        <p class="fair-pass-count" id="fair-a-sub"></p>
+      </div>
+      <div class="fair-card I">
+        <p class="fair-letter" aria-hidden="true">I</p>
+        <p class="fair-name">Interoperable</p>
+        <div class="fair-bar-bg" aria-hidden="true"><div class="fair-bar-fill" id="fair-i-bar" style="width:0%"></div></div>
+        <p class="fair-pct" id="fair-i-pct">—</p>
+        <p class="fair-pass-count" id="fair-i-sub"></p>
+      </div>
+      <div class="fair-card R">
+        <p class="fair-letter" aria-hidden="true">R</p>
+        <p class="fair-name">Reusable</p>
+        <div class="fair-bar-bg" aria-hidden="true"><div class="fair-bar-fill" id="fair-r-bar" style="width:0%"></div></div>
+        <p class="fair-pct" id="fair-r-pct">—</p>
+        <p class="fair-pass-count" id="fair-r-sub"></p>
+      </div>
+    </div>
+
+    <div class="lang-section fade-in stagger-3">
+      <p class="section-label" id="lang-label">By Set</p>
+      <div class="table-wrap">
+        <table aria-labelledby="lang-label">
+          <thead>
+            <tr>
+              <th scope="col">Set name</th>
+              <th scope="col" class="num">Records</th>
+              <th scope="col">Result Distribution</th>
+              <th scope="col" class="num">Pass</th>
+              <th scope="col" class="num">Fail</th>
+              <th scope="col" class="num">Indet.</th>
+              <th scope="col">FAIR</th>
+              <th scope="col"><span class="sr-only">Open detail view</span></th>
+            </tr>
+          </thead>
+          <tbody id="lang-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  <span>CESSDA FAIR Benchmark Dashboard</span>
+  <span>Results read from <code>results/</code> directory</span>
+</footer>
+
+<script>
+  const LANG_NAMES = {
+    de:'German', el:'Greek', en:'English', fi:'Finnish', fr:'French',
+    hr:'Croatian', nl:'Dutch', sl:'Slovenian', 'sl-SI':'Slovenian (SI)', sv:'Swedish'
+  };
+
+  const FAIR_MAP = {
+    'F1-PID':'F','F1-GUID':'F','F2A':'F','F2B':'F','F4':'F',
+    'A1-1':'A','A1-2':'A',
+    'I1-A':'I','I2-A':'I',
+    'R1-2-CPI ':'R','R1-2-CPI':'R',
+    'R1-3-CEK':'R','R1-3-CTV':'R','R1-3-DMOCV':'R',
+    'R1-3-DAUV':'R','R1-3-DTMV':'R','R1-3-DSPV':'R'
+  };
+
+  function pct(n, d) { return d ? Math.round((n / d) * 100) : 0; }
+
+  async function loadData() {
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('error-msg').style.display = 'none';
+
+    let summary;
+    try {
+      const res = await fetch('results/summary.json');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      summary = await res.json();
+    } catch (e) {
+      showError(`Could not load results/summary.json — run GenerateManifest first.\n\n${e.message}`);
+      return;
+    }
+
+    renderDashboard(summary);
+  }
+
+  function renderDashboard(summary) {
+    const ov = summary.overall;
+    const langs = summary.languages || {};
+    const totalTests = ov.pass + ov.fail + ov.indet;
+
+    document.getElementById('kpi-total').textContent = ov.records.toLocaleString();
+    document.getElementById('kpi-pass-rate').textContent = pct(ov.pass,  totalTests) + '%';
+    document.getElementById('kpi-pass-sub').textContent  = `${ov.pass.toLocaleString()} test passes`;
+    document.getElementById('kpi-fail-rate').textContent = pct(ov.fail,  totalTests) + '%';
+    document.getElementById('kpi-fail-sub').textContent  = `${ov.fail.toLocaleString()} test failures`;
+    document.getElementById('kpi-langs').textContent     = Object.keys(langs).length;
+
+    for (const cat of ['F','A','I','R']) {
+      const d  = ov.fair[cat] || {pass:0, total:0};
+      const p  = pct(d.pass, d.total);
+      const c  = cat.toLowerCase();
+      document.getElementById(`fair-${c}-pct`).textContent = p + '%';
+      document.getElementById(`fair-${c}-sub`).textContent = `${d.pass} / ${d.total} tests`;
+      setTimeout(() => { document.getElementById(`fair-${c}-bar`).style.width = p + '%'; }, 100);
+    }
+
+    const tbody = document.getElementById('lang-table-body');
+    tbody.innerHTML = '';
+    for (const lang of Object.keys(langs).sort()) {
+      const ls    = langs[lang];
+      const pass  = ls.pass,  fail = ls.fail,  indet = ls.indet;
+      const total = pass + fail + indet;
+      const fair  = ls.fair || {};
+      const TW    = 120;
+      const pW    = total ? Math.round((pass  / total) * TW) : 0;
+      const fW    = total ? Math.round((fail  / total) * TW) : 0;
+      const iW    = TW - pW - fW;
+      const fairDesc = ['F','A','I','R'].map(c => {
+        const d = fair[c] || {pass:0,total:0};
+        return `${c}: ${pct(d.pass, d.total)}%`;
+      }).join(', ');
+
+      const tr = document.createElement('tr');
+      tr.setAttribute('tabindex', '0');
+      tr.setAttribute('role', 'button');
+      tr.setAttribute('aria-label',
+        `${LANG_NAMES[lang] || lang} — ${ls.records.toLocaleString()} records. ${fairDesc}. Press Enter to view details.`);
+      tr.innerHTML = `
+        <td><div class="lang-name">
+          <span class="lang-tag">${lang}</span>
+          <span class="lang-fullname">${LANG_NAMES[lang] || ''}</span>
+        </div></td>
+        <td class="num">${ls.records.toLocaleString()}</td>
+        <td>
+          <div class="pill-row" aria-hidden="true">
+            <div class="pill pass" style="width:${pW}px"></div>
+            <div class="pill fail" style="width:${fW}px"></div>
+            <div class="pill indet" style="width:${iW}px"></div>
+          </div>
+        </td>
+        <td class="num count-pass">${pass.toLocaleString()}</td>
+        <td class="num count-fail">${fail.toLocaleString()}</td>
+        <td class="num count-indet">${indet.toLocaleString()}</td>
+        <td>
+          <div class="mini-fair" aria-hidden="true">
+            ${['F','A','I','R'].map(c => {
+              const d  = fair[c] || {pass:0, total:0};
+              const p2 = pct(d.pass, d.total);
+              const cls = p2 >= 60 ? 'high' : p2 >= 30 ? 'mid' : 'low';
+              return `<div class="mini-fair-item">
+                <span class="mini-fair-letter">${c}</span>
+                <div class="mini-fair-dot ${cls}"></div>
+              </div>`;
+            }).join('')}
+          </div>
+        </td>
+        <td class="view-arrow" aria-hidden="true">→</td>`;
+      const go = () => {
+        window.location.href = `detail.html?lang=${encodeURIComponent(lang)}#lang=${encodeURIComponent(lang)}`;
+      };
+      tr.addEventListener('click', go);
+      tr.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }});
+      tbody.appendChild(tr);
+    }
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  }
+
+  function showError(msg) {
+    document.getElementById('loading').style.display = 'none';
+    const el = document.getElementById('error-msg');
+    el.style.display = 'block';
+    el.innerHTML = `<strong>Error loading data</strong><br>
+      <pre style="margin-top:12px;font-size:11px;text-align:left;display:inline-block;">${msg}</pre><br><br>
+      <span>Run <code style="background:var(--bg);padding:1px 4px;border:1px solid var(--border);">java GenerateManifest.java</code>
+      then serve with <code style="background:var(--bg);padding:1px 4px;border:1px solid var(--border);"> npx serve . </code></span>`;
+  }
+
+  loadData();
+</script>
+</body>
+</html>

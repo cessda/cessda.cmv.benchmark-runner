@@ -1,0 +1,5 @@
+# Identifiers for language: sl-SI
+# Fetched: 2026-03-13T13:13:34.607182Z
+# Count: 2
+1643c0367ef43c9c94657f1dedac3e1a6f57a5ea2e48f372f9c044ca8c89102d
+627593e2f32d1ec8832a63543f46df0c5f7518a42788c34eecbbfd0a59f02297
