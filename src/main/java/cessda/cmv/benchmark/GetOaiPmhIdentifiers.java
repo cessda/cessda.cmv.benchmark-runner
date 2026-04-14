@@ -79,15 +79,15 @@ public class GetOaiPmhIdentifiers {
     // Defaults
     // -----------------------------------------------------------------------
 
-    static final String DEFAULT_OAI_PMH_BASE_URL =
+    public static final String DEFAULT_OAI_PMH_BASE_URL =
             "https://datacatalogue.cessda.eu/oai-pmh/v0/oai";
 
-    static final String DEFAULT_VERB = "ListIdentifiers";
+    public static final String DEFAULT_VERB = "ListIdentifiers";
 
     /** Metadata prefix used when constructing the output GetRecord URLs. */
-    static final String DEFAULT_METADATA_PREFIX = "oai_ddi25";
+    public static final String DEFAULT_METADATA_PREFIX = "oai_ddi25";
 
-    static final String[] DEFAULT_SETS =
+    public static final String[] DEFAULT_SETS =
             {"de", "el", "en", "fi", "fr", "hr", "nl", "sl", "sl-SI", "sv"};
 
     private static final String RESOURCES_DIR = "src/main/resources";

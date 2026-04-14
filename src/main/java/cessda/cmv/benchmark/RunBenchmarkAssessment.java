@@ -75,13 +75,13 @@ public class RunBenchmarkAssessment {
     // Constants
     // -----------------------------------------------------------------------
 
-    static final String BENCHMARK_ALGORITHM_URI =
+    public static final String BENCHMARK_ALGORITHM_URI =
             "https://tools.ostrails.eu/champion/assess/algorithm/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw";
 
-    static final String DEFAULT_GUIDS_FILE = "guids_hr.txt";
+    public static final String DEFAULT_GUIDS_FILE = "guids_hr.txt";
 
     /** Sets whose {@code guids_XX.txt} files are processed by {@code -P}. */
-    static final String[] DEFAULT_SETS =
+    public static final String[] DEFAULT_SETS =
             {"de", "el", "en", "fi", "fr", "hr", "nl", "sl", "sl-SI", "sv"};
 
     private static final String OUTPUT_DIR   = "results";
