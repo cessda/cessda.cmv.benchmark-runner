@@ -205,6 +205,7 @@ public class GenerateManifest {
             JsonNode testResults = root.path("test_results");
             double netScore = 0.0;
             if (testResults.isObject()) {
+                @SuppressWarnings("deprecation")
                 var fields = testResults.fields();
                 while (fields.hasNext()) {
                     var entry = fields.next();
@@ -214,7 +215,7 @@ public class GenerateManifest {
                     netScore += val.path("weight").asDouble(0.0);
                     stats.addTestResult(testId, result);
                 }
-            }
+            };
             stats.records++;
 
             // Build slim page record
@@ -381,6 +382,7 @@ public class GenerateManifest {
     // ── Inner class ──────────────────────────────────────────────────────────
 
     private static class LangStats {
+        @SuppressWarnings("unused")
         private String set = null;
         int records   = 0;
         int pass      = 0;

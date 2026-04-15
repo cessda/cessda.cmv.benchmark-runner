@@ -1,0 +1,27 @@
+{"properties": [
+  {
+    "name": "benchmark.data-dir",
+    "type": "java.lang.String",
+    "description": "A description for 'benchmark.data-dir'"
+  },
+  {
+    "name": "benchmark.results-dir",
+    "type": "java.lang.String",
+    "description": "A description for 'benchmark.results-dir'"
+  },
+  {
+    "name": "springdoc.info.version",
+    "type": "java.lang.String",
+    "description": "A description for 'springdoc.info.version'"
+  },
+  {
+    "name": "springdoc.info.description",
+    "type": "java.lang.String",
+    "description": "A description for 'springdoc.info.description'"
+  },
+  {
+    "name": "springdoc.info.title",
+    "type": "java.lang.String",
+    "description": "A description for 'springdoc.info.title'"
+  }
+]}
