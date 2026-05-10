@@ -1,2 +1,0 @@
-https://datacatalogue.cessda.eu/oai-pmh/v0/oai?verb=GetRecord&metadataPrefix=oai_ddi25&identifier=9383aafda9500f4a82397281b2b7fcb1fa69c59a812432ab1e45a61b39b15c63
-https://datacatalogue.cessda.eu/detail/9383aafda9500f4a82397281b2b7fcb1fa69c59a812432ab1e45a61b39b15c63?lang=en

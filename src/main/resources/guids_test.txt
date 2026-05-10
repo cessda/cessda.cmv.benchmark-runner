@@ -1,0 +1,4 @@
+https://skg-if-staging.cessda.eu/api/products/092fbbc2bfc214900b5b2c681f8a75ec13a944185b86614d5096c3e0667072ca
+https://datacatalogue.cessda.eu/oai-pmh/v0/oai?verb=GetRecord&metadataPrefix=oai_ddi25&identifier=092fbbc2bfc214900b5b2c681f8a75ec13a944185b86614d5096c3e0667072ca
+https://datacatalogue.cessda.eu/detail/092fbbc2bfc214900b5b2c681f8a75ec13a944185b86614d5096c3e0667072ca?lang=el
+#092fbbc2bfc214900b5b2c681f8a75ec13a944185b86614d5096c3e0667072ca

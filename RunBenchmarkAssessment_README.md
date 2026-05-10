@@ -49,6 +49,8 @@ runs in legacy single-file mode and processes the file specified by
 
 ## Usage
 
+### Process all default GUIDs
+
 Run with Maven (from the project root):
 
 ```bash
@@ -60,28 +62,34 @@ mvn exec:java \
 Run from a JAR:
 
 ```bash
-java -cp <jar> cessda.cmv.benchmark.RunBenchmarkAssessment \
-  --process-all
-```
-
-### Process all default sets
-
-```bash
-java -cp <jar> cessda.cmv.benchmark.RunBenchmarkAssessment \
+java -jar target/benchmark-1.0-SNAPSHOT.jar cessda.cmv.benchmark.RunBenchmarkAssessment \
   --process-all
 ```
 
 ### Process a single GUID file
 
 ```bash
-java -cp <jar> cessda.cmv.benchmark.RunBenchmarkAssessment \
+mvn exec:java \
+  -Dexec.mainClass="cessda.cmv.benchmark.RunBenchmarkAssessment" \
+  -Dexec.args="--process-file guids_de.txt"
+```
+
+```bash
+java -jar target/benchmark-1.0-SNAPSHOT.jar cessda.cmv.benchmark.RunBenchmarkAssessment \
   --process-file guids_de.txt
 ```
 
 ### Process a single GetRecord URL
 
 ```bash
-java -cp <jar> cessda.cmv.benchmark.RunBenchmarkAssessment \
+mvn exec:java \
+  -Dexec.mainClass="cessda.cmv.benchmark.RunBenchmarkAssessment" \
+  -Dexec.args="--guid "https://datacatalogue.cessda.eu/oai-pmh/v0/oai\
+?verb=GetRecord&metadataPrefix=oai_ddi25&identifier=abc123"
+```
+
+```bash
+java -jar target/benchmark-1.0-SNAPSHOT.jar cessda.cmv.benchmark.RunBenchmarkAssessment \
   --guid "https://datacatalogue.cessda.eu/oai-pmh/v0/oai\
 ?verb=GetRecord&metadataPrefix=oai_ddi25&identifier=abc123"
 ```
@@ -89,7 +97,14 @@ java -cp <jar> cessda.cmv.benchmark.RunBenchmarkAssessment \
 ### Use a custom Champion API endpoint
 
 ```bash
-java -cp <jar> cessda.cmv.benchmark.RunBenchmarkAssessment \
+mvn exec:java \
+  -Dexec.mainClass="cessda.cmv.benchmark.RunBenchmarkAssessment" \
+  -Dexec.args="--spreadsheet https://custom.example.org/champion/assess/... \
+  --process-all"
+```
+
+```bash
+java -jar target/benchmark-1.0-SNAPSHOT.jar cessda.cmv.benchmark.RunBenchmarkAssessment \
   --spreadsheet https://custom.example.org/champion/assess/... \
   --process-all
 ```

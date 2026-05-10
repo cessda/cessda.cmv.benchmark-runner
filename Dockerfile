@@ -14,7 +14,7 @@ RUN mvn package -DskipTests -q
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
 # Minimal JRE-only image keeps the final image small.
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:21-jre-alpine@sha256:latest
 
 WORKDIR /app
 
