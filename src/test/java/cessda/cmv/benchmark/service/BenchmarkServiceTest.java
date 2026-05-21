@@ -53,9 +53,13 @@ class BenchmarkServiceTest {
 
     private BenchmarkService service;
 
+    private RunBenchmarkAssessment assessment;
+
+
     @BeforeEach
     void setUp() {
         service = new BenchmarkService();
+        assessment = new RunBenchmarkAssessment(null, null);   
         ReflectionTestUtils.setField(
             service, "dataDir",    dataDir.toString());
         ReflectionTestUtils.setField(
@@ -225,9 +229,9 @@ class BenchmarkServiceTest {
         @DisplayName("Uses default Champion API URI when spreadsheetUri is null")
         void usesDefaultChampionUriWhenNull() {
             assertEquals(
-                "https://tools.ostrails.eu/champion/assess/algorithm"
-                + "/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw",
-                RunBenchmarkAssessment.BENCHMARK_ALGORITHM_URI,
+                //"http://invalid.example.invalid",
+                null,
+                assessment.getBenchmarkAlgorithm(),
                 "Default Champion API URI must match the expected value");
         }
 

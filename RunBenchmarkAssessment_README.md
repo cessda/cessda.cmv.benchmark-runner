@@ -19,18 +19,19 @@ Processing is parallelised with a fixed thread pool of five workers.
 
 ## Default values
 
-| Parameter        | Default value                                                 |
-|------------------|------------------------------------------------------------   |
-| Champion API URI | `https://tools.ostrails.eu/champion/assess/algorithm/`...     |
-| GUIDs file       | `guids_hr.txt`                                                |
-| Sets             | `de`, `el`, `en`, `fi`, `fr`, `hr`, `nl`, `sl`, `sl-SI`, `sv` |
-| Output directory | `results/`                                                    |
+| Parameter             | Default value                                                 |
+|-----------------------|---------------------------------------------------------------|
+| Algorithm URI         | `https://tools.ostrails.eu/champion/assess/algorithm/`...     |
+| Runner URI            | `https://tools.ostrails.eu/champion/assess/...`               |
+| GUIDs file            | `guids_hr.txt`                                                |
+| Sets                  | `de`, `el`, `en`, `fi`, `fr`, `hr`, `nl`, `sl`, `sl-SI`, `sv` |
+| Output directory      | `results/`                                                    |
 
 ## Command-line options
 
 ```text
--s, --spreadsheet <uri>    FAIR Champion API URI to POST GUIDs to
-                            (default: BENCHMARK_ALGORITHM_URI constant)
+-s, --spreadsheet <uri>    Overrides the algorithm URI at runtime
+                            (default: benchmark.algorithm property)
 -p, --process-file <file>  Process a single named GUID file
 -P, --process-all          Process all guids_XX.txt files for the
                             default set list
@@ -46,6 +47,32 @@ Processing is parallelised with a fixed thread pool of five workers.
 If none of the mode flags (`-p`, `-P`, `-g`) are given, the class
 runs in legacy single-file mode and processes the file specified by
 `-f` / `--filename` (defaulting to `guids_hr.txt`).
+
+## Runtime configuration
+
+Both API endpoints are configured via `application.properties` and can
+be overridden at runtime without recompilation:
+
+| Property              | Environment variable    | Purpose                  |
+|-----------------------|-------------------------|--------------------------|
+| `benchmark.algorithm` | `BENCHMARK_ALGORITHM`   | Algorithm URI (payload)  |
+| `benchmark.runner`    | `BENCHMARK_RUNNER`      | Runner URI (POST target) |
+
+For example, using environment variables:
+
+```bash
+BENCHMARK_ALGORITHM=https://custom.example.org/algorithm \
+BENCHMARK_RUNNER=https://custom.example.org/runner \
+java -jar target/benchmark-1.0-SNAPSHOT.jar --process-all
+```
+
+Or JVM system properties:
+
+```bash
+java -Dbenchmark.algorithm=https://... \
+     -Dbenchmark.runner=https://... \
+     -jar target/benchmark-1.0-SNAPSHOT.jar --process-all
+```
 
 ## Usage
 
@@ -166,8 +193,8 @@ Errors are saved as `error_<sanitised-identifier>.json`:
 ## How it works
 
 1. GUIDs are read from the selected file(s) or supplied directly.
-2. A JSON payload is built: `{"guid": "<url>", "url": "<api-uri>"}`.
-3. The payload is POSTed to the Champion API.
+2. A JSON payload is built: `{"calculation_uri": "<algorithm>", "guid": "<url>"}`.
+3. The payload is POSTed to the Champion runner URI.
 4. The response body is saved as a JSON file.
 5. On error, an error JSON file is saved and processing continues
    with the next GUID.

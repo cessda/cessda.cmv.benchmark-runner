@@ -6,16 +6,17 @@
 
 package cessda.cmv.benchmark.service;
 
-import cessda.cmv.benchmark.GenerateManifest;
-import cessda.cmv.benchmark.GetOaiPmhIdentifiers;
-import cessda.cmv.benchmark.RunBenchmarkAssessment;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import cessda.cmv.benchmark.GenerateManifest;
+import cessda.cmv.benchmark.GetOaiPmhIdentifiers;
+import cessda.cmv.benchmark.RunBenchmarkAssessment;
 
 /**
  * Spring service that delegates to the three existing CLI classes.
@@ -41,6 +42,8 @@ public class BenchmarkService {
     /** Root directory for result JSON files (Docker volume: benchmark-results). */
     @Value("${benchmark.results-dir:/results}")
     private String resultsDir;
+
+    RunBenchmarkAssessment assessment;
 
     // -------------------------------------------------------------------------
     // 1. Fetch OAI-PMH Identifiers
@@ -99,8 +102,8 @@ public class BenchmarkService {
         Files.createDirectories(Paths.get(dataDir));
         Files.createDirectories(Paths.get(resultsDir));
 
-        String resolvedUri = nvl(spreadsheetUri, RunBenchmarkAssessment.BENCHMARK_ALGORITHM_URI);
-        RunBenchmarkAssessment runner = new RunBenchmarkAssessment(resolvedUri);
+        String resolvedUri = nvl(spreadsheetUri, assessment.getBenchmarkAlgorithm());
+        RunBenchmarkAssessment runner = new RunBenchmarkAssessment(resolvedUri,assessment.getBenchmarkRunner());
 
         if (guid != null && !guid.isBlank()) {
             runner.processSingleGuid(guid.trim());

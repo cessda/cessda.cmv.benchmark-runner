@@ -40,33 +40,19 @@ class RunBenchmarkAssessmentTest {
 
     // ── Fixture ──────────────────────────────────────────────────────────────
 
-    private RunBenchmarkAssessment client;
+    private RunBenchmarkAssessment assessment;
 
     @BeforeEach
     void setUp() {
-        client = new RunBenchmarkAssessment(
-                RunBenchmarkAssessment.BENCHMARK_ALGORITHM_URI);
+        assessment = new RunBenchmarkAssessment(null, null);
     }
 
     @AfterEach
     void tearDown() {
-        client = null;
+        assessment = null;
     }
 
     // ── Constants ────────────────────────────────────────────────────────────
-
-    @Test
-    void benchmarkAlgorithmUriIsNotBlank() {
-        assertFalse(RunBenchmarkAssessment.BENCHMARK_ALGORITHM_URI.isBlank(),
-                "BENCHMARK_ALGORITHM_URI must not be blank");
-    }
-
-    @Test
-    void benchmarkAlgorithmUriStartsWithHttps() {
-        assertTrue(
-                RunBenchmarkAssessment.BENCHMARK_ALGORITHM_URI.startsWith("https://"),
-                "BENCHMARK_ALGORITHM_URI must be an HTTPS URL");
-    }
 
     @Test
     void defaultGuidsFileIsNotBlank() {
@@ -196,7 +182,7 @@ class RunBenchmarkAssessmentTest {
     @Test
     void processSingleFileThrowsFileNotFoundForMissingFile() {
         assertThrows(FileNotFoundException.class,
-                () -> client.processSingleFile("guids_nonexistent_zzz.txt"));
+                () -> assessment.processSingleFile("guids_nonexistent_zzz.txt"));
     }
 
     // ── processSingleFile: empty file (all comments) ─────────────────────────
@@ -213,7 +199,7 @@ class RunBenchmarkAssessmentTest {
         // easier here to rely on CWD fallback by naming file explicitly.
         // We can't change CWD in JVM, so we use the absolute path.
         RunBenchmarkAssessment localClient =
-                new RunBenchmarkAssessment(RunBenchmarkAssessment.BENCHMARK_ALGORITHM_URI);
+                new RunBenchmarkAssessment(assessment.getBenchmarkAlgorithm(), assessment.getBenchmarkRunner());
 
         // processSingleFile looks up by name in resources then CWD;
         // to keep this test hermetic we invoke the private readGuidsFromResource
@@ -251,7 +237,7 @@ class RunBenchmarkAssessmentTest {
                 StandardCharsets.UTF_8);
 
         RunBenchmarkAssessment localClient =
-                new RunBenchmarkAssessment(RunBenchmarkAssessment.BENCHMARK_ALGORITHM_URI);
+                new RunBenchmarkAssessment(assessment.getBenchmarkAlgorithm(), assessment.getBenchmarkRunner());
 
         var field = RunBenchmarkAssessment.class.getDeclaredField("guidsFilename");
         field.setAccessible(true);
@@ -362,7 +348,7 @@ class RunBenchmarkAssessmentTest {
     @Test
     void constructorWithCustomUriDoesNotThrow() {
         assertDoesNotThrow(() ->
-                new RunBenchmarkAssessment("https://custom.example.org/api"));
+                new RunBenchmarkAssessment("https://custom.example.org/api", "https://custom.example.org/runner"));
     }
 
     // ── Parameterised: default sets match GetOaiPmhIdentifiers ───────────────

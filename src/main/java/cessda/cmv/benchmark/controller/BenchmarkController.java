@@ -112,9 +112,13 @@ public class BenchmarkController {
     @PostMapping("/run-assessment")
     public ResponseEntity<Map<String, String>> runAssessment(
 
-        @Parameter(description = "FAIR Champion API URI to POST GUIDs to. " +
-                   "Default: https://tools.ostrails.eu/champion/assess/algorithm/d/1Nk0vM4y...")
-        @RequestParam(required = false) String spreadsheetUri,
+       @Parameter(description = "FAIR Champion API URI to POST GUIDs to. " +
+           "Configurable via 'benchmark.algorithm-uri' property.")
+        @RequestParam(required = false) String algorithmUri,
+
+        @Parameter(description = "Algorithm runner URI. " +
+           "Configurable via 'benchmark.algorithm-runner' property.")
+        @RequestParam(required = false) String benchmarkAlgorithmUri,
 
         @Parameter(description = "Name of a specific guids_*.txt file to process " +
                    "(e.g. guids_de.txt). Ignored when 'guid' or 'processAll' is set.")
@@ -130,7 +134,7 @@ public class BenchmarkController {
 
     ) {
         try {
-            String message = service.runAssessment(spreadsheetUri, guidFile, guid, processAll);
+            String message = service.runAssessment(benchmarkAlgorithmUri, guidFile, guid, processAll);
             return ResponseEntity.ok(response("ok", message));
         } catch (Exception e) {
             return ResponseEntity.internalServerError()

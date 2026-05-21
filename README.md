@@ -3,8 +3,11 @@
 [![SQAaaS badge](https://github.com/EOSC-synergy/SQAaaS/raw/master/badges/badges_150x116/badge_software_silver.png)](https://api.eu.badgr.io/public/assertions/rxEEBuR9QoadzMDHXT4PmQ "SQAaaS silver badge achieved")
 
 This repository contains the source code for assessing digital objects in bulk
-against a  [CESSDA QA algorithm configuration spreadsheet](https://tools.ostrails.eu/champion/algorithms/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw),
-using the [FAIR Champion Benchmark Assessment tool](https://tools.ostrails.eu/champion/assess/algorithms/new).
+against a CESSDA QA algorithm configuration spreadsheet, using the
+FAIR Champion Benchmark Assessment tool. The algorithm URI and runner endpoint
+are configurable via `application.properties` — see
+[RunBenchmarkAssessment_README.md](RunBenchmarkAssessment_README.md)
+for details.
 
 ## Prerequisites
 
@@ -60,11 +63,12 @@ for full usage and options.
 ### RunBenchmarkAssessment
 
 Reads the `guids_<lang>.txt` files produced by the previous stage and
-POSTs each `GetRecord` URL to the FAIR Champion assessment API. Results
-are saved as JSON files under `results/guids_<lang>/`. Processing is
-parallelised across five threads. Errors are captured in separate
-`error_*.json` files so that a single failure does not interrupt the
-rest of the batch.
+POSTs each `GetRecord` URL to a configurable FAIR Champion runner
+endpoint, with the algorithm URI included in the request payload.
+Results are saved as JSON files under `results/guids_<lang>/`.
+Processing is parallelised across five threads. Errors are captured
+in separate `error_*.json` files so that a single failure does not
+interrupt the rest of the batch.
 
 See [RunBenchmarkAssessment_README.md](RunBenchmarkAssessment_README.md)
 for full usage and options.
