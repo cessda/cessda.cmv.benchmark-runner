@@ -104,7 +104,6 @@ public class BenchmarkService {
 
         String resolvedUri = nvl(spreadsheetUri, assessment.getBenchmarkAlgorithm());
         RunBenchmarkAssessment runner = new RunBenchmarkAssessment(resolvedUri,assessment.getBenchmarkRunner());
-
         if (guid != null && !guid.isBlank()) {
             runner.processSingleGuid(guid.trim());
             return "Processed single GUID: " + guid.trim()

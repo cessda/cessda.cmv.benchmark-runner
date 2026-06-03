@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
 /**
@@ -23,10 +24,13 @@ import org.springframework.test.context.TestPropertySource;
  * the OS temporary directory so the test does not depend on
  * {@code /data} or {@code /results} existing on the host machine.</p>
  */
+@ActiveProfiles("test")
 @SpringBootTest
 @TestPropertySource(properties = {
     "benchmark.data-dir=${java.io.tmpdir}/benchmark-test-data",
-    "benchmark.results-dir=${java.io.tmpdir}/benchmark-test-results"
+    "benchmark.results-dir=${java.io.tmpdir}/benchmark-test-results",
+    "benchmark.algorithm=https://example.com/algorithm",
+    "benchmark.runner=https://example.com/runner"
 })
 class BenchmarkApplicationTest {
 
