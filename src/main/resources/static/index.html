@@ -145,7 +145,7 @@
     /* ── KPI grid ── */
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 1px;
       background: var(--border2);
       border: 1px solid var(--border2);
@@ -298,6 +298,35 @@
     .view-arrow { color: var(--muted); font-size: 16px; text-align: right; }
     tbody tr:hover .view-arrow { color: var(--accent); }
 
+    /* ── Sortable headers ── */
+    thead th.sortable {
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      transition: color 0.15s;
+    }
+    thead th.sortable:hover { color: var(--text); }
+    thead th.sortable.sort-asc::after  { content: ' ↑'; color: var(--accent); }
+    thead th.sortable.sort-desc::after { content: ' ↓'; color: var(--accent); }
+    thead th.sortable.sort-asc,
+    thead th.sortable.sort-desc { color: var(--accent); }
+
+    /* ── Maturity badge ── */
+    .maturity-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 3px 9px;
+      border-radius: 3px;
+      letter-spacing: 0.3px;
+    }
+    .maturity-badge.level-3 { background: var(--pass-bg);   color: var(--pass);   border: 1px solid #a7f3d0; }
+    .maturity-badge.level-2 { background: var(--accent-bg); color: var(--accent); border: 1px solid #bfdbfe; }
+    .maturity-badge.level-1 { background: var(--indet-bg);  color: var(--indet);  border: 1px solid #fde68a; }
+    .maturity-badge.level-0 { background: var(--fail-bg);   color: var(--fail);   border: 1px solid #fca5a5; }
+
     /* ── Footer ── */
     footer {
       border-top: 1px solid var(--border2);
@@ -321,7 +350,7 @@
       main { padding: 24px 20px; }
       header { padding: 20px; flex-wrap: wrap; }
       footer { padding: 16px 20px; flex-direction: column; gap: 4px; }
-      .kpi-grid  { grid-template-columns: repeat(2, 1fr); }
+      .kpi-grid  { grid-template-columns: repeat(3, 1fr); }
       .fair-grid { grid-template-columns: repeat(2, 1fr); }
     }
 
@@ -375,6 +404,11 @@
         <p class="kpi-value" id="kpi-langs">—</p>
         <p class="kpi-sub">sets</p>
       </div>
+      <div class="kpi-cell">
+        <p class="kpi-label">Maturity Levels</p>
+        <p class="kpi-value" id="kpi-maturity-dist" style="font-size:18px;padding-top:4px">—</p>
+        <p class="kpi-sub" id="kpi-maturity-sub">across all sets</p>
+      </div>
     </div>
 
     <p class="section-label" id="fair-label">FAIR Principle Scores
@@ -417,13 +451,14 @@
         <table aria-labelledby="lang-label">
           <thead>
             <tr>
-              <th scope="col">Set name</th>
-              <th scope="col" class="num">Records</th>
+              <th scope="col" class="sortable" data-col="name" data-type="str">Set name</th>
+              <th scope="col" class="num sortable" data-col="records" data-type="num">Records</th>
               <th scope="col">Result Distribution</th>
-              <th scope="col" class="num">Pass</th>
-              <th scope="col" class="num">Fail</th>
-              <th scope="col" class="num">Indet.</th>
+              <th scope="col" class="num sortable" data-col="pass" data-type="num">Pass</th>
+              <th scope="col" class="num sortable" data-col="fail" data-type="num">Fail</th>
+              <th scope="col" class="num sortable" data-col="indet" data-type="num">Indet.</th>
               <th scope="col">FAIR</th>
+              <th scope="col" class="sortable" data-col="maturity" data-type="num">Maturity</th>
               <th scope="col"><span class="sr-only">Open detail view</span></th>
             </tr>
           </thead>
@@ -456,6 +491,53 @@
   };
 
   function pct(n, d) { return d ? Math.round((n / d) * 100) : 0; }
+
+  function maturityBadgeHTML(level) {
+    const labels = ['None','Level 1','Level 2','Level 3'];
+    return `<span class="maturity-badge level-${level}">${labels[level]}</span>`;
+  }
+
+  // ── Sorting state ──────────────────────────────────────────────────────────
+  let sortCol = 'name';
+  let sortDir = 'asc';
+  let tableData = []; // [{lang, records, pass, fail, indet, maturity, fairDesc, ls}, ...]
+
+  // Map data-col attribute values to tableData field names
+  const COL_FIELD = { name: 'lang', records: 'records', pass: 'pass',
+                      fail: 'fail', indet: 'indet', maturity: 'maturity' };
+
+  function applySort() {
+    const field = COL_FIELD[sortCol] || sortCol;
+    tableData.sort((a, b) => {
+      let av = a[field], bv = b[field];
+      if (typeof av === 'string') { av = av.toLowerCase(); bv = bv.toLowerCase(); }
+      if (av < bv) return sortDir === 'asc' ? -1 : 1;
+      if (av > bv) return sortDir === 'asc' ?  1 : -1;
+      return 0;
+    });
+  }
+
+  function updateSortHeaders() {
+    document.querySelectorAll('thead th.sortable').forEach(th => {
+      th.classList.remove('sort-asc', 'sort-desc');
+      if (th.dataset.col === sortCol) {
+        th.classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+      }
+    });
+  }
+
+  function onHeaderClick(th) {
+    const col = th.dataset.col;
+    if (sortCol === col) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortCol = col;
+      sortDir = col === 'name' ? 'asc' : 'desc';
+    }
+    applySort();
+    updateSortHeaders();
+    renderRows();
+  }
 
   async function loadData() {
     document.getElementById('loading').style.display = 'block';
@@ -496,27 +578,66 @@
       setTimeout(() => { document.getElementById(`fair-${c}-bar`).style.width = p + '%'; }, 100);
     }
 
-    const tbody = document.getElementById('lang-table-body');
-    tbody.innerHTML = '';
-    for (const lang of Object.keys(langs).sort()) {
-      const ls    = langs[lang];
-      const pass  = ls.pass,  fail = ls.fail,  indet = ls.indet;
-      const total = pass + fail + indet;
-      const fair  = ls.fair || {};
-      const TW    = 120;
-      const pW    = total ? Math.round((pass  / total) * TW) : 0;
-      const fW    = total ? Math.round((fail  / total) * TW) : 0;
-      const iW    = TW - pW - fW;
+    // Build tableData — read pre-computed maturity from summary.json
+    tableData = Object.keys(langs).map(lang => {
+      const ls   = langs[lang];
+      const mat  = ls.maturityLevel != null ? ls.maturityLevel : 0;
+      const fair = ls.fair || {};
       const fairDesc = ['F','A','I','R'].map(c => {
         const d = fair[c] || {pass:0,total:0};
         return `${c}: ${pct(d.pass, d.total)}%`;
       }).join(', ');
+      return { lang, records: ls.records, pass: ls.pass, fail: ls.fail, indet: ls.indet,
+               maturity: mat, fairDesc, ls };
+    });
+
+    // Maturity distribution KPI — read pre-computed counts from summary.json
+    const ov_dist = ov.maturityDistribution || {};
+    const matCounts = [
+      ov_dist.none   || 0,
+      ov_dist.level1 || 0,
+      ov_dist.level2 || 0,
+      ov_dist.level3 || 0,
+    ];
+    const matParts = [];
+    if (matCounts[3]) matParts.push(`<span style="color:var(--pass)">${matCounts[3]}×L3</span>`);
+    if (matCounts[2]) matParts.push(`<span style="color:var(--accent)">${matCounts[2]}×L2</span>`);
+    if (matCounts[1]) matParts.push(`<span style="color:var(--indet)">${matCounts[1]}×L1</span>`);
+    if (matCounts[0]) matParts.push(`<span style="color:var(--fail)">${matCounts[0]}×L0</span>`);
+    document.getElementById('kpi-maturity-dist').innerHTML = matParts.join(' ') || '—';
+
+    applySort();
+    updateSortHeaders();
+    renderRows();
+
+    // Wire up sortable headers
+    document.querySelectorAll('thead th.sortable').forEach(th => {
+      th.addEventListener('click', () => onHeaderClick(th));
+    });
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  }
+
+  function renderRows() {
+    const tbody = document.getElementById('lang-table-body');
+    tbody.innerHTML = '';
+    for (const row of tableData) {
+      const { lang, ls } = row;
+      const pass  = ls.pass, fail = ls.fail, indet = ls.indet;
+      const total = pass + fail + indet;
+      const fair  = ls.fair || {};
+      const TW = 120;
+      const pW = total ? Math.round((pass  / total) * TW) : 0;
+      const fW = total ? Math.round((fail  / total) * TW) : 0;
+      const iW = TW - pW - fW;
 
       const tr = document.createElement('tr');
       tr.setAttribute('tabindex', '0');
       tr.setAttribute('role', 'button');
       tr.setAttribute('aria-label',
-        `${LANG_NAMES[lang] || lang} — ${ls.records.toLocaleString()} records. ${fairDesc}. Press Enter to view details.`);
+        `${LANG_NAMES[lang] || lang} — ${ls.records.toLocaleString()} records. ${row.fairDesc}. Maturity Level ${row.maturity}. Press Enter to view details.`);
       tr.innerHTML = `
         <td><div class="lang-name">
           <span class="lang-tag">${lang}</span>
@@ -546,6 +667,7 @@
             }).join('')}
           </div>
         </td>
+        <td>${maturityBadgeHTML(row.maturity)}</td>
         <td class="view-arrow" aria-hidden="true">→</td>`;
       const go = () => {
         window.location.href = `detail.html?lang=${encodeURIComponent(lang)}#lang=${encodeURIComponent(lang)}`;
@@ -554,10 +676,6 @@
       tr.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }});
       tbody.appendChild(tr);
     }
-
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('dashboard').style.display = 'block';
-    document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
   }
 
   function showError(msg) {

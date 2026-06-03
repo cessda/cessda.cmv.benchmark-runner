@@ -461,7 +461,10 @@ public class GenerateManifest {
      * (hyphens, spaces, mixed case) resolves to the same canonical entry.
      */
     static String fairCategory(String testId) {
-        return FAIR_MAP.get(normTestId(testId));
+        String normId = normTestId(testId);
+        String cat = FAIR_MAP.get(normId);
+        if (cat != null) return cat;
+        return normId.isEmpty() ? null : String.valueOf(normId.charAt(0));
     }
 
     // ── Inner class ──────────────────────────────────────────────────────────
@@ -493,22 +496,29 @@ public class GenerateManifest {
         }
 
         void addTestResult(String testId, String result) {
-            // Normalise to canonical ID; skip tests not in the recognised 16
             String normId = normTestId(testId);
+
+            switch (result) {
+                case "pass" -> pass++;
+                case "fail" -> fail++;
+                default -> indet++;
+            }
+
             if (!FAIR_MAP.containsKey(normId)) return;
+
             int[] bucket = tests.computeIfAbsent(normId, k -> new int[3]);
             String cat = FAIR_MAP.get(normId);
             switch (result) {
                 case "pass" -> {
-                    pass++; bucket[0]++;
+                    bucket[0]++;
                     if (cat != null) { fair.get(cat)[0]++; fair.get(cat)[1]++; }
                 }
                 case "fail" -> {
-                    fail++; bucket[1]++;
+                    bucket[1]++;
                     if (cat != null) fair.get(cat)[1]++;
                 }
                 default -> {
-                    indet++; bucket[2]++;
+                    bucket[2]++;
                     if (cat != null) fair.get(cat)[1]++;
                 }
             }
