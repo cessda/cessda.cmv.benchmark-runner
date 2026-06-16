@@ -30,6 +30,8 @@ Processing is parallelised with a fixed thread pool of five workers.
 ## Command-line options
 
 ```text
+-r, --runner <uri>         Overrides the runner URI at runtime
+                            (default: benchmark.runner property)
 -s, --spreadsheet <uri>    Overrides the algorithm URI at runtime
                             (default: benchmark.algorithm property)
 -p, --process-file <file>  Process a single named GUID file

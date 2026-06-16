@@ -159,7 +159,7 @@ public class RunBenchmarkAssessment {
      * URI of the FAIR Champion runner instance, injected from
      * {@code benchmark.runner}.
      */
-    private final String benchmarkRunner;
+    private String benchmarkRunner;
 
     /**
      * Name of the GUID file currently being processed; may be
@@ -278,6 +278,11 @@ public class RunBenchmarkAssessment {
             logSevere("Failed to parse arguments: %s", e.getMessage());
             return;
         }
+
+        // Allow the CLI to override the injected runner URI.
+        if (cmd.hasOption("runner")) {
+            client.benchmarkRunner = cmd.getOptionValue("runner");
+}
 
         // Allow the CLI to override the injected algorithm URI.
         if (cmd.hasOption(SPREADSHEET_ARG)) {
@@ -794,6 +799,8 @@ public class RunBenchmarkAssessment {
      */
     static CommandLine parseArgs(String[] args) throws IOException {
         Options options = new Options();
+        options.addOption("r", "runner", true,
+        "Runner URI (overrides benchmark.runner property)");
         options.addOption("s", SPREADSHEET_ARG, true,
                 "Algorithm URI (overrides benchmark.algorithm property)");
         options.addOption("f", FILENAME_ARG, true,
