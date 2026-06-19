@@ -128,6 +128,34 @@ Various non-functional files have been omitted.
 └── start-dashboard.sh  # A script that runs GenerateManifest and starts a web server
 ```
 
+Interaction diagram:
+
+```text
+Browser                    Spring Boot
+  │                            │
+  │  GET /                     │
+  │ ─────────────────────────► │  serves static index.html
+  │ ◄───────────────────────── │
+  │                            │
+  │  GET /api/results/         │
+  │    summary.json            │
+  │    X-API-Key: key-abc      │
+  │ ─────────────────────────► │  TenantAuthFilter resolves "org-cessda"
+  │                            │  TenantContext.tenantId = "org-cessda"
+  │                            │  DashboardController reads
+  │                            │    /results/org-cessda/summary.json
+  │ ◄───────────────────────── │  200 OK + JSON
+  │                            │
+  │  GET /api/results/         │
+  │    guids_de/pages/         │
+  │    page-001.json           │
+  │    X-API-Key: key-abc      │
+  │ ─────────────────────────► │  same filter + controller
+  │                            │  reads /results/org-cessda/guids_de/
+  │                            │       pages/page-001.json
+  │ ◄───────────────────────── │  200 OK + JSON
+```
+
 ## Contributing
 
 Please read [CONTRIBUTING](CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests to us.

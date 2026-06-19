@@ -63,7 +63,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * Reads GUID files produced by {@link GetOaiPmhIdentifiers} (each line
  * is a full OAI-PMH GetRecord URL) and submits every URL to the
  * Champion benchmark assessment API. One JSON result file is written
- * per GUID into a subdirectory of {@value #OUTPUT_DIR} named after the
+ * per GUID into a subdirectory of {@link #resultsDir} named after the
  * input file (minus its extension).
  *
  * <p>
@@ -169,6 +169,11 @@ public class RunBenchmarkAssessment {
 
     private final HttpClient httpClient;
 
+    private Path dataDir = Paths.get("data");
+
+    private Path resultsDir = Paths.get(OUTPUT_DIR);
+
+
     // -----------------------------------------------------------------------
     // Constructor
     // -----------------------------------------------------------------------
@@ -208,9 +213,33 @@ public class RunBenchmarkAssessment {
     }
 
     /**
+     * Alternate constructor for direct instantiation outside of a Spring
+     * context, using default timeout values of 30s (connect) and
+     * 120s (request).
+     *
+     * @param benchmarkAlgorithm URI of the benchmark assessment algorithm
+     * @param benchmarkRunner    URI of the FAIR Champion runner
+     */
+public RunBenchmarkAssessment(String benchmarkAlgorithm, String benchmarkRunner,
+                               Path dataDir, Path resultsDir) {
+    this.benchmarkAlgorithm = benchmarkAlgorithm;
+    this.benchmarkRunner     = benchmarkRunner;
+    this.dataDir    = dataDir;
+    this.resultsDir = resultsDir;
+    this.requestTimeout = Duration.ofSeconds(120);
+    this.httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(30))
+            .build();
+}
+
+    /**
      * Convenience constructor for direct instantiation outside of a
      * Spring context. Uses default timeout values of 30s (connect)
-     * and 120s (request).
+     * and 120s (request), and default paths of {@code data/} and
+     * {@code results/} for the data and results directories.
+     *
+     * <p>Use {@link #RunBenchmarkAssessment(String, String, Path, Path)}
+     * when tenant-scoped directory isolation is required.</p>
      *
      * @param benchmarkAlgorithm URI of the benchmark assessment algorithm
      * @param benchmarkRunner    URI of the FAIR Champion runner
@@ -292,7 +321,7 @@ public class RunBenchmarkAssessment {
         logInfo("Using runner URI:     %s", client.benchmarkRunner);
 
         try {
-            Files.createDirectories(Paths.get(OUTPUT_DIR));
+            Files.createDirectories(client.resultsDir);
 
             boolean processAll = cmd.hasOption(PROCESS_ALL_ARG);
             boolean processFile = cmd.hasOption(PROCESS_FILE_ARG);
@@ -444,10 +473,20 @@ public class RunBenchmarkAssessment {
             }
         }
 
+        // Try the path as given (covers absolute paths and paths relative to cwd).
         Path guidsPath = Paths.get(guidsFilename);
         if (Files.exists(guidsPath)) {
-            return Files.readAllLines(
-                    guidsPath, StandardCharsets.UTF_8)
+            return Files.readAllLines(guidsPath, StandardCharsets.UTF_8)
+                    .stream()
+                    .map(String::trim)
+                    .filter(l -> !l.isBlank() && !l.startsWith("#"))
+                    .toList();
+        }
+
+        // Fall back to resolving the bare filename under the tenant data directory.
+        Path inDataDir = dataDir.resolve(Paths.get(guidsFilename).getFileName());
+        if (Files.exists(inDataDir)) {
+            return Files.readAllLines(inDataDir, StandardCharsets.UTF_8)
                     .stream()
                     .map(String::trim)
                     .filter(l -> !l.isBlank() && !l.startsWith("#"))
@@ -456,7 +495,8 @@ public class RunBenchmarkAssessment {
 
         throw new FileNotFoundException(
                 "Could not find " + guidsFilename
-                        + " in resources or current directory");
+                        + " in resources, current directory, or data directory ("
+                        + dataDir + ")");
     }
 
     // -----------------------------------------------------------------------
@@ -470,7 +510,7 @@ public class RunBenchmarkAssessment {
      * @param guids  list of GetRecord URLs to submit
      * @param set    language / set name used for error-file naming
      *               (may be {@code null})
-     * @param subDir subdirectory inside {@value #OUTPUT_DIR} for
+     * @param subDir subdirectory under {@code resultsDir} for
      *               results (may be {@code null})
      * @throws InterruptedException if the executor is interrupted
      *                              while waiting
@@ -535,7 +575,7 @@ public class RunBenchmarkAssessment {
      * @param index  zero-based position in the batch (for log messages)
      * @param set    language / set name for error-file naming
      *               (may be {@code null})
-     * @param subDir subdirectory inside {@value #OUTPUT_DIR} for
+     * @param subDir subdirectory under {@code resultsDir} for
      *               results (may be {@code null})
      * @param runner URI of the FAIR Champion runner instance to POST to
      * @throws IOException          if the HTTP request or file write
@@ -686,7 +726,7 @@ public class RunBenchmarkAssessment {
      * @param guid   the GUID that caused the error
      * @param set    language / set name (may be {@code null})
      * @param error  the exception that was caught
-     * @param subDir subdirectory inside {@value #OUTPUT_DIR}
+     * @param subDir subdirectory under {@code resultsDir}
      *               (may be {@code null})
      */
     private void saveErrorFile(
@@ -738,17 +778,17 @@ public class RunBenchmarkAssessment {
     // -----------------------------------------------------------------------
 
     /**
-     * Resolves the output directory path for a given subdirectory
-     * name.
+     * Resolves the tenant-scoped output directory path for a given
+     * subdirectory name, rooted at {@link #resultsDir}.
      *
-     * @param subDir subdirectory inside {@value #OUTPUT_DIR}, or
-     *               {@code null} / blank to use the root output dir
+     * @param subDir subdirectory under {@code resultsDir}, or
+     *               {@code null} / blank to use {@code resultsDir} itself
      * @return resolved {@link Path}
      */
-    private static Path resolveOutputDir(String subDir) {
+    private Path resolveOutputDir(String subDir) {
         return (subDir != null && !subDir.isBlank())
-                ? Paths.get(OUTPUT_DIR, subDir)
-                : Paths.get(OUTPUT_DIR);
+                ? resultsDir.resolve(subDir)
+                : resultsDir;
     }
 
     /**

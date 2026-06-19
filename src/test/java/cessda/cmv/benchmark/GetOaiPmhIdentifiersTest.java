@@ -36,6 +36,10 @@ class GetOaiPmhIdentifiersTest {
 
     // ── Fixture ──────────────────────────────────────────────────────────────
 
+    /** Shared temporary directory injected by JUnit for the setUp client. */
+    @TempDir
+    Path tempDir;
+
     private GetOaiPmhIdentifiers client;
 
     @BeforeEach
@@ -43,7 +47,8 @@ class GetOaiPmhIdentifiersTest {
         client = new GetOaiPmhIdentifiers(
                 GetOaiPmhIdentifiers.DEFAULT_OAI_PMH_BASE_URL,
                 GetOaiPmhIdentifiers.DEFAULT_VERB,
-                GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX);
+                GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX,
+                tempDir);
     }
 
     @AfterEach
@@ -125,9 +130,9 @@ class GetOaiPmhIdentifiersTest {
     }
 
     @Test
-    void buildGetRecordUrlWithCustomBaseUrl() {
+    void buildGetRecordUrlWithCustomBaseUrl(@TempDir Path dir) {
         GetOaiPmhIdentifiers custom = new GetOaiPmhIdentifiers(
-                "https://example.org/oai", "ListIdentifiers", "oai_dc");
+                "https://example.org/oai", "ListIdentifiers", "oai_dc", dir);
         String url = custom.buildGetRecordUrl("xyz");
         assertTrue(url.startsWith("https://example.org/oai"),
                 "URL must use the custom base URL");
@@ -232,9 +237,12 @@ class GetOaiPmhIdentifiersTest {
     // ── Constructor / wiring ──────────────────────────────────────────────────
 
     @Test
-    void constructorAcceptsNullSafeDefaults() {
+    void constructorAcceptsNullOutputDir() {
+        // null outputDir is valid for tests that never write files
+        // (e.g. buildGetRecordUrl, parseArgs); the field is only accessed
+        // inside writeGuidsFile, which is only called after a network fetch.
         assertDoesNotThrow(() -> new GetOaiPmhIdentifiers(
-                "https://example.org/oai", "ListIdentifiers", "oai_dc"));
+                "https://example.org/oai", "ListIdentifiers", "oai_dc", null));
     }
 
     // ── Integration-style: write guids file via fetchIdentifiersForLanguage ──
@@ -242,12 +250,11 @@ class GetOaiPmhIdentifiersTest {
     // here we verify behaviour that does not require network access.
 
     @Test
-    void fetchAllLanguageIdentifiersWithEmptySetsArrayDoesNotThrow(
-            @TempDir Path tempDir) {
+    void fetchAllLanguageIdentifiersWithEmptySetsArrayDoesNotThrow() {
         // With an empty set array the loop exits immediately without any
         // HTTP calls, so no exception should be thrown even without a server.
         GetOaiPmhIdentifiers noOpClient = new GetOaiPmhIdentifiers(
-                "https://127.0.0.1:1", "ListIdentifiers", "oai_ddi25");
+                "https://127.0.0.1:1", "ListIdentifiers", "oai_ddi25", null);
         assertDoesNotThrow(
                 () -> noOpClient.fetchAllLanguageIdentifiers(new String[]{}));
     }
@@ -257,11 +264,13 @@ class GetOaiPmhIdentifiersTest {
     @ParameterizedTest
     @ValueSource(strings = {"de", "el", "en", "fi", "fr", "hr", "nl",
                             "sl", "sl-SI", "sv"})
-    void buildGetRecordUrlIsValidForEachDefaultSet(String set) {
+    void buildGetRecordUrlIsValidForEachDefaultSet(String set,
+                                                   @TempDir Path dir) {
         GetOaiPmhIdentifiers c = new GetOaiPmhIdentifiers(
                 GetOaiPmhIdentifiers.DEFAULT_OAI_PMH_BASE_URL,
                 GetOaiPmhIdentifiers.DEFAULT_VERB,
-                GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX);
+                GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX,
+                dir);
         String url = c.buildGetRecordUrl(set);
         assertTrue(url.startsWith("https://"),
                 "URL for set " + set + " must be absolute");

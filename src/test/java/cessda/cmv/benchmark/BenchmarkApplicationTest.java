@@ -18,14 +18,17 @@ import org.springframework.test.context.TestPropertySource;
 
 /**
  * Smoke test that verifies the Spring application context loads
- * without errors.
+ * without errors, using a real embedded servlet container
+ * ({@code RANDOM_PORT}) so that Spring Security's
+ * {@code SecurityFilterChain} bean — which expects a genuine
+ * {@code ServletWebServerFactory} to be present — wires up correctly.
  *
  * <p>The {@code test} property overrides point both volume paths at
  * the OS temporary directory so the test does not depend on
  * {@code /data} or {@code /results} existing on the host machine.</p>
  */
 @ActiveProfiles("test")
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(properties = {
     "benchmark.data-dir=${java.io.tmpdir}/benchmark-test-data",
     "benchmark.results-dir=${java.io.tmpdir}/benchmark-test-results",

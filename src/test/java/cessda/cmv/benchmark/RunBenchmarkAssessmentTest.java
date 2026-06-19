@@ -151,7 +151,7 @@ class RunBenchmarkAssessmentTest {
                 var method = RunBenchmarkAssessment.class
                                 .getDeclaredMethod("resolveOutputDir", String.class);
                 method.setAccessible(true);
-                Path result = (Path) method.invoke(null, "guids_de");
+                Path result = (Path) method.invoke(assessment, "guids_de");
                 assertTrue(result.toString().endsWith("guids_de"),
                                 "Output dir must end with the subdir name");
                 assertTrue(result.toString().contains("results"),
@@ -164,7 +164,7 @@ class RunBenchmarkAssessmentTest {
                 var method = RunBenchmarkAssessment.class
                                 .getDeclaredMethod("resolveOutputDir", String.class);
                 method.setAccessible(true);
-                Path result = (Path) method.invoke(null, (Object) null);
+                Path result = (Path) method.invoke(assessment, (Object) null);
                 assertEquals("results", result.toString());
         }
 
@@ -174,7 +174,7 @@ class RunBenchmarkAssessmentTest {
                 var method = RunBenchmarkAssessment.class
                                 .getDeclaredMethod("resolveOutputDir", String.class);
                 method.setAccessible(true);
-                Path result = (Path) method.invoke(null, "   ");
+                Path result = (Path) method.invoke(assessment, "   ");
                 assertEquals("results", result.toString());
         }
 

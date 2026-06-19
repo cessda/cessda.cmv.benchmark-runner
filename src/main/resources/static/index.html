@@ -472,7 +472,7 @@
 
 <footer>
   <span>CESSDA FAIR Benchmark Dashboard</span>
-  <span>Results read from <code>results/</code> directory</span>
+  <span>Results served via <code>API/</code></span>
 </footer>
 
 <script>
@@ -546,11 +546,11 @@
 
     let summary;
     try {
-      const res = await fetch('results/summary.json');
+      const res = await apiFetch('/api/results/summary.json');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       summary = await res.json();
     } catch (e) {
-      showError(`Could not load results/summary.json — run GenerateManifest first.\n\n${e.message}`);
+      showError(`Could not load /api/results/summary.json — run GenerateManifest first.\n\n${e.message}`);
       return;
     }
 

@@ -25,6 +25,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import cessda.cmv.benchmark.controller.BenchmarkController;
 import cessda.cmv.benchmark.service.BenchmarkService;
+import cessda.cmv.benchmark.tenant.TenantAuthFilter;
+import cessda.cmv.benchmark.tenant.TenantContext;
+import cessda.cmv.benchmark.tenant.TenantProperties;
 
 /**
  * Tests for {@link WebConfig}.
@@ -41,7 +44,14 @@ import cessda.cmv.benchmark.service.BenchmarkService;
  * The actual directory is created in a {@code static} initialiser so it
  * exists before the Spring context starts.</p>
  */
-@WebMvcTest(controllers = BenchmarkController.class)
+@WebMvcTest(
+    controllers = BenchmarkController.class,
+    excludeFilters = @org.springframework.context.annotation.ComponentScan.Filter(
+        type = org.springframework.context.annotation.FilterType.ASSIGNABLE_TYPE,
+        classes = TenantAuthFilter.class
+    )
+)
+@org.springframework.context.annotation.Import(SecurityConfig.class)
 @TestPropertySource(properties = {
     "benchmark.results-dir=${java.io.tmpdir}/webconfig-test-results",
     "benchmark.data-dir=${java.io.tmpdir}/webconfig-test-data"
@@ -53,6 +63,14 @@ class WebConfigTest {
 
     @MockitoBean
     private BenchmarkService service;
+
+    // TenantContext is request-scoped; mock it so the @WebMvcTest slice
+    // can start without a full application context.
+    @MockitoBean
+    private TenantContext tenantContext;
+
+    @MockitoBean
+    private TenantProperties tenantProperties;
 
     @Test
     @DisplayName("GET /results/summary.json returns 200 when file exists")

@@ -27,6 +27,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import cessda.cmv.benchmark.GetOaiPmhIdentifiers;
 import cessda.cmv.benchmark.RunBenchmarkAssessment;
+import cessda.cmv.benchmark.tenant.TenantContext;
 
 /**
  * Unit tests for {@link BenchmarkService}.
@@ -37,6 +38,11 @@ import cessda.cmv.benchmark.RunBenchmarkAssessment;
  * directories. This avoids any dependency on {@code /data} or
  * {@code /results} existing on the build machine.</p>
  *
+ * <p>A stub {@link TenantContext} is wired in via the constructor,
+ * pre-populated with the tenant ID {@code "test-tenant"} so that all
+ * tenant-scoped sub-directory resolution works without a running Spring
+ * context.</p>
+ *
  * <p>Tests that would make real outbound HTTP calls (fetchIdentifiers,
  * runAssessment) are limited to verifying parameter handling, volume
  * path wiring, and error propagation rather than end-to-end execution.
@@ -45,25 +51,46 @@ import cessda.cmv.benchmark.RunBenchmarkAssessment;
  */
 class BenchmarkServiceTest {
 
-    @TempDir
-    Path dataDir;
+    private static final String TENANT_ID = "test-tenant";
 
     @TempDir
-    Path resultsDir;
+    Path rootDataDir;
+
+    @TempDir
+    Path rootResultsDir;
+
+    /**
+     * The effective tenant data directory: {rootDataDir}/test-tenant/
+     * This mirrors what BenchmarkService.tenantDataDir() resolves to.
+     */
+    Path tenantDataDir;
+
+    /**
+     * The effective tenant results directory: {rootResultsDir}/test-tenant/
+     */
+    Path tenantResultsDir;
 
     private BenchmarkService service;
 
-    private RunBenchmarkAssessment assessment;
-
-
     @BeforeEach
-    void setUp() {
-        service = new BenchmarkService();
-        assessment = new RunBenchmarkAssessment(null, null);   
-        ReflectionTestUtils.setField(
-            service, "dataDir",    dataDir.toString());
-        ReflectionTestUtils.setField(
-            service, "resultsDir", resultsDir.toString());
+    void setUp() throws IOException {
+        // Build a stub TenantContext that always returns our fixed tenant ID.
+        TenantContext tenantContext = new TenantContext();
+        tenantContext.setTenantId(TENANT_ID);
+
+        service = new BenchmarkService(tenantContext);
+
+        // Point the service at our temp root directories (not tenant sub-dirs —
+        // BenchmarkService itself appends the tenant ID segment).
+        ReflectionTestUtils.setField(service, "dataDir",    rootDataDir.toString());
+        ReflectionTestUtils.setField(service, "resultsDir", rootResultsDir.toString());
+
+        // Pre-create the tenant sub-directories so that tests which don't
+        // exercise directory-creation logic can write fixture files directly.
+        tenantDataDir    = rootDataDir.resolve(TENANT_ID);
+        tenantResultsDir = rootResultsDir.resolve(TENANT_ID);
+        Files.createDirectories(tenantDataDir);
+        Files.createDirectories(tenantResultsDir);
     }
 
     // -------------------------------------------------------------------------
@@ -75,51 +102,17 @@ class BenchmarkServiceTest {
     class FetchIdentifiers {
 
         @Test
-        @DisplayName("Publishes benchmark.data-dir as a system property")
-        void publishesDataDirSystemProperty() throws Exception {
-            // We cannot make real HTTP calls in a unit test, so we verify
-            // that the system properties are set correctly before the
-            // network call would be made by intercepting the property value.
-            //
-            // Trigger the method with a blank fetchSet so it would call
-            // fetchAllLanguageIdentifiers; it will fail on the HTTP call,
-            // but by then the system properties must already be set.
-            try {
-                service.fetchIdentifiers(
-                    "http://invalid.example.invalid",
-                    null, null, "de", null);
-            } catch (Exception ignored) {
-                // Expected: the HTTP call will fail.
-            }
-            assertEquals(dataDir.toString(),
-                System.getProperty("benchmark.data-dir"),
-                "benchmark.data-dir system property must be set to dataDir");
-        }
-
-        @Test
-        @DisplayName("Publishes benchmark.results-dir as a system property")
-        void publishesResultsDirSystemProperty() throws Exception {
-            try {
-                service.fetchIdentifiers(
-                    "http://invalid.example.invalid",
-                    null, null, "de", null);
-            } catch (Exception ignored) {
-                // Expected: the HTTP call will fail.
-            }
-            assertEquals(resultsDir.toString(),
-                System.getProperty("benchmark.results-dir"),
-                "benchmark.results-dir system property must be set to resultsDir");
-        }
-
-        @Test
-        @DisplayName("Creates the data directory if it does not exist")
-        void createsDataDirectoryWhenAbsent(@TempDir Path root)
+        @DisplayName("Creates the tenant data directory when it does not exist")
+        void createsTenantDataDirectoryWhenAbsent(@TempDir Path root)
                 throws Exception {
-            Path newDataDir = root.resolve("new-data");
-            assertFalse(Files.exists(newDataDir));
+            // Point the service at a fresh root; the tenant sub-dir must not
+            // yet exist.
+            Path newRootData = root.resolve("data");
+            Files.createDirectories(newRootData);
+            Path expectedTenantDir = newRootData.resolve(TENANT_ID);
+            assertFalse(Files.exists(expectedTenantDir));
 
-            ReflectionTestUtils.setField(
-                service, "dataDir", newDataDir.toString());
+            ReflectionTestUtils.setField(service, "dataDir", newRootData.toString());
 
             try {
                 service.fetchIdentifiers(
@@ -128,15 +121,34 @@ class BenchmarkServiceTest {
             } catch (Exception ignored) {
                 // Expected: the HTTP call will fail.
             }
-            assertTrue(Files.isDirectory(newDataDir),
-                "data directory must be created by fetchIdentifiers");
+
+            assertTrue(Files.isDirectory(expectedTenantDir),
+                "fetchIdentifiers must create the tenant-scoped data directory");
+        }
+
+        @Test
+        @DisplayName("Tenant data directories are isolated per tenant ID")
+        void tenantDataDirsAreIsolated() throws Exception {
+            // The directory created must be under the tenant ID sub-path,
+            // not at the root data dir level.
+            try {
+                service.fetchIdentifiers(
+                    "http://invalid.example.invalid",
+                    null, null, "de", null);
+            } catch (Exception ignored) { /* expected */ }
+
+            // The tenant sub-dir must exist; the root must not contain any
+            // guids files directly (they belong under the tenant sub-dir).
+            assertTrue(Files.isDirectory(rootDataDir.resolve(TENANT_ID)),
+                "Data files must be written under {dataDir}/{tenantId}/");
+            assertFalse(
+                Files.exists(rootDataDir.resolve("guids_de.txt")),
+                "guids files must not appear directly under the root data dir");
         }
 
         @Test
         @DisplayName("Uses default OAI-PMH base URL when baseUrl is null")
         void usesDefaultBaseUrlWhenNull() {
-            // Verify that GetOaiPmhIdentifiers.DEFAULT_OAI_PMH_BASE_URL
-            // is the expected CESSDA URL so the nvl() logic is correct.
             assertEquals(
                 "https://datacatalogue.cessda.eu/oai-pmh/v0/oai",
                 GetOaiPmhIdentifiers.DEFAULT_OAI_PMH_BASE_URL,
@@ -170,18 +182,21 @@ class BenchmarkServiceTest {
     class RunAssessment {
 
         @Test
-        @DisplayName("Creates data and results directories if absent")
-        void createsBothDirectoriesWhenAbsent(@TempDir Path root)
+        @DisplayName("Creates tenant data and results directories if absent")
+        void createsBothTenantDirectoriesWhenAbsent(@TempDir Path root)
                 throws Exception {
-            Path newData    = root.resolve("data");
-            Path newResults = root.resolve("results");
-            assertFalse(Files.exists(newData));
-            assertFalse(Files.exists(newResults));
+            Path newRootData    = root.resolve("data");
+            Path newRootResults = root.resolve("results");
+            Files.createDirectories(newRootData);
+            Files.createDirectories(newRootResults);
 
-            ReflectionTestUtils.setField(
-                service, "dataDir",    newData.toString());
-            ReflectionTestUtils.setField(
-                service, "resultsDir", newResults.toString());
+            Path expectedData    = newRootData.resolve(TENANT_ID);
+            Path expectedResults = newRootResults.resolve(TENANT_ID);
+            assertFalse(Files.exists(expectedData));
+            assertFalse(Files.exists(expectedResults));
+
+            ReflectionTestUtils.setField(service, "dataDir",    newRootData.toString());
+            ReflectionTestUtils.setField(service, "resultsDir", newRootResults.toString());
 
             try {
                 service.runAssessment(
@@ -191,24 +206,24 @@ class BenchmarkServiceTest {
                 // Expected: the file or HTTP call will fail.
             }
 
-            assertTrue(Files.isDirectory(newData),
-                "data directory must be created by runAssessment");
-            assertTrue(Files.isDirectory(newResults),
-                "results directory must be created by runAssessment");
+            assertTrue(Files.isDirectory(expectedData),
+                "runAssessment must create the tenant-scoped data directory");
+            assertTrue(Files.isDirectory(expectedResults),
+                "runAssessment must create the tenant-scoped results directory");
         }
 
         @Test
-        @DisplayName("Resolves a bare guid filename against the data directory")
-        void resolvesGuidFilenameAgainstDataDir() throws Exception {
-            // Write a minimal guids file to the data volume.
-            Path guidFile = dataDir.resolve("guids_test.txt");
+        @DisplayName("Resolves a bare guid filename against the tenant data directory")
+        void resolvesGuidFilenameAgainstTenantDataDir() throws Exception {
+            // Write a minimal guids file directly into the tenant data dir.
+            Path guidFile = tenantDataDir.resolve("guids_test.txt");
             Files.writeString(guidFile,
                 "# test\nhttps://example.org/oai?verb=GetRecord"
                 + "&metadataPrefix=oai_ddi25&identifier=abc",
                 StandardCharsets.UTF_8);
 
-            // The service should find the file in dataDir even when
-            // only the bare filename is supplied.  The actual HTTP POST
+            // The service should find the file in the tenant data dir even
+            // when only the bare filename is supplied.  The actual HTTP POST
             // will fail, but we verify no FileNotFoundException is thrown
             // before the network attempt.
             try {
@@ -219,7 +234,7 @@ class BenchmarkServiceTest {
                 assertFalse(
                     e.getMessage().contains("Could not find"),
                     "FileNotFoundException must not be thrown when the file "
-                    + "exists in the data directory; got: " + e.getMessage());
+                    + "exists in the tenant data directory; got: " + e.getMessage());
             } catch (Exception ignored) {
                 // Any other exception (e.g. HTTP failure) is acceptable here.
             }
@@ -228,8 +243,8 @@ class BenchmarkServiceTest {
         @Test
         @DisplayName("Uses default Champion API URI when spreadsheetUri is null")
         void usesDefaultChampionUriWhenNull() {
+            RunBenchmarkAssessment assessment = new RunBenchmarkAssessment(null, null);
             assertEquals(
-                //"http://invalid.example.invalid",
                 null,
                 assessment.getBenchmarkAlgorithm(),
                 "Default Champion API URI must match the expected value");
@@ -255,7 +270,7 @@ class BenchmarkServiceTest {
         @Test
         @DisplayName("Throws IOException when the results directory does not exist")
         void throwsWhenResultsDirMissing() {
-            String missingDir = resultsDir.resolve("does-not-exist").toString();
+            String missingDir = tenantResultsDir.resolve("does-not-exist").toString();
 
             IOException ex = assertThrows(IOException.class,
                 () -> service.generateManifest(missingDir),
@@ -266,31 +281,30 @@ class BenchmarkServiceTest {
         }
 
         @Test
-        @DisplayName("Uses configured resultsDir when override is null")
-        void usesConfiguredResultsDirWhenOverrideIsNull() throws Exception {
-            // An empty results dir produces no output but must not throw.
+        @DisplayName("Uses tenant resultsDir when override is null")
+        void usesConfiguredResultsDirWhenOverrideIsNull() {
+            // An empty tenant results dir produces no output but must not throw.
             assertDoesNotThrow(
                 () -> service.generateManifest(null),
                 "generateManifest must not throw for an empty results directory");
         }
 
         @Test
-        @DisplayName("Uses configured resultsDir when override is blank")
+        @DisplayName("Uses tenant resultsDir when override is blank")
         void usesConfiguredResultsDirWhenOverrideIsBlank() {
-            // Passing a blank string must behave the same as null.
             assertDoesNotThrow(
                 () -> service.generateManifest("   "),
-                "A blank override must fall back to the configured resultsDir");
+                "A blank override must fall back to the tenant resultsDir");
         }
 
         @Test
         @DisplayName("Writes summary.json when guids_* result directories exist")
         void writesSummaryJsonForPopulatedResultsDir() throws Exception {
-            // Create a minimal result directory structure with one record file.
-            Path langDir = resultsDir.resolve("guids_en");
+            // Create a minimal result directory structure with one record file
+            // inside the tenant results dir.
+            Path langDir = tenantResultsDir.resolve("guids_en");
             Files.createDirectories(langDir);
 
-            // Minimal valid result JSON matching the shape GenerateManifest expects.
             String recordJson = """
                 {
                   "testedguid": "https://example.org/oai?verb=GetRecord\
@@ -310,9 +324,9 @@ class BenchmarkServiceTest {
 
             service.generateManifest(null);
 
-            Path summaryFile = resultsDir.resolve("summary.json");
+            Path summaryFile = tenantResultsDir.resolve("summary.json");
             assertTrue(Files.exists(summaryFile),
-                "summary.json must be written to the results directory");
+                "summary.json must be written to the tenant results directory");
 
             String summaryContent = Files.readString(
                 summaryFile, StandardCharsets.UTF_8);
@@ -325,7 +339,7 @@ class BenchmarkServiceTest {
         @Test
         @DisplayName("Writes paginated page files alongside summary.json")
         void writesPageFilesForPopulatedResultsDir() throws Exception {
-            Path langDir = resultsDir.resolve("guids_de");
+            Path langDir = tenantResultsDir.resolve("guids_de");
             Files.createDirectories(langDir);
 
             String recordJson = """
@@ -356,16 +370,14 @@ class BenchmarkServiceTest {
         @Test
         @DisplayName("Ignores error_*.json files when aggregating results")
         void ignoresErrorFilesInResultsDir() throws Exception {
-            Path langDir = resultsDir.resolve("guids_fr");
+            Path langDir = tenantResultsDir.resolve("guids_fr");
             Files.createDirectories(langDir);
 
-            // Write an error file — GenerateManifest must skip it.
             Files.writeString(
                 langDir.resolve("error_abc.json"),
                 "{\"error\": \"timeout\"}",
                 StandardCharsets.UTF_8);
 
-            // Write one valid record file.
             String recordJson = """
                 {
                   "testedguid": "https://example.org/oai?verb=GetRecord\
@@ -387,22 +399,21 @@ class BenchmarkServiceTest {
                 "generateManifest must not throw when error files are present");
 
             String summary = Files.readString(
-                resultsDir.resolve("summary.json"), StandardCharsets.UTF_8);
-            // The summary must count exactly one record, not two.
+                tenantResultsDir.resolve("summary.json"), StandardCharsets.UTF_8);
             assertTrue(summary.contains("\"records\" : 1"),
                 "Error files must not be counted as result records");
         }
 
         @Test
-        @DisplayName("Returns a message containing the absolute results path")
+        @DisplayName("Returns a message containing the absolute tenant results path")
         void returnMessageContainsAbsolutePath() throws Exception {
             String message = service.generateManifest(null);
 
             assertTrue(message.startsWith("Manifest generated in:"),
                 "Return message must start with 'Manifest generated in:'");
             assertTrue(message.contains(
-                    resultsDir.toAbsolutePath().toString()),
-                "Return message must contain the absolute results path");
+                    tenantResultsDir.toAbsolutePath().toString()),
+                "Return message must contain the absolute tenant results path");
         }
     }
 }

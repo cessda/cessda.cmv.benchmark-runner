@@ -90,8 +90,6 @@ public class GetOaiPmhIdentifiers {
     public static final String[] DEFAULT_SETS =
             {"de", "el", "en", "fi", "fr", "hr", "nl", "sl", "sl-SI", "sv"};
 
-    private static final String RESOURCES_DIR = "src/main/resources";
-
     // -----------------------------------------------------------------------
     // CLI option names
     // -----------------------------------------------------------------------
@@ -112,6 +110,8 @@ public class GetOaiPmhIdentifiers {
     private final String verb;
     private final String metadataPrefix;
 
+    private final Path outputDir;
+
     private static final Logger logger =
             Logger.getLogger(GetOaiPmhIdentifiers.class.getName());
 
@@ -120,19 +120,28 @@ public class GetOaiPmhIdentifiers {
     // -----------------------------------------------------------------------
 
     /**
-     * Creates a client with the supplied OAI-PMH parameters.
+     * Creates a client with the supplied OAI-PMH parameters and an explicit
+     * output directory.  All {@code guids_<set>.txt} files will be written
+     * under {@code outputDir}, which must already exist or be created by the
+     * caller before invoking any fetch method.
      *
      * @param oaiPmhBaseUrl  base URL of the OAI-PMH endpoint
      * @param verb           OAI-PMH verb (e.g. {@code "ListIdentifiers"})
      * @param metadataPrefix metadata prefix to embed in output GetRecord URLs
+     * @param outputDir      directory in which to write the guids_*.txt files
      */
-    public GetOaiPmhIdentifiers(String oaiPmhBaseUrl, String verb, String metadataPrefix) {
+    public GetOaiPmhIdentifiers(String oaiPmhBaseUrl, String verb,
+                                String metadataPrefix, Path outputDir) {
         this.oaiPmhBaseUrl  = oaiPmhBaseUrl;
         this.verb           = verb;
         this.metadataPrefix = metadataPrefix;
+        this.outputDir      = outputDir;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(30))
                 .build();
+        logInfo("Initialised GetOaiPmhIdentifiers with base URL: %s, verb: %s, " +
+                "metadata prefix: %s, output directory: %s",
+                oaiPmhBaseUrl, verb, metadataPrefix, outputDir != null ? outputDir.toAbsolutePath() : "null");
     }
 
     // -----------------------------------------------------------------------
@@ -159,7 +168,7 @@ public class GetOaiPmhIdentifiers {
         String verb    = cmd.getOptionValue(VERB_ARG, DEFAULT_VERB);
         String prefix  = cmd.getOptionValue(META_PREFIX_ARG, DEFAULT_METADATA_PREFIX);
 
-        GetOaiPmhIdentifiers client = new GetOaiPmhIdentifiers(baseUrl, verb, prefix);
+        GetOaiPmhIdentifiers client = new GetOaiPmhIdentifiers(baseUrl, verb, prefix, Paths.get("output"));
 
         try {
             if (cmd.hasOption(FETCH_SET_ARG)) {
@@ -361,23 +370,14 @@ public class GetOaiPmhIdentifiers {
 
     /**
      * Writes a list of identifiers to {@code guids_<lang>.txt} as full
-     * GetRecord URLs.
+     * GetRecord URLs, under the {@code outputDir} supplied at construction time.
      *
-     * <p>The file is placed in {@value #RESOURCES_DIR} when that directory
-     * exists (i.e. when running from source), otherwise in the current working
-     * directory (e.g. when running from a JAR).
-     *
-     * @param set        set name, e.g. "de", used in the output filename and log messages
+     * @param set         set name, e.g. "de", used in the output filename
      * @param identifiers raw identifier strings returned by OAI-PMH
      * @throws IOException if the file cannot be written
      */
     private void writeGuidsFile(String set, List<String> identifiers) throws IOException {
-        String filename = "guids_" + set + ".txt";
-
-        Path resourcesDir = Paths.get(RESOURCES_DIR);
-        Path outputPath = Files.isDirectory(resourcesDir)
-                ? resourcesDir.resolve(filename)
-                : Paths.get(filename);
+        Path outputPath = outputDir.resolve("guids_" + set + ".txt");
 
         List<String> lines = new ArrayList<>();
         lines.add("# Identifiers for set: " + set);
@@ -449,10 +449,6 @@ public class GetOaiPmhIdentifiers {
         }
     }
 
-    /** 
-     * @param message
-     * @param args
-     */
     // -----------------------------------------------------------------------
     // Logging helpers
     // -----------------------------------------------------------------------
@@ -463,10 +459,6 @@ public class GetOaiPmhIdentifiers {
         }
     }
 
-    /** 
-     * @param message
-     * @param args
-     */
     static void logSevere(String message, Object... args) {
         if (logger.isLoggable(Level.SEVERE)) {
             logger.severe(args.length == 0 ? message : String.format(message, args));

@@ -4,4 +4,5 @@
 mvn exec:java -Dexec.mainClass="cessda.cmv.benchmark.GenerateManifest"
 
 # start the webserver
-npx serve . 
+# npx serve . 
+mvn spring-boot:run

@@ -1163,18 +1163,18 @@
     }
 
     function pageUrl(p) {
-      return `results/guids_${lang}/pages/page-${String(p).padStart(3, '0')}.json`;
+      return `/api/results/guids_${lang}/pages/page-${String(p).padStart(3, '0')}.json`;
     }
 
     // ── Bootstrap: load summary.json ─────────────────────────────────────────
     async function loadData() {
       let summary;
       try {
-        const r = await fetch('results/summary.json');
+        const r = await apiFetch('/api/results/summary.json');
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         summary = await r.json();
       } catch (e) {
-        showError('Could not load results/summary.json — run GenerateManifest first.' + e.message);
+        showError('Could not load /api/results/summary.json — run GenerateManifest first.' + e.message);
         return;
       }
 

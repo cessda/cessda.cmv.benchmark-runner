@@ -33,5 +33,75 @@
     "name": "benchmark.algorithm",
     "type": "java.lang.String",
     "description": "A description for 'benchmark.algorithm'"
+  },
+  {
+    "name": "key-cessda-prod-abc123",
+    "type": "java.lang.String",
+    "description": "A description for 'key-cessda-prod-abc123'"
+  },
+  {
+    "name": "keys",
+    "type": "java.lang.String",
+    "description": "A description for 'keys'"
+  },
+  {
+    "name": "enabled",
+    "type": "java.lang.String",
+    "description": "A description for 'enabled'"
+  },
+  {
+    "name": "tenants",
+    "type": "java.lang.String",
+    "description": "A description for 'tenants'"
+  },
+  {
+    "name": "static-locations",
+    "type": "java.lang.String",
+    "description": "A description for 'static-locations'"
+  },
+  {
+    "name": "resources",
+    "type": "java.lang.String",
+    "description": "A description for 'resources'"
+  },
+  {
+    "name": "web",
+    "type": "java.lang.String",
+    "description": "A description for 'web'"
+  },
+  {
+    "name": "spring",
+    "type": "java.lang.String",
+    "description": "A description for 'spring'"
+  },
+  {
+    "name": "runner",
+    "type": "java.lang.String",
+    "description": "A description for 'runner'"
+  },
+  {
+    "name": "results-dir",
+    "type": "java.lang.String",
+    "description": "A description for 'results-dir'"
+  },
+  {
+    "name": "data-dir",
+    "type": "java.lang.String",
+    "description": "A description for 'data-dir'"
+  },
+  {
+    "name": "\"key-org-beta\"",
+    "type": "java.lang.String",
+    "description": "A description for '\"key-org-beta\"'"
+  },
+{
+    "name": "\"key-org-alpha\"",
+    "type": "java.lang.String",
+    "description": "A description for '\"key-org-alpha\"'"
+  },
+{
+    "name": "algorithm",
+    "type": "java.lang.String",
+    "description": "A description for 'algorithm'"
   }
-]}  
+]}

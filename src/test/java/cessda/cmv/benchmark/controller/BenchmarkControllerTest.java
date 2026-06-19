@@ -29,6 +29,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import cessda.cmv.benchmark.config.SecurityConfig;
 import cessda.cmv.benchmark.service.BenchmarkService;
 
 /**
@@ -41,7 +42,8 @@ import cessda.cmv.benchmark.service.BenchmarkService;
  * <p>Each nested class groups the tests for one endpoint. Within each
  * group the happy path is tested first, followed by error cases.</p>
  */
-@WebMvcTest(BenchmarkController.class)
+@WebMvcTest(controllers = BenchmarkController.class)
+@org.springframework.context.annotation.Import(SecurityConfig.class)
 class BenchmarkControllerTest {
 
     @Autowired
