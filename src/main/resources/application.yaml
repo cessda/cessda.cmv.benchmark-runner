@@ -1,0 +1,51 @@
+# ── Server ──────────────────────────────────────────────────────────────────
+server:
+  port: 3000
+
+# ── Volume mount points ──────────────────────────────────────────────────────
+# These match the Docker named volumes defined in docker-compose.yml.
+# benchmark-data    - where guids_*.txt files are read and written
+# benchmark-results - where JSON result files and summary.json are written
+#
+# ── Benchmark Algorithm ───────────────────────────────────────────────────────
+# benchmark.algorithm - URI of the Benchmark Assessment Algorithm to use
+# benchmark.runner    - URI of the instance of FAIR Champion to run
+benchmark:
+  data-dir: ./data
+  results-dir: ./results
+  algorithm: https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw
+  runner: https://tools.ostrails.eu/champion/assess/algorithm
+
+# ── SpringDoc / Swagger UI ────────────────────────────────────────────────────
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /api-docs/ui
+    operationsSorter: alpha
+  info:
+    title: CESSDA FAIR Benchmark Runner API
+    description: REST API for the CESSDA CMV FAIR benchmark pipeline
+    version: 2.0.0
+
+# ── Static resources (HTML dashboard) ────────────────────────────────────────
+# Spring Boot serves src/main/resources/static/ at / by default.
+# This covers index.html and detail.html.
+# The /results/** URL prefix is mapped to the results volume by WebConfig.java,
+# matching the relative fetch() paths used in the dashboard JavaScript.
+spring:
+  web:
+    resources:
+      static-locations: classpath:/static/
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+logging:
+  level:
+    cessda.cmv.benchmark: INFO
+
+# ── Multi-tenancy ─────────────────────────────────────────────────────────────
+tenants:
+  enabled: true
+  keys:
+    "key-oxford": "oxford"
+    "key-cessda":  "cessda"

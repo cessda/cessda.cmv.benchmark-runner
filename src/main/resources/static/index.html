@@ -7,24 +7,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
   <style>
-    /*
-      WCAG 2.1 AAA contrast (≥7:1 normal text, ≥4.5:1 large/bold text)
-      --text   #1c1917 on --bg    #f5f3ee  → 16.1:1 ✓
-      --text   #1c1917 on --surface #fff   → 18.1:1 ✓
-      --muted  #57534e on --bg    #f5f3ee  →  7.2:1 ✓
-      --muted  #57534e on --surface #fff   →  7.6:1 ✓
-      --pass   #14532d on --surface #fff   → 13.4:1 ✓
-      --pass   #14532d on --pass-bg #dcfce7→  8.1:1 ✓
-      --fail   #991b1b on --surface #fff   →  8.3:1 ✓
-      --fail   #991b1b on --fail-bg #fee2e2→  5.2:1 ✓ (large/bold only where used on bg)
-      --indet  #78350f on --surface #fff   → 10.3:1 ✓
-      --accent #1d4ed8 on --surface #fff   →  8.6:1 ✓
-      --accent #1d4ed8 on --accent-bg #eff6ff → 8.1:1 ✓
-      --acc2   #6d28d9 on --surface #fff   →  8.5:1 ✓
-      --navy   #1e40af on --surface #fff   →  9.7:1 ✓
-      Colour-only status indicators are always supplemented with text.
-      Progress bars are decorative; values are shown as text beside them.
-    */
     :root {
       --bg:         #f5f3ee;
       --surface:    #ffffff;
@@ -43,9 +25,7 @@
       --navy:       #1e40af;
       --purple:     #6d28d9;
     }
-
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
       background: var(--bg);
       color: var(--text);
@@ -54,22 +34,16 @@
       line-height: 1.6;
       min-height: 100vh;
     }
-
-    /* Visually hidden but screen-reader accessible */
     .sr-only {
       position: absolute; width: 1px; height: 1px;
       padding: 0; margin: -1px; overflow: hidden;
       clip: rect(0,0,0,0); white-space: nowrap; border: 0;
     }
-
-    /* ── Focus styles ── */
     :focus-visible {
       outline: 3px solid var(--accent);
       outline-offset: 2px;
       border-radius: 2px;
     }
-
-    /* ── Header ── */
     header {
       border-bottom: 2px solid var(--border2);
       padding: 24px 48px;
@@ -85,16 +59,8 @@
       color: var(--text);
       letter-spacing: -0.3px;
     }
-    .subtitle {
-      color: var(--muted);
-      font-size: 12px;
-    }
-    .header-right {
-      margin-left: auto;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
+    .subtitle { color: var(--muted); font-size: 12px; }
+    .header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
     #last-updated { color: var(--muted); font-size: 11px; }
     .reload-btn {
       background: var(--bg);
@@ -109,11 +75,9 @@
       transition: background 0.15s, border-color 0.15s;
     }
     .reload-btn:hover { background: var(--border); border-color: var(--muted); }
-
-    /* ── Layout ── */
+    .reload-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .reload-btn:disabled:hover { background: var(--bg); border-color: var(--border2); }
     main { max-width: 1280px; margin: 0 auto; padding: 40px 48px; }
-
-    /* ── Loading / Error ── */
     #loading, #error-msg {
       text-align: center;
       padding: 80px 0;
@@ -131,8 +95,6 @@
       margin-bottom: 12px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Section labels ── */
     .section-label {
       font-size: 11px;
       letter-spacing: 1.5px;
@@ -141,8 +103,6 @@
       margin-bottom: 16px;
       font-weight: 500;
     }
-
-    /* ── KPI grid ── */
     .kpi-grid {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
@@ -174,8 +134,6 @@
     .kpi-value.pass  { color: var(--pass); }
     .kpi-value.fail  { color: var(--fail); }
     .kpi-value.indet { color: var(--indet); }
-
-    /* ── FAIR cards ── */
     .fair-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -211,19 +169,9 @@
       overflow: hidden;
       margin-bottom: 10px;
     }
-    .fair-bar-fill {
-      height: 100%;
-      border-radius: 3px;
-      transition: width 0.8s cubic-bezier(.4,0,.2,1);
-    }
-    .fair-pct {
-      font-size: 22px;
-      font-family: 'Fraunces', serif;
-      font-weight: 700;
-      color: var(--text);
-    }
+    .fair-bar-fill { height: 100%; border-radius: 3px; transition: width 0.8s cubic-bezier(.4,0,.2,1); }
+    .fair-pct { font-size: 22px; font-family: 'Fraunces', serif; font-weight: 700; color: var(--text); }
     .fair-pass-count { font-size: 12px; color: var(--muted); }
-
     .F .fair-letter { color: var(--navy); }
     .A .fair-letter { color: var(--pass); }
     .I .fair-letter { color: var(--purple); }
@@ -232,10 +180,7 @@
     .A .fair-bar-fill { background: var(--pass); }
     .I .fair-bar-fill { background: var(--purple); }
     .R .fair-bar-fill { background: var(--indet); }
-
-    /* ── Language table ── */
     .lang-section { margin-bottom: 48px; }
-
     .table-wrap {
       border: 1px solid var(--border2);
       border-radius: 8px;
@@ -264,7 +209,6 @@
     tbody tr:hover { background: var(--accent-bg); }
     tbody td { padding: 16px 20px; vertical-align: middle; }
     tbody td.num { text-align: right; }
-
     .lang-name { display: flex; align-items: center; gap: 12px; }
     .lang-tag {
       background: var(--accent-bg);
@@ -276,17 +220,14 @@
       font-weight: 500;
     }
     .lang-fullname { color: var(--muted); font-size: 12px; }
-
     .pill-row { display: flex; gap: 3px; align-items: center; }
     .pill { height: 8px; border-radius: 4px; min-width: 4px; }
     .pill.pass  { background: var(--pass); }
     .pill.fail  { background: var(--fail); }
     .pill.indet { background: var(--indet); }
-
     .count-pass  { color: var(--pass);  font-weight: 500; }
     .count-fail  { color: var(--fail);  font-weight: 500; }
     .count-indet { color: var(--indet); font-weight: 500; }
-
     .mini-fair { display: flex; gap: 10px; }
     .mini-fair-item { display: flex; flex-direction: column; align-items: center; gap: 3px; }
     .mini-fair-letter { font-size: 10px; font-weight: 500; color: var(--muted); }
@@ -294,24 +235,14 @@
     .mini-fair-dot.high  { background: var(--pass); }
     .mini-fair-dot.mid   { background: var(--indet); }
     .mini-fair-dot.low   { background: var(--fail); }
-
     .view-arrow { color: var(--muted); font-size: 16px; text-align: right; }
     tbody tr:hover .view-arrow { color: var(--accent); }
-
-    /* ── Sortable headers ── */
-    thead th.sortable {
-      cursor: pointer;
-      user-select: none;
-      white-space: nowrap;
-      transition: color 0.15s;
-    }
+    thead th.sortable { cursor: pointer; user-select: none; white-space: nowrap; transition: color 0.15s; }
     thead th.sortable:hover { color: var(--text); }
     thead th.sortable.sort-asc::after  { content: ' ↑'; color: var(--accent); }
     thead th.sortable.sort-desc::after { content: ' ↓'; color: var(--accent); }
     thead th.sortable.sort-asc,
     thead th.sortable.sort-desc { color: var(--accent); }
-
-    /* ── Maturity badge ── */
     .maturity-badge {
       display: inline-flex;
       align-items: center;
@@ -326,8 +257,6 @@
     .maturity-badge.level-2 { background: var(--accent-bg); color: var(--accent); border: 1px solid #bfdbfe; }
     .maturity-badge.level-1 { background: var(--indet-bg);  color: var(--indet);  border: 1px solid #fde68a; }
     .maturity-badge.level-0 { background: var(--fail-bg);   color: var(--fail);   border: 1px solid #fca5a5; }
-
-    /* ── Footer ── */
     footer {
       border-top: 1px solid var(--border2);
       padding: 20px 48px;
@@ -344,8 +273,6 @@
       font-family: inherit;
       border: 1px solid var(--border);
     }
-
-    /* ── Responsive ── */
     @media (max-width: 900px) {
       main { padding: 24px 20px; }
       header { padding: 20px; flex-wrap: wrap; }
@@ -353,12 +280,72 @@
       .kpi-grid  { grid-template-columns: repeat(3, 1fr); }
       .fair-grid { grid-template-columns: repeat(2, 1fr); }
     }
-
     .fade-in { animation: fadeIn 0.35s ease forwards; opacity: 0; }
     @keyframes fadeIn { to { opacity: 1; } }
     .stagger-1 { animation-delay: 0.05s; }
     .stagger-2 { animation-delay: 0.10s; }
     .stagger-3 { animation-delay: 0.15s; }
+
+    /* ── API key gate ── */
+    #key-gate {
+      display: none;
+      min-height: 60vh;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+      padding: 40px 20px;
+    }
+    #key-gate-card {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      padding: 40px;
+      max-width: 380px;
+      width: 100%;
+      text-align: center;
+    }
+    #key-gate-card h2 {
+      font-family: 'Fraunces', serif;
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    #key-gate-card p {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 24px;
+    }
+    #key-gate-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 13px;
+      margin-bottom: 14px;
+    }
+    #key-gate-input:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+    #key-gate-submit {
+      width: 100%;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    #key-gate-submit:hover { background: var(--navy); }
+    #key-gate-error {
+      color: var(--fail);
+      font-size: 12px;
+      margin-top: 10px;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -370,11 +357,25 @@
   </div>
   <div class="header-right">
     <span id="last-updated" aria-live="polite"></span>
+    <button class="reload-btn" id="change-key-btn" style="display:none" onclick="onChangeKeyClick()">Change key</button>
+    <button class="reload-btn" id="generate-btn" style="display:none" onclick="onGenerateManifestClick()">⚙ Generate manifest</button>
     <button class="reload-btn" onclick="loadData()">↻ Refresh</button>
   </div>
 </header>
 
 <main>
+  <div id="key-gate">
+    <div id="key-gate-card">
+      <h2>Enter your API key</h2>
+      <p>Your organisation's API key identifies which results to display. It is stored only for this browser session.</p>
+      <form id="key-gate-form" onsubmit="onKeyGateSubmit(event)">
+        <input type="password" id="key-gate-input" placeholder="key-org-..." autocomplete="off" />
+        <button type="submit" id="key-gate-submit">View dashboard</button>
+      </form>
+      <p id="key-gate-error">Invalid API key. Please check and try again.</p>
+    </div>
+  </div>
+
   <div id="loading">
     <div class="spinner" role="status" aria-label="Loading data"></div>
     <p>Loading results…</p>
@@ -497,12 +498,116 @@
     return `<span class="maturity-badge level-${level}">${labels[level]}</span>`;
   }
 
+  // ── API key handling ─────────────────────────────────────────────────────
+  //
+  // The dashboard authenticates to the backend via the X-API-Key header.
+  // The key is never put in the URL or page state beyond sessionStorage,
+  // so a tenant's data can only ever be reached by someone holding their
+  // key — there is no tenant picker, because end users only ever have
+  // their own organisation's key, never a list of others.
+  //
+  // On first load, if no key is stored for this browser tab/session, a
+  // simple gate screen is shown asking for the key. Once entered, it is
+  // stored in sessionStorage and apiFetch() attaches it to every request
+  // automatically. The "Change key" button in the header clears the
+  // stored key and re-shows the gate, letting the same browser tab view
+  // a different tenant's data by entering a different key — this is the
+  // intended way to switch between tenants locally during testing.
+  //
+  // A future production deployment can skip the gate screen entirely by
+  // reading the key from a URL parameter the tenant was given when
+  // provisioned (e.g. ?key=...) — apiFetch() itself would not need to
+  // change for that, only how the key first gets into sessionStorage.
+
+  function getStoredApiKey() {
+    return sessionStorage.getItem('apiKey');
+  }
+
+  function setStoredApiKey(key) {
+    sessionStorage.setItem('apiKey', key);
+  }
+
+  function clearStoredApiKey() {
+    sessionStorage.removeItem('apiKey');
+  }
+
+  async function apiFetch(url, opts = {}) {
+    const key = getStoredApiKey();
+    const headers = { ...(opts.headers || {}) };
+    if (key) headers['X-API-Key'] = key;
+    return fetch(url, { ...opts, headers });
+  }
+
+  function showKeyGate() {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('error-msg').style.display = 'none';
+    document.getElementById('change-key-btn').style.display = 'none';
+    document.getElementById('generate-btn').style.display = 'none';
+    document.getElementById('key-gate').style.display = 'flex';
+    document.getElementById('key-gate-input').focus();
+  }
+
+  function hideKeyGate() {
+    document.getElementById('key-gate').style.display = 'none';
+    document.getElementById('key-gate-error').style.display = 'none';
+    document.getElementById('change-key-btn').style.display = 'inline-block';
+    document.getElementById('generate-btn').style.display = 'inline-block';
+  }
+
+  function onKeyGateSubmit(e) {
+    e.preventDefault();
+    const input = document.getElementById('key-gate-input');
+    const key = input.value.trim();
+    if (!key) return;
+    setStoredApiKey(key);
+    loadData();
+  }
+
+  function onChangeKeyClick() {
+    clearStoredApiKey();
+    document.getElementById('key-gate-input').value = '';
+    showKeyGate();
+  }
+
+  async function onGenerateManifestClick() {
+    const btn = document.getElementById('generate-btn');
+    const originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '⚙ Generating…';
+
+    try {
+      const res = await apiFetch('/api/generate-manifest', { method: 'POST' });
+
+      if (res.status === 401) {
+        clearStoredApiKey();
+        showKeyGate();
+        document.getElementById('key-gate-error').style.display = 'block';
+        return;
+      }
+
+      const body = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        showError(`Failed to generate manifest.\n\n${body.message || `HTTP ${res.status}`}`);
+        return;
+      }
+
+      // Manifest written successfully — reload the dashboard with fresh data.
+      await loadData();
+    } catch (e) {
+      showError(`Failed to generate manifest.\n\n${e.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
+  }
+
   // ── Sorting state ──────────────────────────────────────────────────────────
   let sortCol = 'name';
   let sortDir = 'asc';
   let tableData = []; // [{lang, records, pass, fail, indet, maturity, fairDesc, ls}, ...]
 
-  // Map data-col attribute values to tableData field names
   const COL_FIELD = { name: 'lang', records: 'records', pass: 'pass',
                       fail: 'fail', indet: 'indet', maturity: 'maturity' };
 
@@ -540,6 +645,13 @@
   }
 
   async function loadData() {
+    const key = getStoredApiKey();
+    if (!key) {
+      showKeyGate();
+      return;
+    }
+
+    hideKeyGate();
     document.getElementById('loading').style.display = 'block';
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('error-msg').style.display = 'none';
@@ -547,10 +659,26 @@
     let summary;
     try {
       const res = await apiFetch('/api/results/summary.json');
+
+      if (res.status === 401) {
+        // Stored key was rejected — clear it and re-prompt with a visible error.
+        clearStoredApiKey();
+        document.getElementById('loading').style.display = 'none';
+        showKeyGate();
+        document.getElementById('key-gate-error').style.display = 'block';
+        return;
+      }
+
+      if (res.status === 404) {
+        document.getElementById('loading').style.display = 'none';
+        showError('No results found for your organisation yet.\n\nRun the assessment pipeline and generate the manifest first (POST /api/run-assessment, then POST /api/generate-manifest).');
+        return;
+      }
+
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       summary = await res.json();
     } catch (e) {
-      showError(`Could not load /api/results/summary.json — run GenerateManifest first.\n\n${e.message}`);
+      showError(`Could not load /api/results/summary.json.\n\n${e.message}`);
       return;
     }
 
@@ -578,7 +706,6 @@
       setTimeout(() => { document.getElementById(`fair-${c}-bar`).style.width = p + '%'; }, 100);
     }
 
-    // Build tableData — read pre-computed maturity from summary.json
     tableData = Object.keys(langs).map(lang => {
       const ls   = langs[lang];
       const mat  = ls.maturityLevel != null ? ls.maturityLevel : 0;
@@ -591,7 +718,6 @@
                maturity: mat, fairDesc, ls };
     });
 
-    // Maturity distribution KPI — read pre-computed counts from summary.json
     const ov_dist = ov.maturityDistribution || {};
     const matCounts = [
       ov_dist.none   || 0,
@@ -610,7 +736,6 @@
     updateSortHeaders();
     renderRows();
 
-    // Wire up sortable headers
     document.querySelectorAll('thead th.sortable').forEach(th => {
       th.addEventListener('click', () => onHeaderClick(th));
     });
@@ -683,9 +808,7 @@
     const el = document.getElementById('error-msg');
     el.style.display = 'block';
     el.innerHTML = `<strong>Error loading data</strong><br>
-      <pre style="margin-top:12px;font-size:11px;text-align:left;display:inline-block;">${msg}</pre><br><br>
-      <span>Run <code style="background:var(--bg);padding:1px 4px;border:1px solid var(--border);">java GenerateManifest.java</code>
-      then serve with <code style="background:var(--bg);padding:1px 4px;border:1px solid var(--border);"> npx serve . </code></span>`;
+      <pre style="margin-top:12px;font-size:11px;text-align:left;display:inline-block;">${msg}</pre>`;
   }
 
   loadData();

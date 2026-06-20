@@ -31,6 +31,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import cessda.cmv.benchmark.config.SecurityConfig;
 import cessda.cmv.benchmark.service.BenchmarkService;
+import cessda.cmv.benchmark.tenant.TenantContext;
+import cessda.cmv.benchmark.tenant.TenantProperties;
 
 /**
  * Unit tests for {@link BenchmarkController}.
@@ -39,10 +41,37 @@ import cessda.cmv.benchmark.service.BenchmarkService;
  * loaded. {@link BenchmarkService} is replaced with a Mockito mock,
  * meaning no real HTTP calls or file I/O occur during these tests.</p>
  *
+ * <p>{@link SecurityConfig} is imported explicitly so that this slice
+ * uses the application's real, permissive security rules (CSRF
+ * disabled, all requests permitted) rather than Spring Security's
+ * restrictive defaults, which would otherwise reject every POST with
+ * a 403 (CSRF) or 401 (auth required).</p>
+ *
+ * <p>{@code @WebMvcTest} does not component-scan plain
+ * {@code @Component} beans outside the web layer, so
+ * {@link TenantContext} and {@link TenantProperties} — both required
+ * transitively by {@link SecurityConfig} via
+ * {@code TenantAuthFilter} — are supplied here as Mockito mocks rather
+ * than relying on component scanning to find them.</p>
+ *
+ * <p>{@code TenantAuthFilter} itself is explicitly excluded from this
+ * slice via {@code excludeFilters}, since these tests verify controller
+ * parameter-forwarding and error-handling behaviour, not
+ * authentication. With the filter excluded, {@link SecurityConfig}'s
+ * {@code Optional<TenantAuthFilter>} resolves to empty and its
+ * {@code permitAll()} rule applies unconditionally, so requests reach
+ * the controller without needing an {@code X-API-Key} header.</p>
+ *
  * <p>Each nested class groups the tests for one endpoint. Within each
  * group the happy path is tested first, followed by error cases.</p>
  */
-@WebMvcTest(controllers = BenchmarkController.class)
+@WebMvcTest(
+    controllers = BenchmarkController.class,
+    excludeFilters = @org.springframework.context.annotation.ComponentScan.Filter(
+        type = org.springframework.context.annotation.FilterType.ASSIGNABLE_TYPE,
+        classes = cessda.cmv.benchmark.tenant.TenantAuthFilter.class
+    )
+)
 @org.springframework.context.annotation.Import(SecurityConfig.class)
 class BenchmarkControllerTest {
 
@@ -51,6 +80,12 @@ class BenchmarkControllerTest {
 
     @MockitoBean
     private BenchmarkService service;
+
+    @MockitoBean
+    private TenantContext tenantContext;
+
+    @MockitoBean
+    private TenantProperties tenantProperties;
 
     // -------------------------------------------------------------------------
     // POST /api/fetch-identifiers
