@@ -91,7 +91,7 @@ public class GenerateManifest {
         FAIR_MAP.put("F2B",         "F");
         FAIR_MAP.put("F4",          "F");
         FAIR_MAP.put("A1_1",        "A");
-        FAIR_MAP.put("A1_2",        "A");
+        //FAIR_MAP.put("A1_2",        "A");
         FAIR_MAP.put("I1_A",        "I");
         FAIR_MAP.put("I2_A",        "I");
         FAIR_MAP.put("R1_2_CPI",    "R");
@@ -116,7 +116,7 @@ public class GenerateManifest {
 
     /** Tests required for Maturity Level 1 (normalised IDs). */
     private static final java.util.Set<String> MATURITY_L1 = java.util.Set.of(
-        "F1_GUID", "F2B", "F4", "A1_1", "A1_2"
+        "F1_GUID", "F2B", "F4", "A1_1" // "A1_2"
     );
 
     /** Tests required for Maturity Level 2 (superset of L1). */
@@ -400,12 +400,20 @@ public class GenerateManifest {
         node.put("fail",    s.fail);
         node.put("indet",   s.indet);
 
-        // Maturity level for this set: derived from which tests have at least one pass
-        java.util.Set<String> anyPassNorm = new java.util.HashSet<>();
-        for (Map.Entry<String, int[]> e : s.tests.entrySet()) {
-            if (e.getValue()[0] > 0) anyPassNorm.add(normTestId(e.getKey()));
+        // Maturity level for this set: the highest level achieved by at
+        // least one record, derived from the per-record maturityCounts
+        // already accumulated in processLanguage().
+        //
+        // The previous approach (checking which tests have at least one
+        // pass across the whole set) incorrectly returned L0 whenever a
+        // required test never passed for any record — even when many
+        // records individually met a higher level through a different
+        // combination of passing tests.
+        int setMaturity = 0;
+        for (int i = 3; i >= 1; i--) {
+            if (s.maturityCounts[i] > 0) { setMaturity = i; break; }
         }
-        node.put("maturityLevel", computeMaturity(anyPassNorm));
+        node.put("maturityLevel", setMaturity);
 
         // Maturity distribution across records
         ObjectNode matDist = mapper.createObjectNode();

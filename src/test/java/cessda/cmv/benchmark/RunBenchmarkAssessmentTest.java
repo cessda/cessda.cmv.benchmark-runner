@@ -199,8 +199,8 @@ class RunBenchmarkAssessmentTest {
                 // Make the file visible on the classpath by switching to tempDir —
                 // easier here to rely on CWD fallback by naming file explicitly.
                 // We can't change CWD in JVM, so we use the absolute path.
-                RunBenchmarkAssessment localClient = new RunBenchmarkAssessment(assessment.getBenchmarkAlgorithm(),
-                                assessment.getBenchmarkRunner());
+                RunBenchmarkAssessment localClient = new RunBenchmarkAssessment(assessment.getSpreadsheetUri(),
+                                assessment.getChampionUri());
 
                 // processSingleFile looks up by name in resources then CWD;
                 // to keep this test hermetic we invoke the private readGuidsFromResource
@@ -237,8 +237,8 @@ class RunBenchmarkAssessmentTest {
                                                 + "https://example.org/oai?verb=GetRecord&identifier=b2\n",
                                 StandardCharsets.UTF_8);
 
-                RunBenchmarkAssessment localClient = new RunBenchmarkAssessment(assessment.getBenchmarkAlgorithm(),
-                                assessment.getBenchmarkRunner());
+                RunBenchmarkAssessment localClient = new RunBenchmarkAssessment(assessment.getSpreadsheetUri(),
+                                assessment.getChampionUri());
 
                 var field = RunBenchmarkAssessment.class.getDeclaredField("guidsFilename");
                 field.setAccessible(true);
@@ -298,9 +298,9 @@ class RunBenchmarkAssessmentTest {
         @Test
         void parseArgsRecognisesSpreadsheetShortOption() throws IOException {
                 CommandLine cmd = RunBenchmarkAssessment.parseArgs(
-                                new String[] { "-s", "https://custom.example.org/champion" });
-                assertEquals("https://custom.example.org/champion",
-                                cmd.getOptionValue("spreadsheet"));
+                                new String[] { "-s", "https://custom.example.org/spreadsheet" });
+                assertEquals("https://custom.example.org/spreadsheet",
+                                cmd.getOptionValue("spreadsheetUri"));
         }
 
         @Test
@@ -348,7 +348,7 @@ class RunBenchmarkAssessmentTest {
         @Test
         void constructorWithCustomUriDoesNotThrow() {
                 assertDoesNotThrow(() -> new RunBenchmarkAssessment("https://custom.example.org/api",
-                                "https://custom.example.org/runner"));
+                                "https://custom.example.org/championUri"));
         }
 
         // ── Parameterised: default sets match GetOaiPmhIdentifiers ───────────────

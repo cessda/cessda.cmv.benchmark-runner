@@ -204,7 +204,7 @@ class BenchmarkControllerTest {
         @DisplayName("Returns 200 with ok status when called with no parameters")
         void defaultParametersReturn200() throws Exception {
             when(service.runAssessment(
-                    isNull(), isNull(), isNull(), eq(false)))
+                    isNull(), isNull(), isNull(), isNull(), isNull(), eq(false)))
                 .thenReturn(
                     "Processed default file: guids_hr.txt"
                     + " -> results written to /results");
@@ -216,14 +216,14 @@ class BenchmarkControllerTest {
                     is("Processed default file: guids_hr.txt"
                         + " -> results written to /results")));
 
-            verify(service).runAssessment(null, null, null, false);
+            verify(service).runAssessment(null, null, null, null, null, false);
         }
 
         @Test
         @DisplayName("Passes processAll=true to service")
         void processAllParameterIsForwarded() throws Exception {
-            when(service.runAssessment(
-                    isNull(), isNull(), isNull(), eq(true)))
+              when(service.runAssessment(
+        any(), any(), any(), any(), isNull(), anyBoolean()))
                 .thenReturn(
                     "Processed all default set files from /data"
                     + " -> results written to /results");
@@ -233,14 +233,14 @@ class BenchmarkControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status", is("ok")));
 
-            verify(service).runAssessment(null, null, null, true);
+            verify(service).runAssessment(null, null, null, null, null, true);
         }
 
         @Test
         @DisplayName("Passes guidFile parameter to service")
         void guidFileParameterIsForwarded() throws Exception {
             when(service.runAssessment(
-                    isNull(), eq("guids_de.txt"), isNull(), eq(false)))
+                    isNull(), isNull(), eq("guids_de.txt"), isNull(), isNull(), eq(false)))
                 .thenReturn(
                     "Processed file: /data/guids_de.txt"
                     + " -> results written to /results");
@@ -251,7 +251,7 @@ class BenchmarkControllerTest {
                 .andExpect(jsonPath("$.status", is("ok")));
 
             verify(service).runAssessment(
-                null, "guids_de.txt", null, false);
+                null, null,  "guids_de.txt", null, null, false);
         }
 
         @Test
@@ -263,7 +263,7 @@ class BenchmarkControllerTest {
                 + "&identifier=abc123";
 
             when(service.runAssessment(
-                    isNull(), isNull(), eq(guidUrl), eq(false)))
+        isNull(), isNull(), isNull(), isNull(), eq(guidUrl), eq(false)))
                 .thenReturn(
                     "Processed single GUID: " + guidUrl
                     + " -> results written to /results");
@@ -273,15 +273,15 @@ class BenchmarkControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status", is("ok")));
 
-            verify(service).runAssessment(null, null, guidUrl, false);
+            verify(service).runAssessment(null, null, null, null, guidUrl, false);
         }
 
         @Test
         @DisplayName("Passes custom spreadsheetUri to service")
         void spreadsheetUriParameterIsForwarded() throws Exception {
-            String customUri = "https://example.org/champion/assess";
+            String customUri = "https://example.org/spreadsheet";
             when(service.runAssessment(
-                    eq(customUri), isNull(), isNull(), eq(false)))
+        eq(customUri), isNull(),isNull(), isNull(), isNull(), eq(false)))
                 .thenReturn("Processed default file: guids_hr.txt"
                     + " -> results written to /results");
 
@@ -289,12 +289,15 @@ class BenchmarkControllerTest {
                     .param("spreadsheetUri", customUri))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status", is("ok")));
+            
+            verify(service).runAssessment("https://example.org/spreadsheet", null, null, null, null, false);
         }
 
         @Test
         @DisplayName("Returns 500 with error status when service throws IOException")
         void serviceExceptionReturns500() throws Exception {
-            when(service.runAssessment(any(), any(), any(), anyBoolean()))
+          when(service.runAssessment(
+        any(), any(), any(), any(), isNull(), anyBoolean()))
                 .thenThrow(new IOException("File not found: guids_hr.txt"));
 
             mvc.perform(post("/api/run-assessment"))

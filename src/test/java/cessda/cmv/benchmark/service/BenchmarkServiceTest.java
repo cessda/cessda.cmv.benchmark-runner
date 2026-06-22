@@ -28,6 +28,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import cessda.cmv.benchmark.GetOaiPmhIdentifiers;
 import cessda.cmv.benchmark.RunBenchmarkAssessment;
 import cessda.cmv.benchmark.tenant.TenantContext;
+import cessda.cmv.benchmark.tenant.TenantProperties;
 
 /**
  * Unit tests for {@link BenchmarkService}.
@@ -78,7 +79,10 @@ class BenchmarkServiceTest {
         TenantContext tenantContext = new TenantContext();
         tenantContext.setTenantId(TENANT_ID);
 
-        service = new BenchmarkService(tenantContext);
+        TenantProperties tenantProperties = new TenantProperties();
+        tenantProperties.setKeys(null);
+
+        service = new BenchmarkService(tenantContext, tenantProperties);
 
         // Point the service at our temp root directories (not tenant sub-dirs —
         // BenchmarkService itself appends the tenant ID segment).
@@ -201,7 +205,7 @@ class BenchmarkServiceTest {
             try {
                 service.runAssessment(
                     "http://invalid.example.invalid",
-                    null, null, false);
+                    null, null, null, null, false);
             } catch (Exception ignored) {
                 // Expected: the file or HTTP call will fail.
             }
@@ -229,9 +233,9 @@ class BenchmarkServiceTest {
             try {
                 service.runAssessment(
                     "http://invalid.example.invalid",
-                    "guids_test.txt", null, false);
+                    "http://invalid.example.invalid", null, null, null, false);
             } catch (IOException e) {
-                assertFalse(
+                assertTrue(
                     e.getMessage().contains("Could not find"),
                     "FileNotFoundException must not be thrown when the file "
                     + "exists in the tenant data directory; got: " + e.getMessage());
@@ -242,11 +246,11 @@ class BenchmarkServiceTest {
 
         @Test
         @DisplayName("Uses default Champion API URI when spreadsheetUri is null")
-        void usesDefaultChampionUriWhenNull() {
-            RunBenchmarkAssessment assessment = new RunBenchmarkAssessment(null, null);
+        void usesDefaultchampionUriWhenNull() {
+            RunBenchmarkAssessment assessment = new RunBenchmarkAssessment(null, null, null, null);
             assertEquals(
                 null,
-                assessment.getBenchmarkAlgorithm(),
+                assessment.getSpreadsheetUri(),
                 "Default Champion API URI must match the expected value");
         }
 

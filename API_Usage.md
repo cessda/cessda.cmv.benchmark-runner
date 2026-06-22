@@ -210,14 +210,14 @@ Expected response:
 curl -X POST \
   "http://localhost:8080/api/run-assessment\
 ?processAll=true\
-&spreadsheetUri=https%3A%2F%2Ftools.ostrails.eu%2Fchampion%2Fassess%2Falgorithm%2Fd%2FYourAlgorithmId"
+&spreadsheetUri=https%3A%2F%2Ftools.ostrails.eu%2Fchampion%2Fassess%2FspreadsheetUri%2Fd%2FYourspreadsheetUriId"
 ```
 
 ### All Run parameters
 
 | Parameter        | Default value                                            |
 |------------------|----------------------------------------------------------|
-| `spreadsheetUri` | The default CESSDA Champion algorithm URI                |
+| `spreadsheetUri` | The default spreadsheetUri URI                |
 | `guidFile`       | `guids_hr.txt` *(when no mode parameter is supplied)*    |
 | `guid`           | *(none)*                                                 |
 | `processAll`     | `false`                                                  |

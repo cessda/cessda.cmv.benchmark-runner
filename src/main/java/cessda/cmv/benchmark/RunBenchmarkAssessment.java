@@ -49,12 +49,12 @@ import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ApplicationContext;
-import org.springframework.stereotype.Service;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -67,17 +67,21 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * input file (minus its extension).
  *
  * <p>
- * Both the algorithm URI and the runner URI are injected from
- * application properties ({@code benchmark.algorithm} and
- * {@code benchmark.runner} respectively) and may be overridden at
- * runtime via environment variables, JVM system properties, or
- * command-line arguments without recompilation.
+ * This class is a plain Java object, not a Spring-managed bean. It is
+ * constructed directly, either by {@code BenchmarkService} with
+ * tenant-scoped spreadsheetUri, championUri, data, and results paths resolved
+ * per request, or by {@link #main(String[])} for standalone
+ * command-line use. A single shared Spring singleton would be
+ * incompatible with multi-tenancy, since the spreadsheetUri and championUri
+ * URIs — and the data and results directories — differ per tenant and
+ * must be resolved fresh for each invocation.
  * </p>
  *
  * <h2>Command-line options</h2>
- * 
+ *
  * <pre>
- *   -s, --spreadsheet &lt;uri&gt;   Algorithm URI (overrides benchmark.algorithm)
+ *   -s, --spreadsheetUri &lt;uri&gt;   SpreadsheetUri URI (overrides benchmark.spreadsheetUri)
+ *   -r, --championUri &lt;uri&gt;        championUri URI (overrides benchmark.championUri)
  *   -p, --process-file &lt;file&gt; Process a single named GUID file
  *   -P, --process-all         Process all guids_XX.txt files for the
  *                              default set list
@@ -93,7 +97,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * is processed (legacy single-file mode).
  * </p>
  */
-@Service
 public class RunBenchmarkAssessment {
 
     // -----------------------------------------------------------------------
@@ -134,7 +137,7 @@ public class RunBenchmarkAssessment {
     private static final String RESPSAVED = "\u2713 Saved response for GUID ";
 
     // CLI option names
-    private static final String SPREADSHEET_ARG = "spreadsheet";
+    private static final String SPREADSHEET_ARG = "spreadsheetUri";
     private static final String PROCESS_ALL_ARG = "process-all";
     private static final String PROCESS_FILE_ARG = "process-file";
     private static final String GUID_ARG = "guid";
@@ -150,16 +153,18 @@ public class RunBenchmarkAssessment {
     // -----------------------------------------------------------------------
 
     /**
-     * URI of the benchmark assessment algorithm, injected from
-     * {@code benchmark.algorithm} and optionally overridden at runtime.
+     * URI of the benchmark assessment spreadsheetUri, supplied by the
+     * caller (e.g. resolved per-tenant by {@code BenchmarkService}, or
+     * read from {@code application.yml} / CLI flags in standalone
+     * mode via {@link #main(String[])}).
      */
-    private String benchmarkAlgorithm;
+    private String spreadsheetUri;
 
     /**
-     * URI of the FAIR Champion runner instance, injected from
-     * {@code benchmark.runner}.
+     * URI of the FAIR Champion championUri instance, supplied by the
+     * caller in the same way as {@link #spreadsheetUri}.
      */
-    private String benchmarkRunner;
+    private String championUri;
 
     /**
      * Name of the GUID file currently being processed; may be
@@ -179,33 +184,32 @@ public class RunBenchmarkAssessment {
     // -----------------------------------------------------------------------
 
     /**
-     * Creates a service bean that posts GUIDs to the configured
-     * Champion API URIs.
+     * Creates an instance configured with explicit spreadsheetUri, championUri,
+     * and timeout values.
      *
      * <p>
-     * Both URIs are resolved from application properties but can be
-     * overridden at runtime without recompilation via environment
-     * variables ({@code BENCHMARK_ALGORITHM} /
-     * {@code BENCHMARK_RUNNER}), JVM system properties, or the
-     * {@code -s} command-line flag for the algorithm URI.
+     * This constructor is used by {@link #main(String[])} for
+     * standalone command-line use, where the spreadsheetUri and championUri
+     * URIs are read from {@code application.yml} (via the nested
+     * {@link CliConfig} Spring configuration) and may be overridden
+     * by CLI flags before processing begins.
      * </p>
      *
-     * @param benchmarkAlgorithm URI of the benchmark assessment
-     *                           algorithm, bound to
-     *                           {@code benchmark.algorithm}
-     * @param benchmarkRunner    URI of the FAIR Champion runner,
-     *                           bound to {@code benchmark.runner}
+     * @param spreadsheetUri URI of the benchmark assessment
+     *                           spreadsheetUri
+     * @param championUri    URI of the FAIR Champion championUri
+     * @param connectTimeout     HTTP connect timeout, in seconds
+     * @param requestTimeout     HTTP request timeout, in seconds
      */
-    @Autowired
     public RunBenchmarkAssessment(
-            @Value("${benchmark.algorithm}") String benchmarkAlgorithm,
-            @Value("${benchmark.runner}") String benchmarkRunner,
-            @Value("${benchmark.connect.timeout.seconds:30}") int connectTimeout,
-            @Value("${benchmark.request.timeout.seconds:120}") int requestTimeout) {
+            String spreadsheetUri,
+            String championUri,
+            int connectTimeout,
+            int requestTimeout) {
 
         this.requestTimeout = Duration.ofSeconds(requestTimeout);
-        this.benchmarkAlgorithm = benchmarkAlgorithm;
-        this.benchmarkRunner = benchmarkRunner;
+        this.spreadsheetUri = spreadsheetUri;
+        this.championUri = championUri;
         this.guidsFilename = DEFAULT_GUIDS_FILE;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(connectTimeout))
@@ -213,24 +217,39 @@ public class RunBenchmarkAssessment {
     }
 
     /**
-     * Alternate constructor for direct instantiation outside of a Spring
-     * context, using default timeout values of 30s (connect) and
-     * 120s (request).
+     * Creates an instance scoped to a specific tenant's data and
+     * results directories, using default timeout values of 30s
+     * (connect) and 120s (request).
      *
-     * @param benchmarkAlgorithm URI of the benchmark assessment algorithm
-     * @param benchmarkRunner    URI of the FAIR Champion runner
+     * <p>
+     * This is the constructor used by {@code BenchmarkService}, which
+     * resolves {@code spreadsheetUri} and {@code championUri}
+     * per tenant (from {@code tenants.config.<tenantId>} in
+     * {@code application.yml}, with an explicit per-request override
+     * taking priority) before calling this constructor. Each call
+     * creates a fresh instance — there is no shared singleton — so
+     * concurrent requests for different tenants never interfere with
+     * one another.
+     * </p>
+     *
+     * @param spreadsheetUri URI of the benchmark assessment
+     *                           spreadsheetUri for this tenant
+     * @param championUri    URI of the FAIR Champion championUri for
+     *                           this tenant
+     * @param dataDir            tenant-scoped data directory
+     * @param resultsDir         tenant-scoped results directory
      */
-public RunBenchmarkAssessment(String benchmarkAlgorithm, String benchmarkRunner,
-                               Path dataDir, Path resultsDir) {
-    this.benchmarkAlgorithm = benchmarkAlgorithm;
-    this.benchmarkRunner     = benchmarkRunner;
-    this.dataDir    = dataDir;
-    this.resultsDir = resultsDir;
-    this.requestTimeout = Duration.ofSeconds(120);
-    this.httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(30))
-            .build();
-}
+    public RunBenchmarkAssessment(String spreadsheetUri, String championUri,
+                                   Path dataDir, Path resultsDir) {
+        this.spreadsheetUri = spreadsheetUri;
+        this.championUri     = championUri;
+        this.dataDir    = dataDir;
+        this.resultsDir = resultsDir;
+        this.requestTimeout = Duration.ofSeconds(120);
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(30))
+                .build();
+    }
 
     /**
      * Convenience constructor for direct instantiation outside of a
@@ -241,13 +260,13 @@ public RunBenchmarkAssessment(String benchmarkAlgorithm, String benchmarkRunner,
      * <p>Use {@link #RunBenchmarkAssessment(String, String, Path, Path)}
      * when tenant-scoped directory isolation is required.</p>
      *
-     * @param benchmarkAlgorithm URI of the benchmark assessment algorithm
-     * @param benchmarkRunner    URI of the FAIR Champion runner
+     * @param spreadsheetUri URI of the benchmark assessment spreadsheetUri
+     * @param championUri    URI of the FAIR Champion championUri
      */
     public RunBenchmarkAssessment(
-            String benchmarkAlgorithm,
-            String benchmarkRunner) {
-        this(benchmarkAlgorithm, benchmarkRunner, 30, 120);
+            String spreadsheetUri,
+            String championUri) {
+        this(spreadsheetUri, championUri, 30, 120);
     }
 
     // -----------------------------------------------------------------------
@@ -255,24 +274,27 @@ public RunBenchmarkAssessment(String benchmarkAlgorithm, String benchmarkRunner,
     // -----------------------------------------------------------------------
 
     /**
-     * Returns the URI of the benchmark assessment algorithm.
-     * This value is injected from {@code benchmark.algorithm} and may
-     * be overridden at runtime via the {@code -s} CLI flag.
+     * Returns the URI of the benchmark assessment spreadsheetUri.
+     * This value is supplied by the caller — either resolved per
+     * tenant by {@code BenchmarkService}, or read from
+     * {@code application.yml} / overridden via the {@code -s} CLI
+     * flag in standalone mode.
      *
-     * @return the algorithm URI string
+     * @return the spreadsheetUri URI string
      */
-    public String getBenchmarkAlgorithm() {
-        return benchmarkAlgorithm;
+    public String getSpreadsheetUri() {
+        return spreadsheetUri;
     }
 
     /**
-     * Returns the URI of the FAIR Champion runner instance.
-     * This value is injected from {@code benchmark.runner}.
+     * Returns the URI of the FAIR Champion championUri instance.
+     * This value is supplied by the caller in the same way as
+     * {@link #getSpreadsheetUri()}.
      *
-     * @return the runner URI string
+     * @return the championUri URI string
      */
-    public String getBenchmarkRunner() {
-        return benchmarkRunner;
+    public String getChampionUri() {
+        return championUri;
     }
 
     // -----------------------------------------------------------------------
@@ -280,21 +302,82 @@ public RunBenchmarkAssessment(String benchmarkAlgorithm, String benchmarkRunner,
     // -----------------------------------------------------------------------
 
     /**
+     * Spring configuration used only by {@link #main(String[])} to
+     * load {@code application.yml} and bind the shared
+     * {@code benchmark.spreadsheetUri} / {@code benchmark.championUri}
+     * properties for standalone command-line use.
+     *
+     * <p>
+     * This is deliberately separate from {@link RunBenchmarkAssessment}
+     * itself, which is never a Spring bean — see the class-level
+     * Javadoc for why a shared singleton is incompatible with
+     * multi-tenancy. Standalone CLI use has no concept of "the current
+     * tenant", so it falls back to the shared top-level
+     * {@code benchmark.spreadsheetUri} / {@code benchmark.championUri}
+     * properties rather than any {@code tenants.config} entry. Both
+     * properties default to an empty string if absent, rather than
+     * failing context startup, since a CLI user may always supply
+     * {@code -s} / {@code -r} instead.
+     * </p>
+     *
+     * <p>
+     * Deliberately annotated {@code @Configuration} +
+     * {@code @EnableAutoConfiguration} rather than
+     * {@code @SpringBootApplication}. The latter also implies
+     * {@code @SpringBootConfiguration}, which Spring Boot's test
+     * infrastructure auto-discovers when a test does not specify
+     * {@code classes = ...} explicitly — having two such classes on
+     * the classpath (this one and {@code BenchmarkApplication}) makes
+     * that auto-discovery ambiguous and fails every slice test in the
+     * application. No {@code @ComponentScan} is needed here either,
+     * since this configuration declares its one {@code @Bean} method
+     * directly.
+     * </p>
+     */
+    @Configuration
+    @org.springframework.boot.autoconfigure.EnableAutoConfiguration
+    static class CliConfig {
+
+        @Bean
+        RunBenchmarkAssessment runBenchmarkAssessment(
+                @Value("${benchmark.spreadsheetUri:}") String spreadsheetUri,
+                @Value("${benchmark.championUri:}") String championUri,
+                @Value("${benchmark.connect.timeout.seconds:30}") int connectTimeout,
+                @Value("${benchmark.request.timeout.seconds:120}") int requestTimeout) {
+            return new RunBenchmarkAssessment(
+                    spreadsheetUri, championUri,
+                    connectTimeout, requestTimeout);
+        }
+    }
+
+    /**
      * Bootstraps a headless Spring context so that
-     * {@code application.properties} is loaded and {@code @Value}
-     * injection runs before any processing begins. A CLI override for
-     * the algorithm URI (via {@code -s} / {@code --spreadsheet}) is
-     * applied to the managed bean after the context is ready.
+     * {@code application.yml} is loaded and the shared
+     * {@code benchmark.spreadsheetUri} / {@code benchmark.championUri}
+     * properties are bound before any processing begins. A CLI
+     * override for either URI (via {@code -s} / {@code --spreadsheet}
+     * or {@code -r} / {@code --championUri}) is applied after the context
+     * is ready.
+     *
+     * <p>
+     * This standalone entry point uses the shared top-level
+     * {@code benchmark.spreadsheetUri} / {@code benchmark.championUri}
+     * properties, not any tenant-specific {@code tenants.config}
+     * entry — the CLI has no concept of "the current tenant". For
+     * per-tenant runs, use the REST API
+     * ({@code POST /api/run-assessment} with a tenant's
+     * {@code X-API-Key}) instead.
+     * </p>
      *
      * @param args command-line arguments
      */
     public static void main(String[] args) {
         logger.setLevel(Level.INFO);
 
-        // Boot Spring without a web server so application.properties
-        // is loaded and @Value fields are injected correctly.
+        // Boot Spring without a web server so application.yml is
+        // loaded and the shared benchmark.* properties are bound.
         ApplicationContext ctx = new SpringApplicationBuilder(
-                RunBenchmarkAssessment.class)
+                CliConfig.class)
                 .web(WebApplicationType.NONE)
                 .run(args);
 
@@ -308,17 +391,17 @@ public RunBenchmarkAssessment(String benchmarkAlgorithm, String benchmarkRunner,
             return;
         }
 
-        // Allow the CLI to override the injected runner URI.
-        if (cmd.hasOption("runner")) {
-            client.benchmarkRunner = cmd.getOptionValue("runner");
+        // Allow the CLI to override the injected championUri URI.
+        if (cmd.hasOption("championUri")) {
+            client.championUri = cmd.getOptionValue("championUri");
 }
 
-        // Allow the CLI to override the injected algorithm URI.
+        // Allow the CLI to override the injected spreadsheetUri URI.
         if (cmd.hasOption(SPREADSHEET_ARG)) {
-            client.benchmarkAlgorithm = cmd.getOptionValue(SPREADSHEET_ARG);
+            client.spreadsheetUri = cmd.getOptionValue(SPREADSHEET_ARG);
         }
-        logInfo("Using algorithm URI:  %s", client.benchmarkAlgorithm);
-        logInfo("Using runner URI:     %s", client.benchmarkRunner);
+        logInfo("Using spreadsheetUri URI:  %s", client.spreadsheetUri);
+        logInfo("Using championUri URI:     %s", client.championUri);
 
         try {
             Files.createDirectories(client.resultsDir);
@@ -435,7 +518,7 @@ public RunBenchmarkAssessment(String benchmarkAlgorithm, String benchmarkRunner,
             throws IOException, InterruptedException {
 
         logInfo("Processing single GUID: %s", guid);
-        processOneGuid(guid, 0, null, null, benchmarkRunner);
+        processOneGuid(guid, 0, null, null, championUri);
         logInfo(PROCCOMP);
     }
 
@@ -445,8 +528,8 @@ public RunBenchmarkAssessment(String benchmarkAlgorithm, String benchmarkRunner,
 
     /**
      * Reads GUIDs from the file identified by {@link #guidsFilename}.
-     * The classpath (resources) is checked first, then the current
-     * working directory.
+     * The classpath (resources) is checked first, then the path as
+     * given, then the configured {@link #dataDir}.
      *
      * @param filename the name of the file to read (ignored if using the
      *                 default {@code guidsFilename} which is already set to the
@@ -537,7 +620,7 @@ public RunBenchmarkAssessment(String benchmarkAlgorithm, String benchmarkRunner,
                     try {
                         REQUEST_SEMAPHORE.acquire();
                         try {
-                            processOneGuid(guid, index, set, subDir, benchmarkRunner);
+                            processOneGuid(guid, index, set, subDir, championUri);
                         } finally {
                             REQUEST_SEMAPHORE.release();
                         }
@@ -577,7 +660,7 @@ public RunBenchmarkAssessment(String benchmarkAlgorithm, String benchmarkRunner,
      *               (may be {@code null})
      * @param subDir subdirectory under {@code resultsDir} for
      *               results (may be {@code null})
-     * @param runner URI of the FAIR Champion runner instance to POST to
+     * @param championUri URI of the FAIR Champion championUri instance to POST to
      * @throws IOException          if the HTTP request or file write
      *                              fails
      * @throws InterruptedException if interrupted awaiting the response
@@ -590,18 +673,18 @@ public RunBenchmarkAssessment(String benchmarkAlgorithm, String benchmarkRunner,
             int index,
             String set,
             String subDir,
-            String runner) throws IOException, InterruptedException {
+            String championUri) throws IOException, InterruptedException {
 
         logInfo("Processing GUID %d: %s", index + 1, guid);
 
         ObjectNode payload = mapper.createObjectNode();
-        payload.put("calculation_uri", benchmarkAlgorithm);
+        payload.put("calculation_uri", spreadsheetUri);
         payload.put("guid", guid);
         String jsonPayload = mapper.writeValueAsString(payload);
-        logInfo("%s%s — %s", REQSEND, runner, jsonPayload);
+        logInfo("%s%s — %s", REQSEND, championUri, jsonPayload);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(runner))
+                .uri(URI.create(championUri))
                 .header(ACCEPT, HEADER_VALUE)
                 .header(CONTENT_TYPE, HEADER_VALUE)
                 .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
@@ -839,10 +922,10 @@ public RunBenchmarkAssessment(String benchmarkAlgorithm, String benchmarkRunner,
      */
     static CommandLine parseArgs(String[] args) throws IOException {
         Options options = new Options();
-        options.addOption("r", "runner", true,
-        "Runner URI (overrides benchmark.runner property)");
+        options.addOption("r", "championUri", true,
+        "championUri URI (overrides benchmark.championUri property)");
         options.addOption("s", SPREADSHEET_ARG, true,
-                "Algorithm URI (overrides benchmark.algorithm property)");
+                "spreadsheetUri URI (overrides benchmark.spreadsheetUri property)");
         options.addOption("f", FILENAME_ARG, true,
                 "GUIDs filename for legacy single-file mode"
                         + " (default: " + DEFAULT_GUIDS_FILE + ")");
@@ -915,7 +998,7 @@ public RunBenchmarkAssessment(String benchmarkAlgorithm, String benchmarkRunner,
      * "https://".
      * If it does, it returns the GUID as is. If it does not, it prepends the
      * DEFAULT_OAI_PMH_BASE_URL to the GUID and returns the resulting string.
-     * 
+     *
      * @param guid the GUID to normalise
      * @return the normalised GUID
      */

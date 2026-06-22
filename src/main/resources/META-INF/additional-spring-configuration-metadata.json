@@ -25,17 +25,17 @@
     "description": "A description for 'springdoc.info.title'"
   },
   {
-    "name": "benchmark.runner",
+    "name": "benchmark.championUri",
     "type": "java.lang.String",
-    "description": "A description for 'benchmark.runner'"
+    "description": "A description for 'benchmark.championUri'"
   },
   {
-    "name": "benchmark.algorithm",
+    "name": "key-cessda",
     "type": "java.lang.String",
-    "description": "A description for 'benchmark.algorithm'"
+    "description": "A description for 'key-cessda-prod-abc123'"
   },
   {
-    "name": "key-cessda-prod-abc123",
+    "name": "key-oxford",
     "type": "java.lang.String",
     "description": "A description for 'key-cessda-prod-abc123'"
   },
@@ -75,9 +75,9 @@
     "description": "A description for 'spring'"
   },
   {
-    "name": "runner",
+    "name": "championUri",
     "type": "java.lang.String",
-    "description": "A description for 'runner'"
+    "description": "A description for 'championUri'"
   },
   {
     "name": "results-dir",
@@ -90,18 +90,8 @@
     "description": "A description for 'data-dir'"
   },
   {
-    "name": "\"key-org-beta\"",
+    "name": "benchmark.spreadsheetUri",
     "type": "java.lang.String",
-    "description": "A description for '\"key-org-beta\"'"
-  },
-{
-    "name": "\"key-org-alpha\"",
-    "type": "java.lang.String",
-    "description": "A description for '\"key-org-alpha\"'"
-  },
-{
-    "name": "algorithm",
-    "type": "java.lang.String",
-    "description": "A description for 'algorithm'"
+    "description": "A description for 'benchmark.spreadsheetUri'"
   }
 ]}

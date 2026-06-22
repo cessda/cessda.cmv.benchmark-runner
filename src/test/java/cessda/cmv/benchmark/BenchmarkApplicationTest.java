@@ -32,8 +32,8 @@ import org.springframework.test.context.TestPropertySource;
 @TestPropertySource(properties = {
     "benchmark.data-dir=${java.io.tmpdir}/benchmark-test-data",
     "benchmark.results-dir=${java.io.tmpdir}/benchmark-test-results",
-    "benchmark.algorithm=https://example.com/algorithm",
-    "benchmark.runner=https://example.com/runner"
+    "benchmark.spreadsheetUri=https://example.com/spreadsheetUri",
+    "benchmark.championUri=https://example.com/championUri"
 })
 class BenchmarkApplicationTest {
 

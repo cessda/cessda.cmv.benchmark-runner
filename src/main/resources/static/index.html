@@ -346,6 +346,155 @@
       margin-top: 10px;
       display: none;
     }
+
+    /* ── Run assessment confirmation modal ── */
+    #assessment-modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(28, 25, 23, 0.45);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    #assessment-modal-card {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+      padding: 32px;
+      max-width: 480px;
+      width: 100%;
+    }
+    #assessment-modal-card h2 {
+      font-family: 'Fraunces', serif;
+      font-size: 19px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    #assessment-modal-card p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+      margin-bottom: 18px;
+    }
+    #assessment-modal-form label {
+      display: block;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    #assessment-modal-form input[type="text"] {
+      width: 100%;
+      padding: 9px 11px;
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 12px;
+      margin-bottom: 16px;
+    }
+    #assessment-modal-form input[type="text"]:focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 1px;
+    }
+    #assessment-modal-error {
+      color: var(--fail);
+      font-size: 12px;
+      margin-top: -8px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    #assessment-sets-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    #assessment-sets-actions { display: flex; gap: 6px; }
+    #assessment-sets-actions button {
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      color: var(--muted);
+      padding: 3px 10px;
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    #assessment-sets-actions button:hover { background: var(--border); color: var(--text); }
+    #assessment-sets-list {
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      max-height: 160px;
+      overflow-y: auto;
+      margin-bottom: 16px;
+      background: var(--bg);
+    }
+    .assessment-set-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 11px;
+      font-size: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .assessment-set-item:last-child { border-bottom: none; }
+    .assessment-set-item input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .assessment-set-item label {
+      margin-bottom: 0 !important;
+      text-transform: none !important;
+      letter-spacing: normal !important;
+      font-size: 12px !important;
+      font-weight: 400 !important;
+      color: var(--text) !important;
+      cursor: pointer;
+    }
+    #assessment-sets-empty {
+      padding: 14px 11px;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 0 !important;
+    }
+    #assessment-modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    #assessment-modal-actions button {
+      padding: 9px 18px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--border2);
+    }
+    #assessment-modal-cancel {
+      background: var(--bg);
+      color: var(--text);
+    }
+    #assessment-modal-cancel:hover { background: var(--border); }
+    #assessment-modal-confirm {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    #assessment-modal-confirm:hover { background: var(--navy); }
+    #assessment-modal-confirm:disabled,
+    #assessment-modal-cancel:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
@@ -359,6 +508,7 @@
     <span id="last-updated" aria-live="polite"></span>
     <button class="reload-btn" id="change-key-btn" style="display:none" onclick="onChangeKeyClick()">Change key</button>
     <button class="reload-btn" id="generate-btn" style="display:none" onclick="onGenerateManifestClick()">⚙ Generate manifest</button>
+    <button class="reload-btn" id="run-assessment-btn" style="display:none" onclick="onRunAssessmentClick()">▶ Run assessment</button>
     <button class="reload-btn" onclick="loadData()">↻ Refresh</button>
   </div>
 </header>
@@ -373,6 +523,49 @@
         <button type="submit" id="key-gate-submit">View dashboard</button>
       </form>
       <p id="key-gate-error">Invalid API key. Please check and try again.</p>
+    </div>
+  </div>
+
+  <div id="assessment-modal-backdrop">
+    <div id="assessment-modal-card" role="dialog" aria-modal="true"
+         aria-labelledby="assessment-modal-title">
+      <h2 id="assessment-modal-title">Run FAIR benchmark assessment</h2>
+      <p>This processes every identifier against the FAIR Champion API
+        and can take several minutes. Review the spreadsheetUri and championUri
+        URIs below before starting — both can be edited for this run
+        only; your organisation's saved defaults are not changed.</p>
+
+      <form id="assessment-modal-form" onsubmit="onAssessmentModalSubmit(event)">
+        <label for="assessment-spreadsheetUri-input">spreadsheetUri URI</label>
+        <input type="text" id="assessment-spreadsheetUri-input"
+               placeholder="https://..." autocomplete="off" />
+
+        <label for="assessment-championUri-input">championUri URI</label>
+        <input type="text" id="assessment-championUri-input"
+               placeholder="https://..." autocomplete="off" />
+
+        <div id="assessment-sets-header">
+          <label style="margin-bottom:0">Sets to assess</label>
+          <div id="assessment-sets-actions">
+            <button type="button" id="assessment-sets-select-all"
+                    onclick="onSetsSelectAllClick()">All</button>
+            <button type="button" id="assessment-sets-select-none"
+                    onclick="onSetsSelectNoneClick()">None</button>
+          </div>
+        </div>
+        <div id="assessment-sets-list">
+          <p id="assessment-sets-empty">No guids_*.txt files found for
+            your organisation yet. Run "Fetch identifiers" first.</p>
+        </div>
+
+        <p id="assessment-modal-error">Could not load current defaults.</p>
+
+        <div id="assessment-modal-actions">
+          <button type="button" id="assessment-modal-cancel"
+                  onclick="hideAssessmentModal()">Cancel</button>
+          <button type="submit" id="assessment-modal-confirm">Run assessment</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -544,6 +737,7 @@
     document.getElementById('error-msg').style.display = 'none';
     document.getElementById('change-key-btn').style.display = 'none';
     document.getElementById('generate-btn').style.display = 'none';
+    document.getElementById('run-assessment-btn').style.display = 'none';
     document.getElementById('key-gate').style.display = 'flex';
     document.getElementById('key-gate-input').focus();
   }
@@ -553,6 +747,7 @@
     document.getElementById('key-gate-error').style.display = 'none';
     document.getElementById('change-key-btn').style.display = 'inline-block';
     document.getElementById('generate-btn').style.display = 'inline-block';
+    document.getElementById('run-assessment-btn').style.display = 'inline-block';
   }
 
   function onKeyGateSubmit(e) {
@@ -568,6 +763,184 @@
     clearStoredApiKey();
     document.getElementById('key-gate-input').value = '';
     showKeyGate();
+  }
+
+  async function onRunAssessmentClick() {
+    const backdrop = document.getElementById('assessment-modal-backdrop');
+    const algInput = document.getElementById('assessment-spreadsheetUri-input');
+    const runInput = document.getElementById('assessment-championUri-input');
+    const errEl    = document.getElementById('assessment-modal-error');
+    const confirmBtn = document.getElementById('assessment-modal-confirm');
+    const cancelBtn  = document.getElementById('assessment-modal-cancel');
+
+    errEl.style.display = 'none';
+    algInput.value = '';
+    runInput.value = '';
+    confirmBtn.disabled = true;
+    cancelBtn.disabled = false;
+    confirmBtn.textContent = 'Run assessment';
+    renderSetsList([]); // clear any stale list from a previous open
+    backdrop.style.display = 'flex';
+
+    try {
+      const [defaultsRes, filesRes] = await Promise.all([
+        apiFetch('/api/run-assessment/defaults'),
+        apiFetch('/api/run-assessment/guid-files')
+      ]);
+
+      if (defaultsRes.status === 401 || filesRes.status === 401) {
+        hideAssessmentModal();
+        clearStoredApiKey();
+        showKeyGate();
+        document.getElementById('key-gate-error').style.display = 'block';
+        return;
+      }
+
+      if (!defaultsRes.ok) throw new Error(`HTTP ${defaultsRes.status}`);
+      const defaults = await defaultsRes.json();
+      algInput.value = defaults.spreadsheetUri || '';
+      runInput.value = defaults.championUri || '';
+
+      if (!filesRes.ok) throw new Error(`HTTP ${filesRes.status}`);
+      const filesBody = await filesRes.json();
+      renderSetsList(filesBody.files || [], /* checkAllByDefault */ true);
+    } catch (e) {
+      errEl.textContent = `Could not load current defaults.\n${e.message}`;
+      errEl.style.display = 'block';
+    } finally {
+      confirmBtn.disabled = false;
+      algInput.focus();
+    }
+  }
+
+  function renderSetsList(files, checkAllByDefault) {
+    const listEl = document.getElementById('assessment-sets-list');
+    listEl.innerHTML = '';
+
+    if (!files || files.length === 0) {
+      const empty = document.createElement('p');
+      empty.id = 'assessment-sets-empty';
+      empty.textContent = 'No guids_*.txt files found for your ' +
+        'organisation yet. Run "Fetch identifiers" first.';
+      listEl.appendChild(empty);
+      return;
+    }
+
+    files.forEach((filename, i) => {
+      const item = document.createElement('div');
+      item.className = 'assessment-set-item';
+      const inputId = `assessment-set-${i}`;
+      item.innerHTML = `
+        <input type="checkbox" id="${inputId}" value="${filename}"
+               ${checkAllByDefault ? 'checked' : ''} />
+        <label for="${inputId}">${filename}</label>`;
+      listEl.appendChild(item);
+    });
+  }
+
+  function onSetsSelectAllClick() {
+    document.querySelectorAll('#assessment-sets-list input[type="checkbox"]')
+      .forEach(cb => { cb.checked = true; });
+  }
+
+  function onSetsSelectNoneClick() {
+    document.querySelectorAll('#assessment-sets-list input[type="checkbox"]')
+      .forEach(cb => { cb.checked = false; });
+  }
+
+  function hideAssessmentModal() {
+    document.getElementById('assessment-modal-backdrop').style.display = 'none';
+  }
+
+  async function onAssessmentModalSubmit(e) {
+    e.preventDefault();
+
+    const spreadsheetUri = document.getElementById('assessment-spreadsheetUri-input').value.trim();
+    const championUri    = document.getElementById('assessment-championUri-input').value.trim();
+    const errEl       = document.getElementById('assessment-modal-error');
+    const confirmBtn  = document.getElementById('assessment-modal-confirm');
+    const cancelBtn   = document.getElementById('assessment-modal-cancel');
+
+    errEl.style.display = 'none';
+    confirmBtn.disabled = true;
+    cancelBtn.disabled = true;
+    confirmBtn.textContent = 'Running…';
+
+    const headerBtn = document.getElementById('run-assessment-btn');
+    const headerBtnLabel = headerBtn.textContent;
+    headerBtn.disabled = true;
+    headerBtn.textContent = '▶ Running…';
+
+    try {
+      const selected = Array.from(
+        document.querySelectorAll('#assessment-sets-list input[type="checkbox"]:checked')
+      ).map(cb => cb.value);
+
+      const totalAvailable = document.querySelectorAll(
+        '#assessment-sets-list input[type="checkbox"]'
+      ).length;
+
+      if (totalAvailable > 0 && selected.length === 0) {
+        errEl.textContent = 'Select at least one set to assess, or click "None" then "All" to reset.';
+        errEl.style.display = 'block';
+        return;
+      }
+
+      const params = new URLSearchParams();
+      if (spreadsheetUri) params.set('spreadsheetUri', spreadsheetUri);
+      if (championUri)    params.set('championUri', championUri);
+
+      if (selected.length > 0) {
+        // One or more specific sets were chosen — send them explicitly.
+        // Repeated query-string entries bind to the controller's
+        // List<String> guidFiles parameter.
+        selected.forEach(filename => params.append('guidFiles', filename));
+      } else {
+        // No guids_*.txt files exist yet for this tenant — fall back
+        // to the default "process all configured sets" behaviour,
+        // which RunBenchmarkAssessment itself will skip per-file with
+        // a log message rather than failing outright.
+        params.set('processAll', 'true');
+      }
+
+      const res = await apiFetch('/api/run-assessment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString()
+      });
+
+      if (res.status === 401) {
+        hideAssessmentModal();
+        clearStoredApiKey();
+        showKeyGate();
+        document.getElementById('key-gate-error').style.display = 'block';
+        return;
+      }
+
+      const body = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        errEl.textContent = body.message || `HTTP ${res.status}`;
+        errEl.style.display = 'block';
+        return;
+      }
+
+      hideAssessmentModal();
+      window.alert(
+        (body.message || 'Assessment complete.') +
+        '\n\nClick "Generate manifest" to refresh the dashboard with ' +
+        'these results.'
+      );
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    } finally {
+      confirmBtn.disabled = false;
+      cancelBtn.disabled = false;
+      confirmBtn.textContent = 'Run assessment';
+      headerBtn.disabled = false;
+      headerBtn.textContent = headerBtnLabel;
+    }
   }
 
   async function onGenerateManifestClick() {

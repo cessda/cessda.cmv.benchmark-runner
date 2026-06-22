@@ -1,6 +1,6 @@
 # ── Stage 1: Build ───────────────────────────────────────────────────────────
 # Uses the official Maven + JDK 21 image to compile and package the fat JAR.
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3.9.11-eclipse-temurin-21 AS build
 
 WORKDIR /build
 
@@ -14,7 +14,11 @@ RUN mvn package -DskipTests -q
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
 # Minimal JRE-only image keeps the final image small.
-FROM eclipse-temurin:21-jre-alpine@sha256:latest
+# Use a non-alpine Temurin JRE base to avoid known Alpine vulnerabilities
+# and receive regular security updates (Ubuntu Jammy-based image).
+FROM eclipse-temurin:21-jre-jammy
+
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

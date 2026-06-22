@@ -3,9 +3,9 @@
 [![SQAaaS badge shields.io](https://img.shields.io/badge/sqaaas%20software-silver-lightgrey)](https://api.eu.badgr.io/public/assertions/rxEEBuR9QoadzMDHXT4PmQ "SQAaaS silver badge achieved")
 
 This repository contains the source code for assessing digital objects
-in bulk against a CESSDA QA algorithm configuration spreadsheet, using
-the FAIR Champion Benchmark Assessment tool. The algorithm URI and
-runner endpoint are configurable via `application.yml` — see
+in bulk against a Benchmark Assessment Algorithm spreadsheet, using
+the FAIR Champion Benchmark Assessment tool. The spreadsheetUri and
+championUri endpoint are configurable via `application.yml` — see
 [RunBenchmarkAssessment_README.md](RunBenchmarkAssessment_README.md)
 for details.
 
@@ -77,8 +77,8 @@ for full usage and options.
 ### RunBenchmarkAssessment
 
 Reads the `guids_<lang>.txt` files produced by the previous stage and
-POSTs each `GetRecord` URL to a configurable FAIR Champion runner
-endpoint, with the algorithm URI included in the request payload.
+POSTs each `GetRecord` URL to a configurable FAIR Champion championUri
+endpoint, with the spreadsheetUri URI included in the request payload.
 Results are saved as JSON files under the calling tenant's results
 directory, in `guids_<lang>/`. Processing is parallelised across five
 threads. Errors are captured in separate `error_*.json` files so that

@@ -12,6 +12,8 @@ import cessda.cmv.benchmark.GenerateManifest;
 import cessda.cmv.benchmark.GetOaiPmhIdentifiers;
 import cessda.cmv.benchmark.RunBenchmarkAssessment;
 import cessda.cmv.benchmark.tenant.TenantContext;
+import cessda.cmv.benchmark.tenant.TenantProperties;
+import cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig;
 
 @Service
 public class BenchmarkService {
@@ -22,16 +24,72 @@ public class BenchmarkService {
     @Value("${benchmark.results-dir:/results}")
     private String resultsDir;
 
-    @Value("${benchmark.runner}")
-    private String benchmarkRunner;
+    // Fallback values used only when a tenant has no entry under
+    // tenants.config — keeps existing single-tenant deployments working
+    // without requiring every tenant to be migrated to the new config
+    // map immediately.
+    @Value("${benchmark.runner:}")
+    private String defaultBenchmarkRunner;
 
-    @Value("${benchmark.algorithm}")
-    private String benchmarkAlgorithm;
+    @Value("${benchmark.algorithm:}")
+    private String defaultBenchmarkAlgorithm;
 
     private final TenantContext tenantContext;
+    private final TenantProperties tenantProperties;
 
-    public BenchmarkService(TenantContext tenantContext) {
-        this.tenantContext = tenantContext;
+    public BenchmarkService(TenantContext tenantContext,
+                             TenantProperties tenantProperties) {
+        this.tenantContext    = tenantContext;
+        this.tenantProperties = tenantProperties;
+    }
+
+    /**
+     * Returns the algorithm and runner URIs that would be used for
+     * the current tenant if {@link #runAssessment} were called with
+     * no explicit overrides — i.e. the tenant's {@code tenants.config}
+     * entry, falling back to the shared {@code benchmark.algorithm} /
+     * {@code benchmark.runner} properties.
+     *
+     * <p>Used to populate the "Run assessment" confirmation dialog in
+     * the dashboard, so the operator can see and optionally override
+     * the values that will actually be sent before triggering a
+     * potentially long-running assessment run.</p>
+     *
+     * @return a two-element array: {@code [algorithm, runner]}. Either
+     *         element may be {@code null} or blank if no default is
+     *         configured for this tenant and no shared fallback is set.
+     */
+    public String[] getDefaultAlgorithmAndRunner() {
+        return new String[] { resolveAlgorithm(null), resolveRunner(null) };
+    }
+
+    /**
+     * Lists the {@code guids_*.txt} files currently present in the
+     * current tenant's data directory, sorted alphabetically.
+     *
+     * <p>Used to populate the "Run assessment" confirmation dialog
+     * with a checkable list of available sets, so the operator can
+     * choose to assess only some of them rather than always running
+     * every default set via {@link #runAssessment}'s
+     * {@code processAll} flag.</p>
+     *
+     * @return filenames only (e.g. {@code "guids_de.txt"}), not full
+     *         paths; an empty list if the tenant's data directory does
+     *         not exist or contains no matching files
+     * @throws IOException if the directory cannot be read
+     */
+    public java.util.List<String> listGuidFiles() throws IOException {
+        Path tDataDir = tenantDataDir();
+        if (!Files.isDirectory(tDataDir)) {
+            return java.util.List.of();
+        }
+        try (var stream = Files.list(tDataDir)) {
+            return stream
+                    .map(p -> p.getFileName().toString())
+                    .filter(name -> name.startsWith("guids_") && name.endsWith(".txt"))
+                    .sorted()
+                    .toList();
+        }
     }
 
     // ── Path helpers ─────────────────────────────────────────────────────────
@@ -46,6 +104,47 @@ public class BenchmarkService {
         return Paths.get(resultsDir, tenantContext.getTenantId()).toAbsolutePath().normalize();
     }
 
+    // ── Per-tenant configuration helpers ─────────────────────────────────────
+
+    /**
+     * Resolves the FAIR Champion algorithm URI for the current tenant.
+     *
+     * <p>Looks up {@code tenants.config.<tenantId>.algorithm} first;
+     * falls back to the shared {@code benchmark.algorithm} property
+     * (if set) for tenants that have not been migrated to per-tenant
+     * configuration, then to the explicit {@code spreadsheetUri}
+     * parameter if the caller supplied one.</p>
+     */
+    private String resolveAlgorithm(String requestedOverride) {
+        if (requestedOverride != null && !requestedOverride.isBlank()) {
+            return requestedOverride;
+        }
+        TenantConfig cfg = tenantProperties.getConfigFor(tenantContext.getTenantId());
+        if (cfg != null && cfg.getSpreadsheetUri() != null && !cfg.getSpreadsheetUri().isBlank()) {
+            return cfg.getSpreadsheetUri();
+        }
+        return defaultBenchmarkAlgorithm;
+    }
+
+    /**
+     * Resolves the FAIR Champion runner URI for the current tenant.
+     *
+     * <p>Uses the explicit {@code requestedOverride} if supplied;
+     * otherwise looks up {@code tenants.config.<tenantId>.runner};
+     * falls back to the shared {@code benchmark.runner} property if no
+     * per-tenant entry exists.</p>
+     */
+    private String resolveRunner(String requestedOverride) {
+        if (requestedOverride != null && !requestedOverride.isBlank()) {
+            return requestedOverride;
+        }
+        TenantConfig cfg = tenantProperties.getConfigFor(tenantContext.getTenantId());
+        if (cfg != null && cfg.getChampionUri() != null && !cfg.getChampionUri().isBlank()) {
+            return cfg.getChampionUri();
+        }
+        return defaultBenchmarkRunner;
+    }
+
     // ── 1. Fetch OAI-PMH Identifiers ─────────────────────────────────────────
 
     public String fetchIdentifiers(
@@ -58,8 +157,6 @@ public class BenchmarkService {
         Path tDataDir = tenantDataDir();
         Files.createDirectories(tDataDir);
 
-        // Pass the tenant data directory to the CLI class via its constructor
-        // (add a Path-accepting constructor to GetOaiPmhIdentifiers — see note below)
         String resolvedBase   = nvl(baseUrl,       GetOaiPmhIdentifiers.DEFAULT_OAI_PMH_BASE_URL);
         String resolvedVerb   = nvl(verb,           GetOaiPmhIdentifiers.DEFAULT_VERB);
         String resolvedPrefix = nvl(metadataPrefix, GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX);
@@ -85,7 +182,9 @@ public class BenchmarkService {
 
     public String runAssessment(
             String spreadsheetUri,
+            String runnerUri,
             String guidFile,
+            java.util.List<String> guidFiles,
             String guid,
             boolean processAll) throws IOException, InterruptedException {
 
@@ -94,17 +193,41 @@ public class BenchmarkService {
         Files.createDirectories(tDataDir);
         Files.createDirectories(tResultsDir);
 
-        String resolvedUri = nvl(spreadsheetUri, benchmarkAlgorithm);
+        String resolvedAlgorithm = resolveAlgorithm(spreadsheetUri);
+        String resolvedRunner    = resolveRunner(runnerUri);
 
-        // Pass tenant-scoped dirs explicitly — no system property side-effects
+        // Pass tenant-scoped dirs and tenant-scoped algorithm/runner
+        // explicitly — no system property side-effects, and no two
+        // tenants ever share the same Champion configuration unless
+        // their application.yml entries say so deliberately.
         RunBenchmarkAssessment runner =
-                new RunBenchmarkAssessment(resolvedUri, benchmarkRunner,
+                new RunBenchmarkAssessment(resolvedAlgorithm, resolvedRunner,
                                            tDataDir, tResultsDir);
 
         if (guid != null && !guid.isBlank()) {
             runner.processSingleGuid(guid.trim());
             return "Processed single GUID: " + guid.trim()
                     + " -> " + tResultsDir;
+        }
+
+        if (guidFiles != null && !guidFiles.isEmpty()) {
+            int processed = 0;
+            java.util.List<String> skipped = new java.util.ArrayList<>();
+            for (String filename : guidFiles) {
+                if (filename == null || filename.isBlank()) continue;
+                try {
+                    Path resolved = resolveGuidFile(filename.trim(), tDataDir);
+                    runner.processSingleFile(resolved.toString());
+                    processed++;
+                } catch (java.io.FileNotFoundException fnfe) {
+                    skipped.add(filename.trim());
+                }
+            }
+            String message = "Processed " + processed + " selected set file(s) -> " + tResultsDir;
+            if (!skipped.isEmpty()) {
+                message += " (skipped, not found: " + String.join(", ", skipped) + ")";
+            }
+            return message;
         }
 
         if (guidFile != null && !guidFile.isBlank()) {

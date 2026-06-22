@@ -1260,14 +1260,24 @@
       }
     }
 
-    function apiFetch(url, opts = {}) {
-      const key = sessionStorage.getItem('apiKey');
+    // ── API key handling ──────────────────────────────────────────────────
+    // Mirrors the implementation in index.html. The key stored in
+    // sessionStorage by index.html is automatically available here
+    // since both pages share the same origin and tab session.
+    // If no key is present (e.g. the user landed directly on this
+    // page without going through index.html first), they are
+    // redirected back to index.html to authenticate.
+
+    function getStoredApiKey() {
+      return sessionStorage.getItem('apiKey');
+    }
+
+    async function apiFetch(url, opts = {}) {
+      const key = getStoredApiKey();
       if (!key) {
-        // First visit — prompt once and store for the session
-        const entered = prompt('Enter your API key:');
-        if (!entered) throw new Error('API key required');
-        sessionStorage.setItem('apiKey', entered);
-        return apiFetch(url, opts); // retry with key now in storage
+        // No key in this session — send back to index.html to authenticate.
+        window.location.href = 'index.html';
+        return new Promise(() => { }); // prevent further execution
       }
       return fetch(url, {
         ...opts,
@@ -1285,7 +1295,7 @@
       setPageLoading(true);
       let records;
       try {
-        const r = await fetch(pageUrl(p));
+        const r = await apiFetch(pageUrl(p));
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         records = await r.json();
       } catch (e) {
@@ -1369,7 +1379,7 @@
         try {
           document.getElementById('page-loading').textContent =
             `Loading page ${p} of ${pageCount}…`;
-          const r = await fetch(pageUrl(p));
+          const r = await apiFetch(pageUrl(p));
           if (!r.ok) continue;
           const recs = await r.json();
           searchCache.push(...recs);

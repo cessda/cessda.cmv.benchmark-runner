@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -93,7 +94,71 @@ public class BenchmarkController {
     }
 
     // -------------------------------------------------------------------------
-    // 2. POST /api/run-assessment
+    // 2. GET /api/run-assessment/defaults
+    // -------------------------------------------------------------------------
+
+    @Operation(
+        summary     = "Get default spreadsheet and champion URIs",
+        description = "Returns the spreadsheet and champion URIs that would be used " +
+                      "for the current tenant if run-assessment were called with " +
+                      "no explicit overrides. Used by the dashboard to populate " +
+                      "the confirmation dialog shown before triggering an " +
+                      "assessment run.",
+        responses   = {
+            @ApiResponse(responseCode = "200", description = "Defaults retrieved successfully",
+                content = @Content(schema = @Schema(example =
+                    "{\"spreadsheetUri\":\"https://...\",\"championUri\":\"https://...\"}"))),
+            @ApiResponse(responseCode = "500", description = "Failed to resolve defaults")
+        }
+    )
+    @GetMapping("/run-assessment/defaults")
+    public ResponseEntity<Map<String, String>> getRunAssessmentDefaults() {
+        try {
+            String[] defaults = service.getDefaultAlgorithmAndRunner();
+            Map<String, String> body = new LinkedHashMap<>();
+            body.put("spreadsheetUri", defaults[0]);
+            body.put("championUri", defaults[1]);
+            return ResponseEntity.ok(body);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(response("error", e.getMessage()));
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. GET /api/run-assessment/guid-files
+    // -------------------------------------------------------------------------
+
+    @Operation(
+        summary     = "List available guids_*.txt files",
+        description = "Lists the guids_*.txt files present in the current " +
+                      "tenant's data directory, for selecting which sets to " +
+                      "assess. Used by the dashboard to populate the " +
+                      "checkable list shown in the run-assessment " +
+                      "confirmation dialog.",
+        responses   = {
+            @ApiResponse(responseCode = "200", description = "Files listed successfully",
+                content = @Content(schema = @Schema(example =
+                    "{\"files\":[\"guids_de.txt\",\"guids_en.txt\"]}"))),
+            @ApiResponse(responseCode = "500", description = "Failed to list files")
+        }
+    )
+    @GetMapping("/run-assessment/guid-files")
+    public ResponseEntity<Map<String, Object>> listGuidFiles() {
+        try {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("files", service.listGuidFiles());
+            return ResponseEntity.ok(body);
+        } catch (Exception e) {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("status", "error");
+            body.put("message", e.getMessage());
+            return ResponseEntity.internalServerError().body(body);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 4. POST /api/run-assessment
     // -------------------------------------------------------------------------
 
     @Operation(
@@ -113,28 +178,38 @@ public class BenchmarkController {
     public ResponseEntity<Map<String, String>> runAssessment(
 
        @Parameter(description = "FAIR Champion API URI to POST GUIDs to. " +
-           "Configurable via 'benchmark.algorithm-uri' property.")
-        @RequestParam(required = false) String algorithmUri,
+           "Configurable via 'benchmark.championUri' property.")
+        @RequestParam(required = false) String championUri,
 
-        @Parameter(description = "Algorithm runner URI. " +
-           "Configurable via 'benchmark.algorithm-runner' property.")
-        @RequestParam(required = false) String benchmarkAlgorithmUri,
+        @Parameter(description = "Spreadsheet URI. " +
+           "Configurable via 'benchmark.spreadsheetUri' property.")
+        @RequestParam(required = false) String spreadsheetUri,
 
         @Parameter(description = "Name of a specific guids_*.txt file to process " +
-                   "(e.g. guids_de.txt). Ignored when 'guid' or 'processAll' is set.")
+                   "(e.g. guids_de.txt). Ignored when 'guidFiles', 'guid', or " +
+                   "'processAll' is set.")
         @RequestParam(required = false) String guidFile,
 
+        @Parameter(description = "One or more specific guids_*.txt filenames to " +
+                   "process, as selected by the operator (e.g. " +
+                   "guids_de.txt, guids_en.txt). Takes priority over " +
+                   "'guidFile' and 'processAll', but not over 'guid'.")
+        @RequestParam(required = false) java.util.List<String> guidFiles,
+
         @Parameter(description = "A single full OAI-PMH GetRecord URL to assess directly. " +
-                   "Takes priority over 'guidFile' and 'processAll'.")
+                   "Takes priority over 'guidFiles', 'guidFile', and 'processAll'.")
         @RequestParam(required = false) String guid,
 
         @Parameter(description = "When true, process guids_*.txt files for all default sets " +
-                   "(de, el, en, fi, fr, hr, nl, sl, sl-SI, sv). Default: false")
+                   "(de, el, en, fi, fr, hr, nl, sl, sl-SI, sv). Ignored when " +
+                   "'guidFiles' is set. Default: false")
         @RequestParam(required = false, defaultValue = "false") boolean processAll
 
     ) {
         try {
-            String message = service.runAssessment(benchmarkAlgorithmUri, guidFile, guid, processAll);
+            String message = service.runAssessment(
+                    spreadsheetUri, championUri,
+                    guidFile, guidFiles, guid, processAll);
             return ResponseEntity.ok(response("ok", message));
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
@@ -143,7 +218,7 @@ public class BenchmarkController {
     }
 
     // -------------------------------------------------------------------------
-    // 3. POST /api/generate-manifest
+    // 5. POST /api/generate-manifest
     // -------------------------------------------------------------------------
 
     @Operation(

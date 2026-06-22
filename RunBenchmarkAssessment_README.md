@@ -21,19 +21,14 @@ Processing is parallelised with a fixed thread pool of five workers.
 
 | Parameter             | Default value                                                 |
 |-----------------------|---------------------------------------------------------------|
-| Algorithm URI         | `https://tools.ostrails.eu/champion/assess/algorithm/`...     |
-| Runner URI            | `https://tools.ostrails.eu/champion/assess/...`               |
-| GUIDs file            | `guids_hr.txt`                                                |
-| Sets                  | `de`, `el`, `en`, `fi`, `fr`, `hr`, `nl`, `sl`, `sl-SI`, `sv` |
-| Output directory      | `results/`                                                    |
+| GUIDs directory       | `./guids`                                                     |
+| Output directory      | `./results`                                                   |
 
 ## Command-line options
 
 ```text
--r, --runner <uri>         Overrides the runner URI at runtime
-                            (default: benchmark.runner property)
--s, --spreadsheet <uri>    Overrides the algorithm URI at runtime
-                            (default: benchmark.algorithm property)
+-r, --championUri <uri>    Overrides the championUri URI at runtime
+-s, --spreadsheetUri <uri> Overrides the spreadsheetUri URI at runtime
 -p, --process-file <file>  Process a single named GUID file
 -P, --process-all          Process all guids_XX.txt files for the
                             default set list
@@ -55,24 +50,24 @@ runs in legacy single-file mode and processes the file specified by
 Both API endpoints are configured via `application.properties` and can
 be overridden at runtime without recompilation:
 
-| Property              | Environment variable    | Purpose                  |
-|-----------------------|-------------------------|--------------------------|
-| `benchmark.algorithm` | `BENCHMARK_ALGORITHM`   | Algorithm URI (payload)  |
-| `benchmark.runner`    | `BENCHMARK_RUNNER`      | Runner URI (POST target) |
+| Property                   | Environment variable         | Purpose                       |
+|----------------------------|------------------------------|-------------------------------|
+| `benchmark.spreadsheetUri` | `BENCHMARK_spreadsheetUri`   | spreadsheetUri URI (payload)  |
+| `benchmark.championUri`    | `BENCHMARK_championUri`      | championUri URI (POST target) |
 
 For example, using environment variables:
 
 ```bash
-BENCHMARK_ALGORITHM=https://custom.example.org/algorithm \
-BENCHMARK_RUNNER=https://custom.example.org/runner \
+BENCHMARK_spreadsheetUri=https://custom.example.org/spreadsheetUri \
+BENCHMARK_championUri=https://custom.example.org/championUri \
 java -jar target/benchmark-1.0-SNAPSHOT.jar --process-all
 ```
 
 Or JVM system properties:
 
 ```bash
-java -Dbenchmark.algorithm=https://... \
-     -Dbenchmark.runner=https://... \
+java -Dbenchmark.spreadsheetUri=https://... \
+     -Dbenchmark.championUri=https://... \
      -jar target/benchmark-1.0-SNAPSHOT.jar --process-all
 ```
 
@@ -195,8 +190,8 @@ Errors are saved as `error_<sanitised-identifier>.json`:
 ## How it works
 
 1. GUIDs are read from the selected file(s) or supplied directly.
-2. A JSON payload is built: `{"calculation_uri": "<algorithm>", "guid": "<url>"}`.
-3. The payload is POSTed to the Champion runner URI.
+2. A JSON payload is built: `{"calculation_uri": "<spreadsheetUri>", "guid": "<url>"}`.
+3. The payload is POSTed to the Champion championUri URI.
 4. The response body is saved as a JSON file.
 5. On error, an error JSON file is saved and processing continues
    with the next GUID.
