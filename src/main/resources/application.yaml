@@ -64,7 +64,7 @@ tenants:
       title: CESSDA Data Catalogue · Assessment Results
       footer: CESSDA FAIR Benchmark Dashboard
     oxford:
-      algorithm: https://docs.google.com/spreadsheets/d/REPLACE_WITH_OXFORD_SHEET_ID
+      algorithm: https://docs.google.com/spreadsheets/d/1Lbo0KzlN-RPRJ5POqHKh8YE2GXSv0bnaKZzwkaCOP9M
       runner: https://tools.ostrails.eu/champion/assess/algorithm
       title: Oxford Research Archive · Assessment Results
       footer: Oxford FAIR Benchmark Dashboard
