@@ -49,8 +49,8 @@ import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.WebApplicationType;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -58,6 +58,8 @@ import org.springframework.context.annotation.Configuration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import cessda.cmv.benchmark.config.BenchmarkProperties;
 
 /**
  * Reads GUID files produced by {@link GetOaiPmhIdentifiers} (each line
@@ -80,8 +82,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * <h2>Command-line options</h2>
  *
  * <pre>
- *   -s, --spreadsheetUri &lt;uri&gt;   SpreadsheetUri URI (overrides benchmark.spreadsheetUri)
- *   -r, --championUri &lt;uri&gt;        championUri URI (overrides benchmark.championUri)
+ *   -s, --spreadsheetUri &lt;uri&gt;   SpreadsheetUri URI (overrides benchmark.algorithm)
+ *   -r, --championUri &lt;uri&gt;        championUri URI (overrides benchmark.runner)
  *   -p, --process-file &lt;file&gt; Process a single named GUID file
  *   -P, --process-all         Process all guids_XX.txt files for the
  *                              default set list
@@ -304,7 +306,7 @@ public class RunBenchmarkAssessment {
     /**
      * Spring configuration used only by {@link #main(String[])} to
      * load {@code application.yml} and bind the shared
-     * {@code benchmark.spreadsheetUri} / {@code benchmark.championUri}
+     * {@code benchmark.algorithm} / {@code benchmark.runner}
      * properties for standalone command-line use.
      *
      * <p>
@@ -313,7 +315,7 @@ public class RunBenchmarkAssessment {
      * Javadoc for why a shared singleton is incompatible with
      * multi-tenancy. Standalone CLI use has no concept of "the current
      * tenant", so it falls back to the shared top-level
-     * {@code benchmark.spreadsheetUri} / {@code benchmark.championUri}
+     * {@code benchmark.algorithm} / {@code benchmark.runner}
      * properties rather than any {@code tenants.config} entry. Both
      * properties default to an empty string if absent, rather than
      * failing context startup, since a CLI user may always supply
@@ -335,25 +337,23 @@ public class RunBenchmarkAssessment {
      * </p>
      */
     @Configuration
+    @EnableConfigurationProperties(BenchmarkProperties.class)
     @org.springframework.boot.autoconfigure.EnableAutoConfiguration
     static class CliConfig {
 
         @Bean
         RunBenchmarkAssessment runBenchmarkAssessment(
-                @Value("${benchmark.spreadsheetUri:}") String spreadsheetUri,
-                @Value("${benchmark.championUri:}") String championUri,
-                @Value("${benchmark.connect.timeout.seconds:30}") int connectTimeout,
-                @Value("${benchmark.request.timeout.seconds:120}") int requestTimeout) {
+                BenchmarkProperties benchmarkProperties) {
             return new RunBenchmarkAssessment(
-                    spreadsheetUri, championUri,
-                    connectTimeout, requestTimeout);
+                    benchmarkProperties.getAlgorithm(),
+                    benchmarkProperties.getRunner());
         }
     }
 
     /**
      * Bootstraps a headless Spring context so that
      * {@code application.yml} is loaded and the shared
-     * {@code benchmark.spreadsheetUri} / {@code benchmark.championUri}
+     * {@code benchmark.algorithm} / {@code benchmark.runner}
      * properties are bound before any processing begins. A CLI
      * override for either URI (via {@code -s} / {@code --spreadsheet}
      * or {@code -r} / {@code --championUri}) is applied after the context
@@ -361,7 +361,7 @@ public class RunBenchmarkAssessment {
      *
      * <p>
      * This standalone entry point uses the shared top-level
-     * {@code benchmark.spreadsheetUri} / {@code benchmark.championUri}
+     * {@code benchmark.algorithm} / {@code benchmark.runner}
      * properties, not any tenant-specific {@code tenants.config}
      * entry — the CLI has no concept of "the current tenant". For
      * per-tenant runs, use the REST API
@@ -399,6 +399,15 @@ public class RunBenchmarkAssessment {
         // Allow the CLI to override the injected spreadsheetUri URI.
         if (cmd.hasOption(SPREADSHEET_ARG)) {
             client.spreadsheetUri = cmd.getOptionValue(SPREADSHEET_ARG);
+        }
+        if (client.spreadsheetUri == null || client.spreadsheetUri.isBlank()) {
+            logSevere("No benchmark.algorithm configured and no --%s override supplied.",
+                    SPREADSHEET_ARG);
+            return;
+        }
+        if (client.championUri == null || client.championUri.isBlank()) {
+            logSevere("No benchmark.runner configured and no --championUri override supplied.");
+            return;
         }
         logInfo("Using spreadsheetUri URI:  %s", client.spreadsheetUri);
         logInfo("Using championUri URI:     %s", client.championUri);
@@ -923,9 +932,9 @@ public class RunBenchmarkAssessment {
     static CommandLine parseArgs(String[] args) throws IOException {
         Options options = new Options();
         options.addOption("r", "championUri", true,
-        "championUri URI (overrides benchmark.championUri property)");
+        "championUri URI (overrides benchmark.runner property)");
         options.addOption("s", SPREADSHEET_ARG, true,
-                "spreadsheetUri URI (overrides benchmark.spreadsheetUri property)");
+                "spreadsheetUri URI (overrides benchmark.algorithm property)");
         options.addOption("f", FILENAME_ARG, true,
                 "GUIDs filename for legacy single-file mode"
                         + " (default: " + DEFAULT_GUIDS_FILE + ")");

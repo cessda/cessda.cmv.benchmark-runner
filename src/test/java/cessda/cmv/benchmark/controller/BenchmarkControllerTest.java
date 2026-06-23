@@ -23,12 +23,15 @@ import java.io.IOException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import cessda.cmv.benchmark.config.BenchmarkProperties;
 import cessda.cmv.benchmark.config.SecurityConfig;
 import cessda.cmv.benchmark.service.BenchmarkService;
 import cessda.cmv.benchmark.tenant.TenantContext;
@@ -73,6 +76,11 @@ import cessda.cmv.benchmark.tenant.TenantProperties;
     )
 )
 @org.springframework.context.annotation.Import(SecurityConfig.class)
+@EnableConfigurationProperties(BenchmarkProperties.class)
+@TestPropertySource(properties = {
+    "benchmark.data-dir=${java.io.tmpdir}/benchmark-controller-test-data",
+    "benchmark.results-dir=${java.io.tmpdir}/benchmark-controller-test-results"
+})
 class BenchmarkControllerTest {
 
     @Autowired

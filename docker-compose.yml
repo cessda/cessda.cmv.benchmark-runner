@@ -11,7 +11,7 @@ services:
       - ./guids:/data
       - ./results:/results
     environment:
-      # Override volume paths if needed (these match application.properties defaults)
+      # Override volume paths if needed (these match application.yaml)
       - benchmark.data-dir=/data
       - benchmark.results-dir=/results
     restart: unless-stopped

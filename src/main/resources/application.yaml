@@ -18,6 +18,8 @@ server:
 benchmark:
   data-dir: ./guids
   results-dir: ./results
+  algorithm: https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw
+  runner: https://tools.ostrails.eu/champion/assess/algorithm
 
 # ── SpringDoc / Swagger UI ────────────────────────────────────────────────────
 springdoc:

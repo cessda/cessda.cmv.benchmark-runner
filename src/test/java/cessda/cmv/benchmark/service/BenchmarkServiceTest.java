@@ -23,21 +23,21 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import cessda.cmv.benchmark.GetOaiPmhIdentifiers;
 import cessda.cmv.benchmark.RunBenchmarkAssessment;
+import cessda.cmv.benchmark.config.BenchmarkProperties;
 import cessda.cmv.benchmark.tenant.TenantContext;
 import cessda.cmv.benchmark.tenant.TenantProperties;
+import cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig;
 
 /**
  * Unit tests for {@link BenchmarkService}.
  *
- * <p>The service is instantiated directly (no Spring context) and its
- * private {@code dataDir} and {@code resultsDir} fields are injected
- * via {@link ReflectionTestUtils} to point at JUnit temporary
- * directories. This avoids any dependency on {@code /data} or
- * {@code /results} existing on the build machine.</p>
+ * <p>The service is instantiated directly (no Spring context) with
+ * {@link BenchmarkProperties} pointing at JUnit temporary directories.
+ * This avoids any dependency on {@code /data} or {@code /results}
+ * existing on the build machine.</p>
  *
  * <p>A stub {@link TenantContext} is wired in via the constructor,
  * pre-populated with the tenant ID {@code "test-tenant"} so that all
@@ -72,6 +72,7 @@ class BenchmarkServiceTest {
     Path tenantResultsDir;
 
     private BenchmarkService service;
+    private BenchmarkProperties benchmarkProperties;
 
     @BeforeEach
     void setUp() throws IOException {
@@ -79,15 +80,23 @@ class BenchmarkServiceTest {
         TenantContext tenantContext = new TenantContext();
         tenantContext.setTenantId(TENANT_ID);
 
+        TenantConfig tenantConfig = new TenantConfig();
+        tenantConfig.setAlgorithm("https://example.org/algorithm");
+        tenantConfig.setRunner("https://example.org/runner");
+        tenantConfig.setTitle("Test tenant title");
+        tenantConfig.setFooter("Test tenant footer");
+
         TenantProperties tenantProperties = new TenantProperties();
-        tenantProperties.setKeys(null);
+        tenantProperties.setConfig(java.util.Map.of(TENANT_ID, tenantConfig));
 
-        service = new BenchmarkService(tenantContext, tenantProperties);
+        benchmarkProperties = new BenchmarkProperties();
+        benchmarkProperties.setDataDir(rootDataDir.toString());
+        benchmarkProperties.setResultsDir(rootResultsDir.toString());
+        benchmarkProperties.setAlgorithm("https://example.org/algorithm");
+        benchmarkProperties.setRunner("https://example.org/runner");
 
-        // Point the service at our temp root directories (not tenant sub-dirs —
-        // BenchmarkService itself appends the tenant ID segment).
-        ReflectionTestUtils.setField(service, "dataDir",    rootDataDir.toString());
-        ReflectionTestUtils.setField(service, "resultsDir", rootResultsDir.toString());
+        service = new BenchmarkService(
+                benchmarkProperties, tenantContext, tenantProperties);
 
         // Pre-create the tenant sub-directories so that tests which don't
         // exercise directory-creation logic can write fixture files directly.
@@ -116,7 +125,7 @@ class BenchmarkServiceTest {
             Path expectedTenantDir = newRootData.resolve(TENANT_ID);
             assertFalse(Files.exists(expectedTenantDir));
 
-            ReflectionTestUtils.setField(service, "dataDir", newRootData.toString());
+            benchmarkProperties.setDataDir(newRootData.toString());
 
             try {
                 service.fetchIdentifiers(
@@ -199,8 +208,8 @@ class BenchmarkServiceTest {
             assertFalse(Files.exists(expectedData));
             assertFalse(Files.exists(expectedResults));
 
-            ReflectionTestUtils.setField(service, "dataDir",    newRootData.toString());
-            ReflectionTestUtils.setField(service, "resultsDir", newRootResults.toString());
+            benchmarkProperties.setDataDir(newRootData.toString());
+            benchmarkProperties.setResultsDir(newRootResults.toString());
 
             try {
                 service.runAssessment(
@@ -261,6 +270,55 @@ class BenchmarkServiceTest {
                 RunBenchmarkAssessment.DEFAULT_GUIDS_FILE,
                 "Default guids filename must be guids_hr.txt");
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // tenant configuration
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Returns tenant algorithm and runner from configuration")
+    void returnsTenantAlgorithmAndRunnerFromConfiguration() {
+        assertArrayEquals(
+            new String[]{"https://example.org/algorithm",
+                "https://example.org/runner"},
+            service.getDefaultAlgorithmAndRunner());
+    }
+
+    @Test
+    @DisplayName("Resolves legacy spreadsheetUri and championUri tenant keys")
+    void resolvesLegacyTenantKeys() {
+        TenantContext tenantContext = new TenantContext();
+        tenantContext.setTenantId("legacy-tenant");
+
+        TenantConfig legacyConfig = new TenantConfig();
+        legacyConfig.setSpreadsheetUri("https://legacy.example.org/spreadsheet");
+        legacyConfig.setChampionUri("https://legacy.example.org/champion");
+        legacyConfig.setTitle("Legacy title");
+        legacyConfig.setFooter("Legacy footer");
+
+        TenantProperties tenantProperties = new TenantProperties();
+        tenantProperties.setConfig(java.util.Map.of("legacy-tenant", legacyConfig));
+
+        BenchmarkService legacyService = new BenchmarkService(
+            benchmarkProperties,
+            tenantContext,
+            tenantProperties);
+
+        assertArrayEquals(
+            new String[]{
+                "https://legacy.example.org/spreadsheet",
+                "https://legacy.example.org/champion"
+            },
+            legacyService.getDefaultAlgorithmAndRunner());
+    }
+
+    @Test
+    @DisplayName("Returns tenant branding from configuration")
+    void returnsTenantBrandingFromConfiguration() {
+        BenchmarkService.Branding branding = service.getTenantBranding();
+        assertEquals("Test tenant title", branding.title());
+        assertEquals("Test tenant footer", branding.footer());
     }
 
     // -------------------------------------------------------------------------

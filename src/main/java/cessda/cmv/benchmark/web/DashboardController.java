@@ -2,9 +2,7 @@ package cessda.cmv.benchmark.web;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
@@ -14,6 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import cessda.cmv.benchmark.config.BenchmarkProperties;
 import cessda.cmv.benchmark.tenant.TenantContext;
 
 /**
@@ -35,12 +34,12 @@ import cessda.cmv.benchmark.tenant.TenantContext;
 @RequestMapping("/api/results")
 public class DashboardController {
 
-    @Value("${benchmark.results-dir:/results}")
-    private String resultsDir;
-
+    private final BenchmarkProperties benchmarkProperties;
     private final TenantContext tenantContext;
 
-    public DashboardController(TenantContext tenantContext) {
+    public DashboardController(BenchmarkProperties benchmarkProperties,
+                               TenantContext tenantContext) {
+        this.benchmarkProperties = benchmarkProperties;
         this.tenantContext = tenantContext;
     }
 
@@ -85,9 +84,9 @@ public class DashboardController {
     // ── Private helpers ──────────────────────────────────────────────────────
 
     private Path tenantResultsDir() {
-        return Paths.get(resultsDir, tenantContext.getTenantId())
-                    .toAbsolutePath()
-                    .normalize();
+        return benchmarkProperties.getResultsDirPath()
+                .resolve(tenantContext.getTenantId())
+                .normalize();
     }
 
     private ResponseEntity<Resource> serveFile(Path file) {

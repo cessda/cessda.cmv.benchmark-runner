@@ -3,14 +3,13 @@ package cessda.cmv.benchmark.service;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import cessda.cmv.benchmark.GenerateManifest;
 import cessda.cmv.benchmark.GetOaiPmhIdentifiers;
 import cessda.cmv.benchmark.RunBenchmarkAssessment;
+import cessda.cmv.benchmark.config.BenchmarkProperties;
 import cessda.cmv.benchmark.tenant.TenantContext;
 import cessda.cmv.benchmark.tenant.TenantProperties;
 import cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig;
@@ -18,61 +17,41 @@ import cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig;
 @Service
 public class BenchmarkService {
 
-    @Value("${benchmark.data-dir:/data}")
-    private String dataDir;
-
-    @Value("${benchmark.results-dir:/results}")
-    private String resultsDir;
-
-    // Fallback values used only when a tenant has no entry under
-    // tenants.config — keeps existing single-tenant deployments working
-    // without requiring every tenant to be migrated to the new config
-    // map immediately.
-    @Value("${benchmark.runner:}")
-    private String defaultBenchmarkRunner;
-
-    @Value("${benchmark.algorithm:}")
-    private String defaultBenchmarkAlgorithm;
-
+    private final BenchmarkProperties benchmarkProperties;
     private final TenantContext tenantContext;
     private final TenantProperties tenantProperties;
 
     public record Branding(String title, String footer) {}
 
-    public BenchmarkService(TenantContext tenantContext,
+    public BenchmarkService(BenchmarkProperties benchmarkProperties,
+                             TenantContext tenantContext,
                              TenantProperties tenantProperties) {
+        this.benchmarkProperties = benchmarkProperties;
         this.tenantContext    = tenantContext;
         this.tenantProperties = tenantProperties;
     }
 
     /**
-    * Returns the title and footer for the current tenant, falling back to empty strings 
-    * if no per-tenant configuration exists.
-    * 
+    * Returns the title and footer for the current tenant.
+    *
     * @return a {@link Branding} record containing the title and footer strings
-    */  
+    */
     public Branding getTenantBranding() {
-        TenantConfig cfg = tenantProperties.getConfigFor(tenantContext.getTenantId());
-        String title  = (cfg != null && cfg.getTitle()  != null) ? cfg.getTitle()  : "FAIR Benchmark Dashboard";
-        String footer = (cfg != null && cfg.getFooter() != null) ? cfg.getFooter() : "FAIR Benchmark Dashboard";
-        return new Branding(title, footer);
+       TenantConfig cfg = currentTenantConfig();
+       return new Branding(cfg.getTitle(), cfg.getFooter());
     }
 
     /**
      * Returns the algorithm and runner URIs that would be used for
      * the current tenant if {@link #runAssessment} were called with
-     * no explicit overrides — i.e. the tenant's {@code tenants.config}
-     * entry, falling back to the shared {@code benchmark.algorithm} /
-     * {@code benchmark.runner} properties.
+     * no explicit overrides.
      *
      * <p>Used to populate the "Run assessment" confirmation dialog in
      * the dashboard, so the operator can see and optionally override
      * the values that will actually be sent before triggering a
      * potentially long-running assessment run.</p>
      *
-     * @return a two-element array: {@code [algorithm, runner]}. Either
-     *         element may be {@code null} or blank if no default is
-     *         configured for this tenant and no shared fallback is set.
+     * @return a two-element array: {@code [algorithm, runner]}.
      */
     public String[] getDefaultAlgorithmAndRunner() {
         return new String[] { resolveAlgorithm(null), resolveRunner(null) };
@@ -111,12 +90,16 @@ public class BenchmarkService {
 
     /** /data/{tenantId}/ */
     private Path tenantDataDir() {
-        return Paths.get(dataDir, tenantContext.getTenantId()).toAbsolutePath().normalize();
+        return benchmarkProperties.getDataDirPath()
+                .resolve(tenantContext.getTenantId())
+                .normalize();
     }
 
     /** /results/{tenantId}/ */
     private Path tenantResultsDir() {
-        return Paths.get(resultsDir, tenantContext.getTenantId()).toAbsolutePath().normalize();
+        return benchmarkProperties.getResultsDirPath()
+                .resolve(tenantContext.getTenantId())
+                .normalize();
     }
 
     /**
@@ -125,7 +108,7 @@ public class BenchmarkService {
      * Used by the branding endpoint to expose title and footer values.
      */
     public TenantConfig getCurrentTenantConfig() {
-        return tenantProperties.getConfigFor(tenantContext.getTenantId());
+        return currentTenantConfig();
     }
 
     // ── Per-tenant configuration helpers ─────────────────────────────────────
@@ -133,40 +116,47 @@ public class BenchmarkService {
     /**
      * Resolves the FAIR Champion algorithm URI for the current tenant.
      *
-     * <p>Looks up {@code tenants.config.<tenantId>.algorithm} first;
-     * falls back to the shared {@code benchmark.algorithm} property
-     * (if set) for tenants that have not been migrated to per-tenant
-     * configuration, then to the explicit {@code spreadsheetUri}
-     * parameter if the caller supplied one.</p>
+     * <p>Uses the explicit request override when supplied; otherwise
+     * resolves the current tenant's configured
+     * {@code tenants.config.<tenantId>.algorithm} value.</p>
      */
     private String resolveAlgorithm(String requestedOverride) {
         if (requestedOverride != null && !requestedOverride.isBlank()) {
             return requestedOverride;
         }
-        TenantConfig cfg = tenantProperties.getConfigFor(tenantContext.getTenantId());
-        if (cfg != null && cfg.getSpreadsheetUri() != null && !cfg.getSpreadsheetUri().isBlank()) {
-            return cfg.getSpreadsheetUri();
+        String tenantValue = currentTenantConfig().effectiveAlgorithm();
+        if (tenantValue != null && !tenantValue.isBlank()) {
+            return tenantValue;
         }
-        return defaultBenchmarkAlgorithm;
+        String sharedValue = benchmarkProperties.getAlgorithm();
+        if (sharedValue != null && !sharedValue.isBlank()) {
+            return sharedValue;
+        }
+        throw new IllegalStateException(
+                "No algorithm configured for tenant: " + tenantContext.getTenantId());
     }
 
     /**
      * Resolves the FAIR Champion runner URI for the current tenant.
      *
-     * <p>Uses the explicit {@code requestedOverride} if supplied;
-     * otherwise looks up {@code tenants.config.<tenantId>.runner};
-     * falls back to the shared {@code benchmark.runner} property if no
-     * per-tenant entry exists.</p>
+     * <p>Uses the explicit request override when supplied; otherwise
+     * resolves the current tenant's configured
+     * {@code tenants.config.<tenantId>.runner} value.</p>
      */
     private String resolveRunner(String requestedOverride) {
         if (requestedOverride != null && !requestedOverride.isBlank()) {
             return requestedOverride;
         }
-        TenantConfig cfg = tenantProperties.getConfigFor(tenantContext.getTenantId());
-        if (cfg != null && cfg.getChampionUri() != null && !cfg.getChampionUri().isBlank()) {
-            return cfg.getChampionUri();
+        String tenantValue = currentTenantConfig().effectiveRunner();
+        if (tenantValue != null && !tenantValue.isBlank()) {
+            return tenantValue;
         }
-        return defaultBenchmarkRunner;
+        String sharedValue = benchmarkProperties.getRunner();
+        if (sharedValue != null && !sharedValue.isBlank()) {
+            return sharedValue;
+        }
+        throw new IllegalStateException(
+                "No runner configured for tenant: " + tenantContext.getTenantId());
     }
 
     // ── 1. Fetch OAI-PMH Identifiers ─────────────────────────────────────────
@@ -275,7 +265,7 @@ public class BenchmarkService {
 
     public String generateManifest(String overrideResultsDir) throws IOException {
         Path targetDir = (overrideResultsDir != null && !overrideResultsDir.isBlank())
-                ? Paths.get(overrideResultsDir).toAbsolutePath().normalize()
+                ? Path.of(overrideResultsDir).toAbsolutePath().normalize()
                 : tenantResultsDir();   // <-- tenant-scoped by default
 
         if (!Files.isDirectory(targetDir)) {
@@ -289,12 +279,22 @@ public class BenchmarkService {
     // ── Private helpers ──────────────────────────────────────────────────────
 
     private Path resolveGuidFile(String filename, Path tDataDir) {
-        Path asGiven = Paths.get(filename);
+        Path asGiven = Path.of(filename);
         if (Files.exists(asGiven)) return asGiven;
         return tDataDir.resolve(asGiven.getFileName());
     }
 
     private static String nvl(String value, String fallback) {
         return (value != null && !value.isBlank()) ? value : fallback;
+    }
+
+    private TenantConfig currentTenantConfig() {
+        String tenantId = tenantContext.getTenantId();
+        TenantConfig cfg = tenantProperties.getConfigFor(tenantId);
+        if (cfg == null) {
+            throw new IllegalStateException(
+                    "No tenant configuration found for tenant: " + tenantId);
+        }
+        return cfg;
     }
 }

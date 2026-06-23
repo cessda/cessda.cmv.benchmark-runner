@@ -4,8 +4,8 @@
 
 This repository contains the source code for assessing digital objects
 in bulk against a Benchmark Assessment Algorithm spreadsheet, using
-the FAIR Champion Benchmark Assessment tool. The spreadsheetUri and
-championUri endpoint are configurable via `application.yml` — see
+the FAIR Champion Benchmark Assessment tool. The benchmark algorithm
+and runner URIs are configurable via `application.yaml` — see
 [RunBenchmarkAssessment_README.md](RunBenchmarkAssessment_README.md)
 for details.
 
@@ -78,7 +78,8 @@ for full usage and options.
 
 Reads the `guids_<lang>.txt` files produced by the previous stage and
 POSTs each `GetRecord` URL to a configurable FAIR Champion championUri
-endpoint, with the spreadsheetUri URI included in the request payload.
+endpoint, with the configured benchmark algorithm URI included in the
+request payload.
 Results are saved as JSON files under the calling tenant's results
 directory, in `guids_<lang>/`. Processing is parallelised across five
 threads. Errors are captured in separate `error_*.json` files so that

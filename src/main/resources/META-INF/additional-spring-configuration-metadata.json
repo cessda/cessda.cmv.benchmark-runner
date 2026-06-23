@@ -1,97 +1,24 @@
-{"properties": [
-  {
-    "name": "benchmark.data-dir",
-    "type": "java.lang.String",
-    "description": "A description for 'benchmark.data-dir'"
-  },
-  {
-    "name": "benchmark.results-dir",
-    "type": "java.lang.String",
-    "description": "A description for 'benchmark.results-dir'"
-  },
-  {
-    "name": "springdoc.info.version",
-    "type": "java.lang.String",
-    "description": "A description for 'springdoc.info.version'"
-  },
-  {
-    "name": "springdoc.info.description",
-    "type": "java.lang.String",
-    "description": "A description for 'springdoc.info.description'"
-  },
-  {
-    "name": "springdoc.info.title",
-    "type": "java.lang.String",
-    "description": "A description for 'springdoc.info.title'"
-  },
-  {
-    "name": "benchmark.championUri",
-    "type": "java.lang.String",
-    "description": "A description for 'benchmark.championUri'"
-  },
-  {
-    "name": "key-cessda",
-    "type": "java.lang.String",
-    "description": "A description for 'key-cessda-prod-abc123'"
-  },
-  {
-    "name": "key-oxford",
-    "type": "java.lang.String",
-    "description": "A description for 'key-cessda-prod-abc123'"
-  },
-  {
-    "name": "keys",
-    "type": "java.lang.String",
-    "description": "A description for 'keys'"
-  },
-  {
-    "name": "enabled",
-    "type": "java.lang.String",
-    "description": "A description for 'enabled'"
-  },
-  {
-    "name": "tenants",
-    "type": "java.lang.String",
-    "description": "A description for 'tenants'"
-  },
-  {
-    "name": "static-locations",
-    "type": "java.lang.String",
-    "description": "A description for 'static-locations'"
-  },
-  {
-    "name": "resources",
-    "type": "java.lang.String",
-    "description": "A description for 'resources'"
-  },
-  {
-    "name": "web",
-    "type": "java.lang.String",
-    "description": "A description for 'web'"
-  },
-  {
-    "name": "spring",
-    "type": "java.lang.String",
-    "description": "A description for 'spring'"
-  },
-  {
-    "name": "championUri",
-    "type": "java.lang.String",
-    "description": "A description for 'championUri'"
-  },
-  {
-    "name": "results-dir",
-    "type": "java.lang.String",
-    "description": "A description for 'results-dir'"
-  },
-  {
-    "name": "data-dir",
-    "type": "java.lang.String",
-    "description": "A description for 'data-dir'"
-  },
-  {
-    "name": "benchmark.spreadsheetUri",
-    "type": "java.lang.String",
-    "description": "A description for 'benchmark.spreadsheetUri'"
-  }
-]}
+{
+  "properties": [
+    {
+      "name": "benchmark.data-dir",
+      "type": "java.lang.String",
+      "description": "Root directory for tenant-scoped guids_*.txt input files."
+    },
+    {
+      "name": "benchmark.results-dir",
+      "type": "java.lang.String",
+      "description": "Root directory for tenant-scoped JSON results and generated manifest files."
+    },
+    {
+      "name": "benchmark.algorithm",
+      "type": "java.lang.String",
+      "description": "Default benchmark algorithm URI for standalone CLI execution."
+    },
+    {
+      "name": "benchmark.runner",
+      "type": "java.lang.String",
+      "description": "Default FAIR Champion runner URI for standalone CLI execution."
+    }
+  ]
+}

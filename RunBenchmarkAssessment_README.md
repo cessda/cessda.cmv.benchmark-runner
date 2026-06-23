@@ -47,27 +47,27 @@ runs in legacy single-file mode and processes the file specified by
 
 ## Runtime configuration
 
-Both API endpoints are configured via `application.properties` and can
+Both endpoint URIs are configured via `application.yaml` and can
 be overridden at runtime without recompilation:
 
 | Property                   | Environment variable         | Purpose                       |
 |----------------------------|------------------------------|-------------------------------|
-| `benchmark.spreadsheetUri` | `BENCHMARK_spreadsheetUri`   | spreadsheetUri URI (payload)  |
-| `benchmark.championUri`    | `BENCHMARK_championUri`      | championUri URI (POST target) |
+| `benchmark.algorithm`      | `BENCHMARK_ALGORITHM`        | Benchmark algorithm URI (payload) |
+| `benchmark.runner`         | `BENCHMARK_RUNNER`           | Champion runner URI (POST target) |
 
 For example, using environment variables:
 
 ```bash
-BENCHMARK_spreadsheetUri=https://custom.example.org/spreadsheetUri \
-BENCHMARK_championUri=https://custom.example.org/championUri \
+BENCHMARK_ALGORITHM=https://custom.example.org/algorithm \
+BENCHMARK_RUNNER=https://custom.example.org/runner \
 java -jar target/benchmark-1.0-SNAPSHOT.jar --process-all
 ```
 
 Or JVM system properties:
 
 ```bash
-java -Dbenchmark.spreadsheetUri=https://... \
-     -Dbenchmark.championUri=https://... \
+java -Dbenchmark.algorithm=https://... \
+     -Dbenchmark.runner=https://... \
      -jar target/benchmark-1.0-SNAPSHOT.jar --process-all
 ```
 

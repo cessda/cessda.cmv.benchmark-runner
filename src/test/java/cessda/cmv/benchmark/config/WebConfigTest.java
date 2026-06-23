@@ -18,6 +18,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -52,6 +53,7 @@ import cessda.cmv.benchmark.tenant.TenantProperties;
     )
 )
 @org.springframework.context.annotation.Import(SecurityConfig.class)
+@EnableConfigurationProperties(BenchmarkProperties.class)
 @TestPropertySource(properties = {
     "benchmark.results-dir=${java.io.tmpdir}/webconfig-test-results",
     "benchmark.data-dir=${java.io.tmpdir}/webconfig-test-data"

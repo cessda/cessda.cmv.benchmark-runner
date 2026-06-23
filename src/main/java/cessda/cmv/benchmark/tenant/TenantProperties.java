@@ -5,6 +5,10 @@ import java.util.Map;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
+import org.springframework.validation.annotation.Validated;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 
 /**
  * Maps API keys to tenant IDs, and tenant IDs to their per-tenant
@@ -36,6 +40,7 @@ import org.springframework.stereotype.Component;
  * configuration.</p>
  */
 @Component
+@Validated
 @ConfigurationProperties(prefix = "tenants")
 public class TenantProperties {
 
@@ -43,13 +48,17 @@ public class TenantProperties {
     private Map<String, String> keys = new HashMap<>();
 
     /** tenantId -> per-tenant benchmark configuration */
-    private Map<String, TenantConfig> config = new HashMap<>();
+    private Map<String, @Valid TenantConfig> config = new HashMap<>();
 
     public Map<String, String> getKeys() { return keys; }
-    public void setKeys(Map<String, String> keys) { this.keys = keys; }
+    public void setKeys(Map<String, String> keys) {
+        this.keys = keys != null ? keys : new HashMap<>();
+    }
 
     public Map<String, TenantConfig> getConfig() { return config; }
-    public void setConfig(Map<String, TenantConfig> config) { this.config = config; }
+    public void setConfig(Map<String, TenantConfig> config) {
+        this.config = config != null ? config : new HashMap<>();
+    }
 
     /** @return the tenantId for the given API key, or null if unrecognised */
     public String resolve(String apiKey) {
@@ -75,10 +84,33 @@ public class TenantProperties {
      */
     public static class TenantConfig {
 
+        private String algorithm;
+
+        private String runner;
+
+        /**
+         * Legacy alias for {@link #algorithm}. Kept for compatibility with
+         * older tenant configuration keys.
+         */
         private String spreadsheetUri;
+
+        /**
+         * Legacy alias for {@link #runner}. Kept for compatibility with older
+         * tenant configuration keys.
+         */
         private String championUri;
+
+        @NotBlank
         private String title;
+
+        @NotBlank
         private String footer;
+
+        public String getAlgorithm() { return algorithm; }
+        public void setAlgorithm(String algorithm) { this.algorithm = algorithm; }
+
+        public String getRunner() { return runner; }
+        public void setRunner(String runner) { this.runner = runner; }
 
         public String getSpreadsheetUri() { return spreadsheetUri; }
         public void setSpreadsheetUri(String spreadsheetUri) { this.spreadsheetUri = spreadsheetUri; }
@@ -91,5 +123,19 @@ public class TenantProperties {
 
         public String getFooter() { return footer; }
         public void setFooter(String footer) { this.footer = footer; }
+
+        public String effectiveAlgorithm() {
+            if (algorithm != null && !algorithm.isBlank()) {
+                return algorithm;
+            }
+            return spreadsheetUri;
+        }
+
+        public String effectiveRunner() {
+            if (runner != null && !runner.isBlank()) {
+                return runner;
+            }
+            return championUri;
+        }
     }
 }

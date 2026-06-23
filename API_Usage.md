@@ -217,7 +217,7 @@ curl -X POST \
 
 | Parameter        | Default value                                            |
 |------------------|----------------------------------------------------------|
-| `spreadsheetUri` | The default spreadsheetUri URI                |
+| `spreadsheetUri` | The current tenant's configured algorithm URI |
 | `guidFile`       | `guids_hr.txt` *(when no mode parameter is supplied)*    |
 | `guid`           | *(none)*                                                 |
 | `processAll`     | `false`                                                  |

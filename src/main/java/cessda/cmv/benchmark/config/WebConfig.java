@@ -6,7 +6,6 @@
 
 package cessda.cmv.benchmark.config;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -30,8 +29,11 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
-    @Value("${benchmark.results-dir:/results}")
-    private String resultsDir;
+    private final BenchmarkProperties benchmarkProperties;
+
+    public WebConfig(BenchmarkProperties benchmarkProperties) {
+        this.benchmarkProperties = benchmarkProperties;
+    }
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
@@ -43,6 +45,7 @@ public class WebConfig implements WebMvcConfigurer {
         //   -> ./results/summary.json (IDE / local run)
         registry
             .addResourceHandler("/results/**")
-            .addResourceLocations("file:" + resultsDir + "/");
+            .addResourceLocations(
+                    "file:" + benchmarkProperties.getResultsDirPath() + "/");
     }
 }
