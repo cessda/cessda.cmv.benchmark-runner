@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CESSDA FAIR Benchmark Dashboard</title>
+  <title>FAIR Benchmark Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
   <style>
@@ -502,7 +502,7 @@
 <header>
   <div>
     <h1>FAIR Benchmark</h1>
-    <p class="subtitle">CESSDA Data Catalogue · Assessment Results</p>
+    <p class="subtitle" id="subtitle">FAIR Assessment Results</p>
   </div>
   <div class="header-right">
     <span id="last-updated" aria-live="polite"></span>
@@ -531,17 +531,17 @@
          aria-labelledby="assessment-modal-title">
       <h2 id="assessment-modal-title">Run FAIR benchmark assessment</h2>
       <p>This processes every identifier against the FAIR Champion API
-        and can take several minutes. Review the spreadsheetUri and championUri
+        and can take several minutes. Review the algorithm and runner
         URIs below before starting — both can be edited for this run
         only; your organisation's saved defaults are not changed.</p>
 
       <form id="assessment-modal-form" onsubmit="onAssessmentModalSubmit(event)">
-        <label for="assessment-spreadsheetUri-input">spreadsheetUri URI</label>
-        <input type="text" id="assessment-spreadsheetUri-input"
+        <label for="assessment-algorithm-input">Algorithm URI</label>
+        <input type="text" id="assessment-algorithm-input"
                placeholder="https://..." autocomplete="off" />
 
-        <label for="assessment-championUri-input">championUri URI</label>
-        <input type="text" id="assessment-championUri-input"
+        <label for="assessment-runner-input">Runner URI</label>
+        <input type="text" id="assessment-runner-input"
                placeholder="https://..." autocomplete="off" />
 
         <div id="assessment-sets-header">
@@ -665,7 +665,7 @@
 </main>
 
 <footer>
-  <span>CESSDA FAIR Benchmark Dashboard</span>
+  <span id="footer-text">FAIR Benchmark Dashboard</span>
   <span>Results served via <code>API/</code></span>
 </footer>
 
@@ -767,8 +767,8 @@
 
   async function onRunAssessmentClick() {
     const backdrop = document.getElementById('assessment-modal-backdrop');
-    const algInput = document.getElementById('assessment-spreadsheetUri-input');
-    const runInput = document.getElementById('assessment-championUri-input');
+    const algInput = document.getElementById('assessment-algorithm-input');
+    const runInput = document.getElementById('assessment-runner-input');
     const errEl    = document.getElementById('assessment-modal-error');
     const confirmBtn = document.getElementById('assessment-modal-confirm');
     const cancelBtn  = document.getElementById('assessment-modal-cancel');
@@ -798,8 +798,8 @@
 
       if (!defaultsRes.ok) throw new Error(`HTTP ${defaultsRes.status}`);
       const defaults = await defaultsRes.json();
-      algInput.value = defaults.spreadsheetUri || '';
-      runInput.value = defaults.championUri || '';
+      algInput.value = defaults.algorithm || '';
+      runInput.value = defaults.runner || '';
 
       if (!filesRes.ok) throw new Error(`HTTP ${filesRes.status}`);
       const filesBody = await filesRes.json();
@@ -855,8 +855,8 @@
   async function onAssessmentModalSubmit(e) {
     e.preventDefault();
 
-    const spreadsheetUri = document.getElementById('assessment-spreadsheetUri-input').value.trim();
-    const championUri    = document.getElementById('assessment-championUri-input').value.trim();
+    const algorithm = document.getElementById('assessment-algorithm-input').value.trim();
+    const runner    = document.getElementById('assessment-runner-input').value.trim();
     const errEl       = document.getElementById('assessment-modal-error');
     const confirmBtn  = document.getElementById('assessment-modal-confirm');
     const cancelBtn   = document.getElementById('assessment-modal-cancel');
@@ -887,8 +887,8 @@
       }
 
       const params = new URLSearchParams();
-      if (spreadsheetUri) params.set('spreadsheetUri', spreadsheetUri);
-      if (championUri)    params.set('championUri', championUri);
+      if (algorithm) params.set('benchmarkAlgorithmUri', algorithm);
+      if (runner)    params.set('benchmarkRunnerUri', runner);
 
       if (selected.length > 0) {
         // One or more specific sets were chosen — send them explicitly.
@@ -1029,11 +1029,21 @@
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('error-msg').style.display = 'none';
 
+    // Fetch branding and summary in parallel
     let summary;
     try {
-      const res = await apiFetch('/api/results/summary.json');
+      const [brandingRes, summaryRes] = await Promise.all([
+        apiFetch('/api/tenant/branding'),
+        apiFetch('/api/results/summary.json')
+      ]);
 
-      if (res.status === 401) {
+      if (brandingRes.ok) {
+        const branding = await brandingRes.json();
+        if (branding.title)  document.getElementById('subtitle').textContent = branding.title;
+        if (branding.footer) document.getElementById('footer-text').textContent = branding.footer;
+      }
+
+      if (summaryRes.status === 401) {
         // Stored key was rejected — clear it and re-prompt with a visible error.
         clearStoredApiKey();
         document.getElementById('loading').style.display = 'none';
@@ -1042,14 +1052,14 @@
         return;
       }
 
-      if (res.status === 404) {
+      if (summaryRes.status === 404) {
         document.getElementById('loading').style.display = 'none';
         showError('No results found for your organisation yet.\n\nRun the assessment pipeline and generate the manifest first (POST /api/run-assessment, then POST /api/generate-manifest).');
         return;
       }
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      summary = await res.json();
+      if (!summaryRes.ok) throw new Error(`HTTP ${summaryRes.status}`);
+      summary = await summaryRes.json();
     } catch (e) {
       showError(`Could not load /api/results/summary.json.\n\n${e.message}`);
       return;

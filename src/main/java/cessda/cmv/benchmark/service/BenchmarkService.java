@@ -37,10 +37,25 @@ public class BenchmarkService {
     private final TenantContext tenantContext;
     private final TenantProperties tenantProperties;
 
+    public record Branding(String title, String footer) {}
+
     public BenchmarkService(TenantContext tenantContext,
                              TenantProperties tenantProperties) {
         this.tenantContext    = tenantContext;
         this.tenantProperties = tenantProperties;
+    }
+
+    /**
+    * Returns the title and footer for the current tenant, falling back to empty strings 
+    * if no per-tenant configuration exists.
+    * 
+    * @return a {@link Branding} record containing the title and footer strings
+    */  
+    public Branding getTenantBranding() {
+        TenantConfig cfg = tenantProperties.getConfigFor(tenantContext.getTenantId());
+        String title  = (cfg != null && cfg.getTitle()  != null) ? cfg.getTitle()  : "FAIR Benchmark Dashboard";
+        String footer = (cfg != null && cfg.getFooter() != null) ? cfg.getFooter() : "FAIR Benchmark Dashboard";
+        return new Branding(title, footer);
     }
 
     /**
@@ -102,6 +117,15 @@ public class BenchmarkService {
     /** /results/{tenantId}/ */
     private Path tenantResultsDir() {
         return Paths.get(resultsDir, tenantContext.getTenantId()).toAbsolutePath().normalize();
+    }
+
+    /**
+     * Returns the {@link TenantConfig} for the current tenant, or
+     * {@code null} if no {@code tenants.config} entry exists for it.
+     * Used by the branding endpoint to expose title and footer values.
+     */
+    public TenantConfig getCurrentTenantConfig() {
+        return tenantProperties.getConfigFor(tenantContext.getTenantId());
     }
 
     // ── Per-tenant configuration helpers ─────────────────────────────────────

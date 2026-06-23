@@ -20,16 +20,16 @@ import org.springframework.stereotype.Component;
  *     "key-oxford": "oxford"
  *   config:
  *     cessda:
- *       spreadsheetUri: https://docs.google.com/spreadsheets/d/CESSDA_SHEET_ID
- *       championUri: https://tools.ostrails.eu/champion/assess/spreadsheetUri
+ *       algorithm: https://docs.google.com/spreadsheets/d/CESSDA_SHEET_ID
+ *       runner: https://tools.ostrails.eu/champion/assess/algorithm
  *     oxford:
- *       spreadsheetUri: https://docs.google.com/spreadsheets/d/OXFORD_SHEET_ID
- *       championUri: https://tools.ostrails.eu/champion/assess/spreadsheetUri
+ *       algorithm: https://docs.google.com/spreadsheets/d/OXFORD_SHEET_ID
+ *       runner: https://tools.ostrails.eu/champion/assess/algorithm
  * }</pre>
  *
- * <p>Each tenant has its own spreadsheetUri and championUri URI, since different
+ * <p>Each tenant has its own algorithm and runner URI, since different
  * organisations may use different FAIR Champion configurations or
- * championUri instances. {@code keys} and {@code config} are deliberately
+ * runner instances. {@code keys} and {@code config} are deliberately
  * separate maps — {@code keys} maps an API key to a tenant ID, while
  * {@code config} maps a tenant ID to that tenant's settings — so a
  * tenant's secret key is never used as a lookup key for its own
@@ -70,18 +70,26 @@ public class TenantProperties {
     }
 
     /**
-     * Per-tenant benchmark settings: the FAIR Champion spreadsheetUri and
-     * championUri URIs to use for that tenant's assessments.
+     * Per-tenant benchmark settings: the FAIR Champion algorithm and
+     * runner URIs, and the branding strings shown in the dashboard UI.
      */
     public static class TenantConfig {
 
         private String spreadsheetUri;
         private String championUri;
+        private String title;
+        private String footer;
 
         public String getSpreadsheetUri() { return spreadsheetUri; }
         public void setSpreadsheetUri(String spreadsheetUri) { this.spreadsheetUri = spreadsheetUri; }
 
         public String getChampionUri() { return championUri; }
         public void setChampionUri(String championUri) { this.championUri = championUri; }
+
+        public String getTitle() { return title; }
+        public void setTitle(String title) { this.title = title; }
+
+        public String getFooter() { return footer; }
+        public void setFooter(String footer) { this.footer = footer; }
     }
 }

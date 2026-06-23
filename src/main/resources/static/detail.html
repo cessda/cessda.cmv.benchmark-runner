@@ -1092,7 +1092,7 @@
     </div>
   </main>
 
-  <footer>CESSDA FAIR Benchmark · <span id="footer-lang"></span> detail view</footer>
+  <footer><span id="footer-text">FAIR Benchmark</span> · <span id="footer-lang"></span></footer>
 
   <!-- Side panel -->
   <div class="detail-overlay" id="overlay" onclick="closePanel()"></div>
@@ -1147,8 +1147,8 @@
       showError('No set specified. Return to the dashboard and click a set row.');
     } else {
       document.getElementById('hdr-lang').textContent = lang;
-      document.getElementById('hdr-title').textContent = LANG_NAMES[lang] || lang;
-      document.getElementById('footer-lang').textContent = lang;
+      document.getElementById('hdr-title').textContent = (LANG_NAMES[lang] || lang) + ' — FAIR Assessment';
+      document.getElementById('footer-lang').textContent = (LANG_NAMES[lang] || lang) + ' view';
       document.title = `FAIR Benchmark · ${LANG_NAMES[lang] || lang}`;
     }
 
@@ -1170,11 +1170,29 @@
     async function loadData() {
       let summary;
       try {
-        const r = await apiFetch('/api/results/summary.json');
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        summary = await r.json();
+        const [brandingRes, summaryRes] = await Promise.all([
+          apiFetch('/api/tenant/branding'),
+          apiFetch('/api/results/summary.json')
+        ]);
+
+        if (brandingRes.ok) {
+          const branding = await brandingRes.json();
+          const setLabel = LANG_NAMES[lang] || lang;
+          if (branding.title) {
+            document.getElementById('hdr-title').textContent =
+              setLabel + ' — ' + branding.title;
+            document.title = setLabel + ' · ' + branding.title;
+          }
+          if (branding.footer) {
+            document.getElementById('footer-text').textContent = branding.footer;
+            document.getElementById('footer-lang').textContent = setLabel + ' view';
+          }
+        }
+
+        if (!summaryRes.ok) throw new Error(`HTTP ${summaryRes.status}`);
+        summary = await summaryRes.json();
       } catch (e) {
-        showError('Could not load /api/results/summary.json — run GenerateManifest first.' + e.message);
+        showError('Could not load /api/results/summary.json — run GenerateManifest first. ' + e.message);
         return;
       }
 

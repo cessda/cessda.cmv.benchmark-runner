@@ -12,10 +12,12 @@ server:
 #                         files and summary.json, resolved as
 #                         {results-dir}/{tenant-id}/
 #
-# ── Benchmark ───────────────────────────────────────────────────────
+# ── Benchmark Algorithm ───────────────────────────────────────────────────────
+# benchmark.algorithm - URI of the Benchmark Assessment Algorithm to use
+# benchmark.runner    - URI of the instance of FAIR Champion to run
 benchmark:
-  data-dir: ${DATA_DIR:/storage/guids}
-  results-dir: ${RESULTS_DIR:/storage/results}
+  data-dir: ./guids
+  results-dir: ./results
 
 # ── SpringDoc / Swagger UI ────────────────────────────────────────────────────
 springdoc:
@@ -25,9 +27,9 @@ springdoc:
     path: /api-docs/ui
     operationsSorter: alpha
   info:
-    title: FAIR Benchmark Champion API
-    description: REST API for the FAIR benchmark pipeline
-    version: 3.0.0
+    title: CESSDA FAIR Benchmark Runner API
+    description: REST API for the CESSDA CMV FAIR benchmark pipeline
+    version: 2.0.0
 
 # ── Static resources (HTML dashboard) ────────────────────────────────────────
 # Spring Boot serves src/main/resources/static/ at / by default.
@@ -50,10 +52,19 @@ tenants:
   keys:
     "key-cessda": "cessda"
     "key-oxford": "oxford"
+    
+  # Each tenant has its own Benchmark Assessment Algorithm and FAIR
+  # Champion runner — these are not shared across tenants, since one
+  # tenant's algorithm configuration is not meaningful for another
+  # tenant's data.
   config:
     cessda:
-      spreadsheetUri: https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw
-      championUri: https://tools.ostrails.eu/champion/assess/algorithm
+      algorithm: https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw
+      runner: https://tools.ostrails.eu/champion/assess/algorithm
+      title: CESSDA Data Catalogue · Assessment Results
+      footer: CESSDA FAIR Benchmark Dashboard
     oxford:
-      spreadsheetUri: https://docs.google.com/spreadsheets/d/1Lbo0KzlN-RPRJ5POqHKh8YE2GXSv0bnaKZzwkaCOP9M
-      championUri: https://champion.fairsharing.org/champion/assess/algorithm
+      algorithm: https://docs.google.com/spreadsheets/d/REPLACE_WITH_OXFORD_SHEET_ID
+      runner: https://tools.ostrails.eu/champion/assess/algorithm
+      title: Oxford Research Archive · Assessment Results
+      footer: Oxford FAIR Benchmark Dashboard
