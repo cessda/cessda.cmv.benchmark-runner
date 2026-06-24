@@ -65,8 +65,59 @@ tenants:
       runner: https://tools.ostrails.eu/champion/assess/algorithm
       title: CESSDA Data Catalogue · Assessment Results
       footer: CESSDA FAIR Benchmark Dashboard
+      set-names:
+        de: German
+        el: Greek
+        en: English
+        fi: Finnish
+        fr: French
+        hr: Croatian
+        nl: Dutch
+        sl: Slovenian
+        sl-SI: Slovenian (SI)
+        sv: Swedish
+      fair-map:
+        F1-PID: F
+        F1-GUID: F
+        F2A: F
+        F2B: F
+        F4: F
+        A1-1: A
+        A1-2: A
+        I1-A: I
+        I2-A: I
+        R1-2-CPI: R
+        R1-3-CEK: R
+        R1-3-CTV: R
+        R1-3-DMOCV: R
+        R1-3-DAUV: R
+        R1-3-DTMV: R
+        R1-3-DSPV: R
     oxford:
       algorithm: https://docs.google.com/spreadsheets/d/1Lbo0KzlN-RPRJ5POqHKh8YE2GXSv0bnaKZzwkaCOP9M
       runner: https://champion.fairsharing.org/champion/assess/algorithm
       title: Oxford Research Archive · Assessment Results
       footer: Oxford FAIR Benchmark Dashboard
+      set-names:
+        bhf: British Heart Foundation
+        epsrc: Engineering and Physical Sciences Research Council
+        mrc: Medical Research Council
+        nerc: Natural Environment Research Council
+        wellcome: Wellcome Trust
+      fair-map:
+        F1-PID: F
+        F1-GUID: F
+        F2A: F
+        F2B: F
+        F4: F
+        A1-1: A
+        A1-2: A
+        I1-A: I
+        I2-A: I
+        R1-2-CPI: R
+        R1-3-CEK: R
+        R1-3-CTV: R
+        R1-3-DMOCV: R
+        R1-3-DAUV: R
+        R1-3-DTMV: R
+        R1-3-DSPV: R

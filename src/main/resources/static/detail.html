@@ -1092,7 +1092,7 @@
     </div>
   </main>
 
-  <footer><span id="footer-text">FAIR Benchmark</span> · <span id="footer-lang"></span></footer>
+  <footer>CESSDA FAIR Benchmark · <span id="footer-lang"></span> detail view</footer>
 
   <!-- Side panel -->
   <div class="detail-overlay" id="overlay" onclick="closePanel()"></div>
@@ -1103,19 +1103,30 @@
   </div>
 
   <script>
-    // ── Constants (mirror GenerateManifest.java) ──────────────────────────────
-    const FAIR_MAP = {
-      'F1-PID': 'F', 'F1-GUID': 'F', 'F2A': 'F', 'F2B': 'F', 'F4': 'F',
-      'A1-1': 'A', 'A1-2': 'A',
-      'I1-A': 'I', 'I2-A': 'I',
-      'R1-2-CPI ': 'R', 'R1-2-CPI': 'R',
-      'R1-3-CEK': 'R', 'R1-3-CTV': 'R', 'R1-3-DMOCV': 'R',
-      'R1-3-DAUV': 'R', 'R1-3-DTMV': 'R', 'R1-3-DSPV': 'R'
-    };
-    const LANG_NAMES = {
-      de: 'German', el: 'Greek', en: 'English', fi: 'Finnish', fr: 'French',
-      hr: 'Croatian', nl: 'Dutch', sl: 'Slovenian', 'sl-SI': 'Slovenian (SI)', sv: 'Swedish'
-    };
+    // ── Tenant config (fetched from /api/config) ──────────────────────────────
+    // Both maps start empty; init() populates them before any rendering occurs.
+    let SET_NAMES = {};
+    let FAIR_MAP  = {};
+
+    // ── Tenant API key ────────────────────────────────────────────────────────
+    // Prefer the key from query string, otherwise fall back to the key stored
+    // by index.html in this tab's sessionStorage.
+    function getStoredApiKey() {
+      return sessionStorage.getItem('apiKey') || '';
+    }
+
+    const _apiKey = new URLSearchParams(window.location.search).get('key')
+      || getStoredApiKey();
+
+    if (_apiKey) {
+      sessionStorage.setItem('apiKey', _apiKey);
+    }
+
+    function apiFetch(url, options = {}) {
+      const headers = Object.assign({}, options.headers || {});
+      if (_apiKey) headers['X-API-Key'] = _apiKey;
+      return fetch(url, Object.assign({}, options, { headers }));
+    }
 
     // ── Maturity badge helper ─────────────────────────────────────────────────
     function maturityBadgeHTML(level) {
@@ -1135,23 +1146,6 @@
     let sortDir = 'asc';
     let currentRecords = []; // the currently displayed records (pre-sort)
 
-    // ── Lang init ─────────────────────────────────────────────────────────────
-    (function initLang() {
-      const qp = new URLSearchParams(window.location.search);
-      const hp = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-      lang = qp.get('lang') || hp.get('lang') || '';
-      if (lang) lang = decodeURIComponent(lang);
-    })();
-
-    if (!lang) {
-      showError('No set specified. Return to the dashboard and click a set row.');
-    } else {
-      document.getElementById('hdr-lang').textContent = lang;
-      document.getElementById('hdr-title').textContent = (LANG_NAMES[lang] || lang) + ' — FAIR Assessment';
-      document.getElementById('footer-lang').textContent = (LANG_NAMES[lang] || lang) + ' view';
-      document.title = `FAIR Benchmark · ${LANG_NAMES[lang] || lang}`;
-    }
-
     // ── Utilities ─────────────────────────────────────────────────────────────
     function pct(n, d) { return d ? Math.round((n / d) * 100) : 0; }
 
@@ -1170,29 +1164,11 @@
     async function loadData() {
       let summary;
       try {
-        const [brandingRes, summaryRes] = await Promise.all([
-          apiFetch('/api/tenant/branding'),
-          apiFetch('/api/results/summary.json')
-        ]);
-
-        if (brandingRes.ok) {
-          const branding = await brandingRes.json();
-          const setLabel = LANG_NAMES[lang] || lang;
-          if (branding.title) {
-            document.getElementById('hdr-title').textContent =
-              setLabel + ' — ' + branding.title;
-            document.title = setLabel + ' · ' + branding.title;
-          }
-          if (branding.footer) {
-            document.getElementById('footer-text').textContent = branding.footer;
-            document.getElementById('footer-lang').textContent = setLabel + ' view';
-          }
-        }
-
-        if (!summaryRes.ok) throw new Error(`HTTP ${summaryRes.status}`);
-        summary = await summaryRes.json();
+        const r = await apiFetch('/api/results/summary.json');
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        summary = await r.json();
       } catch (e) {
-        showError('Could not load /api/results/summary.json — run GenerateManifest first. ' + e.message);
+        showError('Could not load /api/results/summary.json — check your API key and manifest. ' + e.message);
         return;
       }
 
@@ -1276,31 +1252,6 @@
         <p class="test-sub">${t.toLocaleString()} records</p>`;
         grid.appendChild(cell);
       }
-    }
-
-    // ── API key handling ──────────────────────────────────────────────────
-    // Mirrors the implementation in index.html. The key stored in
-    // sessionStorage by index.html is automatically available here
-    // since both pages share the same origin and tab session.
-    // If no key is present (e.g. the user landed directly on this
-    // page without going through index.html first), they are
-    // redirected back to index.html to authenticate.
-
-    function getStoredApiKey() {
-      return sessionStorage.getItem('apiKey');
-    }
-
-    async function apiFetch(url, opts = {}) {
-      const key = getStoredApiKey();
-      if (!key) {
-        // No key in this session — send back to index.html to authenticate.
-        window.location.href = 'index.html';
-        return new Promise(() => { }); // prevent further execution
-      }
-      return fetch(url, {
-        ...opts,
-        headers: { ...(opts.headers || {}), 'X-API-Key': key }
-      });
     }
 
     // ── Pagination ────────────────────────────────────────────────────────────
@@ -1599,10 +1550,48 @@
       tbody.innerHTML = `<tr><td colspan="5" style="padding:20px;color:var(--fail)">${msg}</td></tr>`;
     }
 
-    // ── Also update index.html to load summary.json instead of manifest.json ──
-    // (index.html has its own script; this comment is just a reminder)
+    // ── Bootstrap ─────────────────────────────────────────────────────────────
+    // Fetch tenant config (set-names, fair-map) before rendering anything that
+    // depends on those maps.  Header text and page title are set here so they
+    // always reflect the fetched names.
+    async function init() {
+      // Resolve lang from URL first
+      (function initLang() {
+        const qp = new URLSearchParams(window.location.search);
+        const hp = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        lang = qp.get('lang') || hp.get('lang') || '';
+        if (lang) lang = decodeURIComponent(lang);
+      })();
 
-    if (lang) loadData();
+      if (!lang) {
+        showError('No set specified. Return to the dashboard and click a set row.');
+        return;
+      }
+      if (!_apiKey) {
+        showError('No API key found. Return to the dashboard and enter a valid key.');
+        return;
+      }
+
+      try {
+        const res = await apiFetch('api/config');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const cfg = await res.json();
+        SET_NAMES = cfg.setNames || {};
+        FAIR_MAP  = cfg.fairMap  || {};
+      } catch (e) {
+        // Non-fatal: fall back to empty maps; set codes display as-is.
+        console.warn('Could not load /api/config:', e.message);
+      }
+
+      document.getElementById('hdr-lang').textContent    = lang;
+      document.getElementById('hdr-title').textContent   = SET_NAMES[lang] || lang;
+      document.getElementById('footer-lang').textContent = lang;
+      document.title = `FAIR Benchmark · ${SET_NAMES[lang] || lang}`;
+
+      loadData();
+    }
+
+    init();
   </script>
 </body>
 
