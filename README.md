@@ -88,24 +88,41 @@ a single failure does not interrupt the rest of the batch.
 See [RunBenchmarkAssessment_README.md](RunBenchmarkAssessment_README.md)
 for full usage and options.
 
-### GenerateManifest
+PLACEHOLDER
+PLACEHOLDER
+PLACEHOLDER
+PLACEHOLDER
+PLACEHOLDER
+PLACEHOLDER
+PLACEHOLDER
+PLACEHOLDER
+PLACEHOLDER
+PLACEHOLDER
+PLACEHOLDER
+PLACEHOLDER
+PLACEHOLDER
 
-Scans the calling tenant's results directory and pre-processes the
-per-record JSON files into two artefacts used by the HTML dashboard.
-It writes a single `summary.json` containing aggregated pass, fail,
-and indeterminate counts broken down by set, test ID, and FAIR
-category (F, A, I, R). It also writes paginated
-`guids_<set>/pages/page-NNN.json` files (200 records per page)
-containing only the fields the browser needs, keeping page loads
-small.
+## HTTP API overview
 
-See [GenerateManifest_README.md](GenerateManifest_README.md) for full
-details of the output formats.
+All `/api/**` endpoints require an `X-API-Key` header. The key selects
+the current tenant before any data or configuration is read.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/api/config` | Tenant's `setNames` and `fairMap` |
+| `GET` | `/api/tenant/branding` | Tenant's dashboard title and footer |
+| `POST` | `/api/fetch-identifiers` | Fetch OAI-PMH identifiers |
+| `GET` | `/api/run-assessment/defaults` | Tenant's default algorithm and runner |
+| `GET` | `/api/run-assessment/guid-files` | List available `guids_*.txt` files |
+| `POST` | `/api/run-assessment` | Run FAIR Champion assessment |
+| `POST` | `/api/generate-manifest` | Generate dashboard manifest |
+| `GET` | `/api/results/summary.json` | Tenant's summary manifest |
+| `GET` | `/api/results/guids_{set}/pages/{page}` | Paginated record data |
 
 ## Multi-tenancy
 
 Each organisation using this deployment is a tenant. A tenant is
-identified by an API key, configured centrally in `application.yml`,
+identified by an API key, configured centrally in `application.yaml`,
 which maps to a tenant ID used to namespace that organisation's files
 on disk.
 
@@ -145,10 +162,10 @@ files, even if the same Spring Boot instance is serving both.
 
 ### Adding a new tenant
 
-Adding a tenant requires two steps: registering its API key, and
-creating its directories on disk.
+Adding a tenant requires three steps: registering its API key,
+configuring its properties, and creating its directories on disk.
 
-1. Add a new entry under `tenants.keys` in `application.yml`:
+1. Add a new entry under `tenants.keys` in `application.yaml`:
 
    ```yaml
    tenants:
@@ -162,10 +179,19 @@ creating its directories on disk.
    The map key is the secret the tenant will send in the `X-API-Key`
    header; the map value is the tenant ID used to namespace its files.
    Choose a strong, unique key for each tenant and keep it
-   confidential — anyone holding a tenant's key can read that
-   tenant's results.
+   confidential.
 
-2. Create matching subdirectories under the configured data and
+2. Add a matching `tenants.config.<tenant-id>` block with at least:
+
+   - `algorithm` — FAIR Champion algorithm URI
+   - `runner` — FAIR Champion runner URI
+   - `title` — dashboard page title
+   - `footer` — dashboard footer
+   - `set-names` — friendly set names
+   - `fair-map` — test ID to FAIR category mapping
+   - `maturity-levels` — tests required for each maturity level
+
+3. Create matching subdirectories under the configured data and
    results directories:
 
    ```bash
@@ -177,7 +203,7 @@ creating its directories on disk.
    it does not already exist. It is shown here for clarity and is
    useful when pre-seeding a tenant's results manually.
 
-3. Restart the application so the new `application.yml` entry is
+4. Restart the application so the new `application.yaml` entry is
    loaded.
 
 No code changes are required to add a tenant.
@@ -246,7 +272,7 @@ non-functional files have been omitted.
 │   │   ├── java        # Contains release source code of the
 │   │   │                 application
 │   │   ├── resources   # Contains release resource assets, including
-│   │   │                 application.yml, index.html, and detail.html
+│   │   │                 application.yaml, index.html, and detail.html
 │   │   └── webapp
 │   └── test
 │       ├── java        # Contains test source code

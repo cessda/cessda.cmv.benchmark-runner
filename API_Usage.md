@@ -10,11 +10,21 @@ Interactive documentation is also available via Swagger UI at
 
 ## Contents
 
+- [Authentication](#authentication)
 - [1. Fetch OAI-PMH Identifiers](#1-fetch-oai-pmh-identifiers)
 - [2. Run Benchmark Assessment](#2-run-benchmark-assessment)
 - [3. Generate Dashboard Manifest](#3-generate-dashboard-manifest)
+- [4. Tenant and dashboard endpoints](#4-tenant-and-dashboard-endpoints)
 - [Response format](#response-format)
 - [Running the full pipeline](#running-the-full-pipeline)
+
+## Authentication
+
+All `/api/**` requests require an `X-API-Key` header:
+
+```bash
+-H "X-API-Key: key-cessda"
+```
 
 ## Response format
 
@@ -217,7 +227,9 @@ curl -X POST \
 
 | Parameter        | Default value                                            |
 |------------------|----------------------------------------------------------|
-| `spreadsheetUri` | The current tenant's configured algorithm URI |
+| `spreadsheetUri` | The current tenant's configured algorithm URI            |
+| `runnerUri`      | The current tenant's configured runner URI               |
+| `guidFiles`      | *(none)*                                                 |
 | `guidFile`       | `guids_hr.txt` *(when no mode parameter is supplied)*    |
 | `guid`           | *(none)*                                                 |
 | `processAll`     | `false`                                                  |
@@ -225,9 +237,10 @@ curl -X POST \
 Parameter priority when multiple are supplied:
 
 1. `guid` — single URL, processed immediately
-2. `guidFile` — single named file
-3. `processAll=true` — all default set files
-4. *(none)* — default file (`guids_hr.txt`)
+2. `guidFiles` — selected file list
+3. `guidFile` — single named file
+4. `processAll=true` — all default set files
+5. *(none)* — default file (`guids_hr.txt`)
 
 ## 3. Generate Dashboard Manifest
 
@@ -301,6 +314,59 @@ calling `/api/generate-manifest`.
 | Parameter    | Default value                               |
 |--------------|---------------------------------------------|
 | `resultsDir` | The configured `benchmark.results-dir` path |
+
+## 4. Tenant and dashboard endpoints
+
+### `GET /api/config`
+
+Returns the current tenant's dashboard lookup maps:
+
+```json
+{
+  "setNames": { "de": "German", "en": "English" },
+  "fairMap": { "F1-GUID": "F", "A1-1": "A" }
+}
+```
+
+### `GET /api/tenant/branding`
+
+Returns the current tenant's dashboard title and footer:
+
+```json
+{
+  "title": "CESSDA · Assessment Results",
+  "footer": "CESSDA FAIR Benchmark"
+}
+```
+
+### `GET /api/run-assessment/defaults`
+
+Returns the tenant's effective default algorithm and runner URIs:
+
+```json
+{
+  "algorithm": "https://example.org/algorithm",
+  "runner": "https://example.org/runner"
+}
+```
+
+### `GET /api/run-assessment/guid-files`
+
+Lists available `guids_*.txt` files for the current tenant:
+
+```json
+{
+  "files": ["guids_de.txt", "guids_en.txt", "guids_fr.txt"]
+}
+```
+
+### Dashboard data endpoints
+
+The following endpoints serve pre-generated manifest data to the
+dashboard. Both require the same `X-API-Key` header:
+
+- `GET /api/results/summary.json` — overall and per-set statistics
+- `GET /api/results/guids_{set}/pages/page-NNN.json` — paginated record data
 
 ## Running the full pipeline
 

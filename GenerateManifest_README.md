@@ -131,31 +131,14 @@ parameter of the `testedguid` URL.
 
 ## FAIR category mapping
 
-Test identifiers are mapped to FAIR categories as follows:
+Test identifiers are mapped to FAIR categories via the current tenant's
+`fair-map` configuration in `application.yaml`. Unmapped identifiers are
+categorised by their first character if it is one of `F`, `A`, `I`, or `R`.
+Identifiers that cannot be mapped are excluded from FAIR category counts
+but still appear in the per-test breakdown.
 
-| Test ID      | Category |
-|--------------|----------|
-| F1-PID       | F        |
-| F1-GUID      | F        |
-| F2A          | F        |
-| F2B          | F        |
-| F4           | F        |
-| A1-1         | A        |
-| A1-2         | A        |
-| I1-A         | I        |
-| I2-A         | I        |
-| R1-2-CPI     | R        |
-| R1-3-CEK     | R        |
-| R1-3-CTV     | R        |
-| R1-3-DMOCV   | R        |
-| R1-3-DAUV    | R        |
-| R1-3-DTMV    | R        |
-| R1-3-DSPV    | R        |
-
-Any test identifier not in the table above is mapped by its first
-character if that character is one of `F`, `A`, `I`, or `R`.
-Identifiers that cannot be mapped are excluded from FAIR category
-counts but still appear in the per-test breakdown.
+See the tenant configuration section in the README for details on how to
+configure the `fair-map` for your deployment.
 
 ## How it works
 
@@ -165,10 +148,12 @@ counts but still appear in the per-test breakdown.
    with `error_` are collected and sorted.
 3. Each file is parsed; `test_results` fields are aggregated into pass,
    fail, and indeterminate counts, broken down by test ID and FAIR
-   category.
-4. A slim record object is built for each file and buffered. When the
+   category (using the tenant's `fair-map` configuration).
+4. Per-record maturity level is computed based on the tenant's
+   `maturity-levels` configuration.
+5. A slim record object is built for each file and buffered. When the
    buffer reaches 200 records it is flushed to the next page file.
-5. After all sets are processed, `summary.json` is written with
+6. After all sets are processed, `summary.json` is written with
    the per-set and overall aggregated statistics.
 
 ## Dependencies
