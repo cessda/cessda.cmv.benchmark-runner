@@ -75,12 +75,12 @@ class GetOaiPmhIdentifiersTest {
     }
 
     @Test
-    void defaultSetsContainsTenLanguages() {
+    void defaultSetsContainsTenSets() {
         assertEquals(10, GetOaiPmhIdentifiers.DEFAULT_SETS.length);
     }
 
     @Test
-    void defaultSetsContainsExpectedLanguageCodes() {
+    void defaultSetsContainsExpectedSetCodes() {
         List<String> sets = List.of(GetOaiPmhIdentifiers.DEFAULT_SETS);
         assertAll(
                 () -> assertTrue(sets.contains("de")),

@@ -64,11 +64,11 @@ tenant never reads or writes another tenant's files.
 
 Queries an OAI-PMH endpoint using the `ListIdentifiers` verb,
 following resumption tokens until all pages have been retrieved. For
-each language set it writes a `guids_<lang>.txt` file, under the
+each set it writes a `guids_<lang>.txt` file, under the
 calling tenant's data directory, in which every non-comment line is a
 complete OAI-PMH `GetRecord` URL ready for the next stage. By default
 it targets the CESSDA Data Catalogue endpoint and processes ten
-language sets (`de`, `el`, `en`, `fi`, `fr`, `hr`, `nl`, `sl`,
+sets (`de`, `el`, `en`, `fi`, `fr`, `hr`, `nl`, `sl`,
 `sl-SI`, `sv`).
 
 See [GetOaiPmhIdentifiers_README.md](GetOaiPmhIdentifiers_README.md)
@@ -93,7 +93,7 @@ for full usage and options.
 Scans the calling tenant's results directory and pre-processes the
 per-record JSON files into two artefacts used by the HTML dashboard.
 It writes a single `summary.json` containing aggregated pass, fail,
-and indeterminate counts broken down by language, test ID, and FAIR
+and indeterminate counts broken down by set, test ID, and FAIR
 category (F, A, I, R). It also writes paginated
 `guids_<lang>/pages/page-NNN.json` files (200 records per page)
 containing only the fields the browser needs, keeping page loads
@@ -211,7 +211,7 @@ API) is still supported for local development, using Maven from the
 project root:
 
 ```bash
-# 1. Fetch identifiers for all default language sets
+# 1. Fetch identifiers for all default sets
 mvn exec:java \
   -Dexec.mainClass="cessda.cmv.benchmark.GetOaiPmhIdentifiers"
 

@@ -1172,7 +1172,7 @@
         return;
       }
 
-      const ls = summary.languages && summary.languages[set];
+      const ls = summary.sets && summary.sets[set];
       if (!ls) {
         showError(`No data found for set "${set}" in summary.json.`);
         return;

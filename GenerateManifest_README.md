@@ -5,12 +5,12 @@ the HTML dashboard.
 
 ## Overview
 
-`GenerateManifest` scans a `results/` directory for per-language
+`GenerateManifest` scans a `results/` directory for per-set
 subdirectories (each named `guids_<lang>/`) and produces:
 
 - `results/summary.json` — fully aggregated statistics for every
   set and overall totals. Loaded once by both `index.html` and
-  `language.html`; no individual record files are fetched by the
+  `detail.html`; no individual record files are fetched by the
   browser.
 - `results/guids_<lang>/pages/page-NNN.json` — slim, paginated slices
   of the record list (200 records per page). Only the current page is
@@ -91,7 +91,7 @@ If `resultsDir` is omitted it defaults to `./results`.
       "F1-GUID": { "pass": 900, "fail": 200, "indet": 100 }
     }
   },
-  "languages": {
+  "sets": {
     "de": {
       "records": 120,
       "pageCount": 1,
@@ -105,9 +105,9 @@ If `resultsDir` is omitted it defaults to `./results`.
 }
 ```
 
-The `overall` block aggregates across all languages. Each entry in
-`languages` contains the same fields plus `pageCount` (the number of
-page files written for that language).
+The `overall` block aggregates across all sets. Each entry in
+`sets` contains the same fields plus `pageCount` (the number of
+page files written for that set).
 
 ## page-NNN.json structure
 
@@ -168,7 +168,7 @@ counts but still appear in the per-test breakdown.
    category.
 4. A slim record object is built for each file and buffered. When the
    buffer reaches 200 records it is flushed to the next page file.
-5. After all languages are processed, `summary.json` is written with
+5. After all sets are processed, `summary.json` is written with
    the per-set and overall aggregated statistics.
 
 ## Dependencies

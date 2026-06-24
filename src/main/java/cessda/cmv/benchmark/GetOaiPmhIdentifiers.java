@@ -238,7 +238,7 @@ public class GetOaiPmhIdentifiers {
         String url = oaiPmhBaseUrl
                 + "?verb=" + URLEncoder.encode(verb, StandardCharsets.UTF_8)
                 + "&metadataPrefix=" + DEFAULT_METADATA_PREFIX
-                + "&set=language:" + URLEncoder.encode(set, StandardCharsets.UTF_8);
+                + "&set=set:" + URLEncoder.encode(set, StandardCharsets.UTF_8);
 
         int page = 1;
         while (url != null) {

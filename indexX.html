@@ -559,7 +559,7 @@
 
   function renderDashboard(summary) {
     const ov = summary.overall;
-    const langs = summary.languages || {};
+    const langs = summary.sets || {};
     const totalTests = ov.pass + ov.fail + ov.indet;
 
     document.getElementById('kpi-total').textContent = ov.records.toLocaleString();

@@ -69,12 +69,12 @@ class RunBenchmarkAssessmentTest {
         }
 
         @Test
-        void defaultSetsContainsTenLanguages() {
+        void defaultSetsContainsTenSets() {
                 assertEquals(10, RunBenchmarkAssessment.DEFAULT_SETS.length);
         }
 
         @Test
-        void defaultSetsContainsExpectedLanguageCodes() {
+        void defaultSetsContainsExpectedSetCodes() {
                 List<String> sets = List.of(RunBenchmarkAssessment.DEFAULT_SETS);
                 assertAll(
                                 () -> assertTrue(sets.contains("de")),

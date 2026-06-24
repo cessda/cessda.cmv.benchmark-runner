@@ -85,7 +85,7 @@ class WebConfigTest {
 
         String summaryContent =
             "{\"generated\":\"2026-01-01T00:00:00Z\","
-            + "\"overall\":{},\"languages\":{}}";
+            + "\"overall\":{},\"sets\":{}}";
         Files.writeString(
             resultsDir.resolve("summary.json"),
             summaryContent,
