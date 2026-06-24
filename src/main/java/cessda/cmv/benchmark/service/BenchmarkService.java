@@ -264,6 +264,7 @@ public class BenchmarkService {
     // ── 3. Generate Manifest ─────────────────────────────────────────────────
 
     public String generateManifest(String overrideResultsDir) throws IOException {
+        TenantConfig cfg = currentTenantConfig();
         Path targetDir = (overrideResultsDir != null && !overrideResultsDir.isBlank())
                 ? Path.of(overrideResultsDir).toAbsolutePath().normalize()
                 : tenantResultsDir();   // <-- tenant-scoped by default
@@ -272,7 +273,13 @@ public class BenchmarkService {
             throw new IOException("Results directory not found: " + targetDir);
         }
 
-        new GenerateManifest(targetDir).run();
+        new GenerateManifest(
+                targetDir,
+                cfg.getFairMap(),
+                cfg.getMaturityLevels().getLevel1(),
+                cfg.getMaturityLevels().getLevel2(),
+                cfg.getMaturityLevels().getLevel3())
+            .run();
         return "Manifest generated in: " + targetDir;
     }
 

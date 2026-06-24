@@ -578,9 +578,6 @@
       border-radius: 3px;
       font-weight: 500;
       letter-spacing: 0.2px;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
     }
 
     .chip.pass {
@@ -595,6 +592,34 @@
 
     .chip.indet {
       background: var(--indet-bg);
+      color: var(--indet);
+    }
+
+    .chip.fair {
+      border: 1px solid var(--border2);
+      background: var(--bg);
+      color: var(--text);
+      letter-spacing: 0;
+    }
+
+    .chip.fair .chip-key {
+      font-weight: 700;
+      margin-right: 4px;
+    }
+
+    .chip.fair.fair-F .chip-key {
+      color: var(--navy);
+    }
+
+    .chip.fair.fair-A .chip-key {
+      color: var(--pass);
+    }
+
+    .chip.fair.fair-I .chip-key {
+      color: var(--purple);
+    }
+
+    .chip.fair.fair-R .chip-key {
       color: var(--indet);
     }
 
@@ -756,6 +781,53 @@
       margin-left: auto;
       font-size: 11px;
       color: var(--muted);
+    }
+
+    .fair-summary-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .fair-summary-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: var(--bg);
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      font-size: 12px;
+    }
+
+    .fair-summary-letter {
+      min-width: 18px;
+      font-family: 'Fraunces', serif;
+      font-size: 17px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .fair-summary-letter.F {
+      color: var(--navy);
+    }
+
+    .fair-summary-letter.A {
+      color: var(--pass);
+    }
+
+    .fair-summary-letter.I {
+      color: var(--purple);
+    }
+
+    .fair-summary-letter.R {
+      color: var(--indet);
+    }
+
+    .fair-summary-counts {
+      color: var(--muted);
+      font-size: 11px;
+      margin-left: auto;
     }
 
     .narrative-list {
@@ -1110,7 +1182,6 @@
     // Both maps start empty; init() populates them before any rendering occurs.
     let SET_NAMES = {};
     let FAIR_MAP  = {};
-    let FAIR_MAP_NORMALISED = {};
 
     // ── Tenant API key ────────────────────────────────────────────────────────
     // Prefer the key from query string, otherwise fall back to the key stored
@@ -1149,45 +1220,82 @@
     let sortCol = null;   // 'identifier' | 'score' | 'maturity'
     let sortDir = 'asc';
     let currentRecords = []; // the currently displayed records (pre-sort)
+    const FAIR_DIMENSIONS = ['F', 'A', 'I', 'R'];
 
     // ── Utilities ─────────────────────────────────────────────────────────────
     function pct(n, d) { return d ? Math.round((n / d) * 100) : 0; }
 
-    function normaliseTestId(testId) {
-      return (testId || '')
-        .trim()
-        .toUpperCase()
-        .replace(/[\s-]+/g, '_');
-    }
-
-    function normaliseFairCategory(category) {
-      const cat = (category || '').trim().toUpperCase();
-      return ['F', 'A', 'I', 'R'].includes(cat) ? cat : null;
-    }
-
-    function buildNormalisedFairMap(fairMap) {
-      const normalised = {};
-      for (const [testId, category] of Object.entries(fairMap || {})) {
-        const key = normaliseTestId(testId);
-        const cat = normaliseFairCategory(category);
-        if (key && cat) normalised[key] = cat;
-      }
-      return normalised;
-    }
-
     function fairCategory(testId) {
-      const t = (testId || '').trim();
-      if (!t) return null;
+      if (FAIR_MAP[testId]) {
+        const cat = String(FAIR_MAP[testId]).trim().toUpperCase();
+        return FAIR_DIMENSIONS.includes(cat) ? cat : null;
+      }
+      const t = testId.trim();
+      if (FAIR_MAP[t]) {
+        const cat = String(FAIR_MAP[t]).trim().toUpperCase();
+        return FAIR_DIMENSIONS.includes(cat) ? cat : null;
+      }
+      const fallback = (t[0] || '').toUpperCase();
+      return FAIR_DIMENSIONS.includes(fallback) ? fallback : null;
+    }
 
-      const direct = normaliseFairCategory(FAIR_MAP[testId])
-        || normaliseFairCategory(FAIR_MAP[t]);
-      if (direct) return direct;
+    function normaliseResultValue(result) {
+      if (result === 'pass' || result === 'fail' || result === 'indeterminate') {
+        return result;
+      }
+      return null;
+    }
 
-      const mapped = FAIR_MAP_NORMALISED[normaliseTestId(t)];
-      if (mapped) return mapped;
+    function buildFairSummary(results) {
+      const summary = {};
+      FAIR_DIMENSIONS.forEach(cat => {
+        summary[cat] = { pass: 0, fail: 0, indeterminate: 0, total: 0 };
+      });
+      for (const [tid, value] of Object.entries(results || {})) {
+        const cat = fairCategory(tid);
+        const result = normaliseResultValue(value && value.result);
+        if (!cat || !result) continue;
+        summary[cat][result] += 1;
+        summary[cat].total += 1;
+      }
+      return summary;
+    }
 
-      const first = t[0].toUpperCase();
-      return ['F', 'A', 'I', 'R'].includes(first) ? first : null;
+    function fairSummaryText(summary) {
+      return FAIR_DIMENSIONS
+        .filter(cat => (summary[cat] && summary[cat].total > 0))
+        .map(cat => {
+          const row = summary[cat];
+          return `${cat}: ${row.pass} pass, ${row.fail} fail, `
+            + `${row.indeterminate} indeterminate`;
+        })
+        .join('; ');
+    }
+
+    function fairSummaryChipsHtml(summary) {
+      return FAIR_DIMENSIONS
+        .filter(cat => (summary[cat] && summary[cat].total > 0))
+        .map(cat => {
+          const row = summary[cat];
+          return `<span class="chip fair fair-${cat}" title="${cat}: ${row.pass} pass, ${row.fail} fail, ${row.indeterminate} indeterminate">
+            <span class="chip-key">${cat}</span>P:${row.pass} F:${row.fail} I:${row.indeterminate}
+          </span>`;
+        })
+        .join('');
+    }
+
+    function fairSummaryRowsHtml(summary) {
+      return FAIR_DIMENSIONS
+        .filter(cat => (summary[cat] && summary[cat].total > 0))
+        .map(cat => {
+          const row = summary[cat];
+          return `<div class="fair-summary-row">
+            <span class="fair-summary-letter ${cat}" aria-hidden="true">${cat}</span>
+            <span>${row.pass} pass · ${row.fail} fail · ${row.indeterminate} indeterminate</span>
+            <span class="fair-summary-counts">${row.total} tests</span>
+          </div>`;
+        })
+        .join('');
     }
 
     function pageUrl(p) {
@@ -1460,20 +1568,14 @@
 
       for (const rec of records) {
         const results = rec.test_results || {};
+        const fairSummary = buildFairSummary(results);
+        const fairSummaryTextValue = fairSummaryText(fairSummary);
         const netScore = rec.netScore != null
           ? rec.netScore
           : Object.values(results).reduce((s, v) => s + (v.weight || 0), 0);
         const scoreClass = netScore > 0 ? 'pos' : netScore < 0 ? 'neg' : 'zero';
         const matLevel = rec.maturity != null ? rec.maturity : 0;
-
-        const chips = Object.entries(results).map(([tid, v]) => {
-          const cls = v.result === 'indeterminate' ? 'indet' : v.result;
-          const cat = fairCategory(tid);
-          const fairBadge = cat
-            ? `<span class="test-fair-badge badge-${cat}">${cat}</span>`
-            : '';
-          return `<span class="chip ${cls}">${tid.trim()}${fairBadge}</span>`;
-        });
+        const chips = fairSummaryChipsHtml(fairSummary);
 
         const identifier = rec.identifier || extractIdentifier(rec.testedguid || '');
         const shortId = identifier.length > 20
@@ -1484,10 +1586,10 @@
         tr.setAttribute('tabindex', '0');
         tr.setAttribute('role', 'button');
         tr.setAttribute('aria-label',
-          `Record ${shortId}, net score ${netScore > 0 ? '+' : ''}${Number(netScore).toFixed(1)}, maturity level ${matLevel}. Press Enter to view details.`);
+          `Record ${shortId}, FAIR summary ${fairSummaryTextValue || 'not available'}, net score ${netScore > 0 ? '+' : ''}${Number(netScore).toFixed(1)}, maturity level ${matLevel}. Press Enter to view details.`);
         tr.innerHTML = `
         <td class="guid-cell" title="${identifier}">${shortId}</td>
-        <td><div class="result-chips">${chips.join('')}</div></td>
+        <td><div class="result-chips">${chips}</div></td>
         <td><span class="score-col ${scoreClass}">${netScore > 0 ? '+' : ''}${Number(netScore).toFixed(1)}</span></td>
         <td>${maturityBadgeHTML(matLevel)}</td>
         <td style="color:var(--muted);font-size:16px" aria-hidden="true">→</td>`;
@@ -1510,15 +1612,21 @@
     // ── Detail side panel ─────────────────────────────────────────────────────
     function openPanel(rec) {
       const results = rec.test_results || {};
+      const fairSummary = buildFairSummary(results);
+      const fairSummaryRows = fairSummaryRowsHtml(fairSummary);
       const identifier = rec.identifier || extractIdentifier(rec.testedguid || '');
       const guid = rec.testedguid || '';
 
-      const testRows = Object.entries(results).map(([tid, v]) => `
+      const testRows = Object.entries(results).map(([tid, v]) => {
+        const cat = fairCategory(tid);
+        return `
       <div class="test-row">
         <span class="test-row-id">${tid.trim()}</span>
+        ${cat ? `<span class="test-fair-badge badge-${cat}">${cat}</span>` : ''}
         <span class="test-row-result ${v.result === 'indeterminate' ? 'indeterminate' : v.result}">${v.result}</span>
         <span class="test-row-weight">weight: ${v.weight}</span>
-      </div>`).join('');
+      </div>`;
+      }).join('');
 
       const narrativeRows = (rec.narratives || []).map(n => {
         const cls = n.toLowerCase().startsWith('unacceptable') ? 'unacceptable' : 'acceptable';
@@ -1548,6 +1656,10 @@
       <p class="panel-guid" id="panel-heading">
         <a href="${guid}" target="_blank" rel="noopener noreferrer">${identifier}</a>
       </p>
+      ${fairSummaryRows ? `<div class="panel-section">
+        <p class="panel-section-title">FAIR Summary</p>
+        <div class="fair-summary-list">${fairSummaryRows}</div>
+      </div>` : ''}
       <div class="panel-section">
         <p class="panel-section-title">Test Results</p>
         <div class="test-list">${testRows}</div>
@@ -1611,16 +1723,14 @@
       }
 
       try {
-        const res = await apiFetch('api/config');
+        const res = await apiFetch('/api/config');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const cfg = await res.json();
         SET_NAMES = cfg.setNames || {};
         FAIR_MAP  = cfg.fairMap  || {};
-        FAIR_MAP_NORMALISED = buildNormalisedFairMap(FAIR_MAP);
       } catch (e) {
         // Non-fatal: fall back to empty maps; set codes display as-is.
         console.warn('Could not load /api/config:', e.message);
-        FAIR_MAP_NORMALISED = {};
       }
 
       document.getElementById('hdr-set').textContent    = set;

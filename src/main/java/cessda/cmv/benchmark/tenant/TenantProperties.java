@@ -2,6 +2,7 @@ package cessda.cmv.benchmark.tenant;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -103,6 +104,7 @@ public class TenantProperties {
 
         private Map<String, String> setNames = new LinkedHashMap<>();
         private Map<String, String> fairMap  = new LinkedHashMap<>();
+        private MaturityLevels maturityLevels = new MaturityLevels();
 
         @NotBlank
         private String title;
@@ -132,7 +134,16 @@ public class TenantProperties {
         public void setSetNames(Map<String, String> setNames) { this.setNames = setNames; }
 
         public Map<String, String> getFairMap() { return fairMap; }
-        public void setFairMap(Map<String, String> fairMap) { this.fairMap = fairMap; }
+        public void setFairMap(Map<String, String> fairMap) {
+            this.fairMap = fairMap != null ? fairMap : new LinkedHashMap<>();
+        }
+
+        public MaturityLevels getMaturityLevels() { return maturityLevels; }
+        public void setMaturityLevels(MaturityLevels maturityLevels) {
+            this.maturityLevels = maturityLevels != null
+                ? maturityLevels
+                : new MaturityLevels();
+        }
 
         public String effectiveAlgorithm() {
             if (algorithm != null && !algorithm.isBlank()) {
@@ -146,6 +157,28 @@ public class TenantProperties {
                 return runner;
             }
             return championUri;
+        }
+
+        public static class MaturityLevels {
+
+            private List<String> level1 = List.of();
+            private List<String> level2 = List.of();
+            private List<String> level3 = List.of();
+
+            public List<String> getLevel1() { return level1; }
+            public void setLevel1(List<String> level1) {
+                this.level1 = level1 != null ? level1 : List.of();
+            }
+
+            public List<String> getLevel2() { return level2; }
+            public void setLevel2(List<String> level2) {
+                this.level2 = level2 != null ? level2 : List.of();
+            }
+
+            public List<String> getLevel3() { return level3; }
+            public void setLevel3(List<String> level3) {
+                this.level3 = level3 != null ? level3 : List.of();
+            }
         }
     }
 }

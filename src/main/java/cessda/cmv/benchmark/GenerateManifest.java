@@ -23,9 +23,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.logging.Logger;
 
@@ -79,73 +81,18 @@ public class GenerateManifest {
 
     private static final int PAGE_SIZE = 200;
 
-    /**
-     * Canonical test ID -> FAIR category. Keys are the normalised (uppercase, underscore)
-     * forms — the single source of truth for all 16 recognised tests.
-     */
-    private static final Map<String, String> FAIR_MAP = new LinkedHashMap<>();
-    static {
-        FAIR_MAP.put("F1_PID_ADHU", "F");
-        FAIR_MAP.put("F1_GUID",     "F");
-        FAIR_MAP.put("F2A",         "F");
-        FAIR_MAP.put("F2B",         "F");
-        FAIR_MAP.put("F4",          "F");
-        FAIR_MAP.put("A1_1",        "A");
-        //FAIR_MAP.put("A1_2",        "A");
-        FAIR_MAP.put("I1_A",        "I");
-        FAIR_MAP.put("I2_A",        "I");
-        FAIR_MAP.put("R1_2_CPI",    "R");
-        FAIR_MAP.put("R1_3_CEK",    "R");
-        FAIR_MAP.put("R1_3_CTV",    "R");
-        FAIR_MAP.put("R1_3_DMOCV",  "R");
-        FAIR_MAP.put("R1_3_DAUV",   "R");
-        FAIR_MAP.put("R1_3_DTMV",   "R");
-        FAIR_MAP.put("R1_3_DSPV",   "R");
-    }
+    private static final List<String> FAIR_CATEGORIES = List.of("F", "A", "I", "R");
 
     /**
-     * Normalise a test ID to the canonical form used in MATURITY_* sets:
-     * trim, uppercase, replace hyphens and whitespace with underscores.
+     * Normalise a test ID to the canonical form used in tenant FAIR and
+     * maturity configuration: trim, uppercase, replace hyphens and
+     * whitespace with underscores.
      * e.g. "F1-GUID" -> "F1_GUID", "R1-2-CPI " -> "R1_2_CPI"
      */
     private static String normTestId(String raw) {
         return raw.trim().toUpperCase()
                   .replace('-', '_')
                   .replaceAll("\\s+", "_");
-    }
-
-    /** Tests required for Maturity Level 1 (normalised IDs). */
-    private static final java.util.Set<String> MATURITY_L1 = java.util.Set.of(
-        "F1_GUID", "F2B", "F4", "A1_1" // "A1_2"
-    );
-
-    /** Tests required for Maturity Level 2 (superset of L1). */
-    private static final java.util.Set<String> MATURITY_L2;
-    static {
-        var s = new java.util.HashSet<>(MATURITY_L1);
-        s.addAll(java.util.List.of("F2A", "I1_A", "R1_2_CPI"));
-        MATURITY_L2 = java.util.Collections.unmodifiableSet(s);
-    }
-
-    /** Tests required for Maturity Level 3 (superset of L2). */
-    private static final java.util.Set<String> MATURITY_L3;
-    static {
-        var s = new java.util.HashSet<>(MATURITY_L2);
-        s.addAll(java.util.List.of(
-            "F1_PID_ADHU", "I2_A", "R1_3_CEK", "R1_3_CTV",
-            "R1_3_DMOCV", "R1_3_DAUV", "R1_3_DTMV", "R1_3_DSPV"
-        ));
-        MATURITY_L3 = java.util.Collections.unmodifiableSet(s);
-    }
-
-    /**
-     * Compute the maturity level (0-3) for a set of normalised passing test IDs.
-     */
-    private static int computeMaturity(java.util.Set<String> passedNorm) {
-        if (passedNorm.containsAll(MATURITY_L3)) return 3;
-        if (passedNorm.containsAll(MATURITY_L2)) return 2;
-        if (passedNorm.containsAll(MATURITY_L1)) return 1;
-        return 0;
     }
 
     private static final Logger LOG = Logger.getLogger(GenerateManifest.class.getName());
@@ -166,7 +113,7 @@ public class GenerateManifest {
         }
 
         LOG.info("Scanning " + resultsDir + " ...");
-        new GenerateManifest(resultsDir).run();
+        new GenerateManifest(resultsDir, Map.of(), List.of(), List.of(), List.of()).run();
     }
 
     // ── Fields ───────────────────────────────────────────────────────────────
@@ -174,11 +121,24 @@ public class GenerateManifest {
     private final Path resultsDir;
     private final ObjectMapper mapper = new ObjectMapper();
     private final Map<String, SetStats> setStats = new TreeMap<>();
+    private final Map<String, String> fairMap;
+    private final Set<String> maturityLevel1Tests;
+    private final Set<String> maturityLevel2Tests;
+    private final Set<String> maturityLevel3Tests;
 
     // ── Constructor ──────────────────────────────────────────────────────────
 
-    public GenerateManifest(Path resultsDir) {
+    public GenerateManifest(
+            Path resultsDir,
+            Map<String, String> fairMap,
+            List<String> maturityLevel1,
+            List<String> maturityLevel2,
+            List<String> maturityLevel3) {
         this.resultsDir = resultsDir;
+        this.fairMap = normaliseFairMap(fairMap);
+        this.maturityLevel1Tests = normaliseTestIdSet(maturityLevel1);
+        this.maturityLevel2Tests = normaliseTestIdSet(maturityLevel2);
+        this.maturityLevel3Tests = normaliseTestIdSet(maturityLevel3);
     }
 
     /** 
@@ -228,7 +188,7 @@ public class GenerateManifest {
         }
         LOG.info(String.format("  %d result file(s) found", files.size()));
 
-        SetStats stats = new SetStats(set);
+        SetStats stats = new SetStats(set, fairMap);
         setStats.put(set, stats);
 
         // Create (or clear) the pages directory
@@ -283,7 +243,9 @@ public class GenerateManifest {
             slim.put("testedguid",  testedGuid);
             slim.put("netScore",    netScore);
             slim.put("maturity",    recMaturity);
-            // Rewrite test_results with normalised canonical IDs, dropping unknowns
+            // Rewrite test_results with normalised test IDs.
+            // Keep all tests so tenant-specific mappings (e.g. Oxford) can
+            // still be categorised client-side via /api/config fair-map.
             if (testResults.isObject()) {
                 ObjectNode normResults = mapper.createObjectNode();
                 @SuppressWarnings("deprecation")
@@ -291,9 +253,7 @@ public class GenerateManifest {
                 while (slimFields.hasNext()) {
                     var e = slimFields.next();
                     String normId = normTestId(e.getKey());
-                    if (FAIR_MAP.containsKey(normId)) {
-                        normResults.set(normId, e.getValue());
-                    }
+                    normResults.set(normId, e.getValue());
                 }
                 slim.set("test_results", normResults);
             }
@@ -354,14 +314,14 @@ public class GenerateManifest {
         root.put("generated", java.time.Instant.now().toString());
 
         // Overall aggregation
-        SetStats overall = new SetStats("_overall");
+        SetStats overall = new SetStats("_overall", fairMap);
         for (SetStats ls : setStats.values()) {
             overall.records += ls.records;
             overall.pass    += ls.pass;
             overall.fail    += ls.fail;
             overall.indet   += ls.indet;
             for (int i = 0; i < 4; i++) overall.maturityCounts[i] += ls.maturityCounts[i];
-            for (String cat : List.of("F","A","I","R")) {
+            for (String cat : FAIR_CATEGORIES) {
                 overall.fair.get(cat)[0] += ls.fair.get(cat)[0];
                 overall.fair.get(cat)[1] += ls.fair.get(cat)[1];
             }
@@ -424,7 +384,7 @@ public class GenerateManifest {
         node.set("maturityDistribution", matDist);
 
         ObjectNode fairNode = mapper.createObjectNode();
-        for (String cat : List.of("F","A","I","R")) {
+        for (String cat : FAIR_CATEGORIES) {
             int[] d = s.fair.get(cat);
             ObjectNode c = mapper.createObjectNode();
             c.put("pass",  d[0]);
@@ -459,27 +419,46 @@ public class GenerateManifest {
         return amp >= 0 ? after.substring(0, amp) : after;
     }
 
-    /** 
-     * @param testId
-     * @return String
-     */
-    /**
-     * Returns the FAIR category for a test ID, or {@code null} if the test is not one of
-     * the recognised 16. The ID is normalised before lookup so any variant spelling
-     * (hyphens, spaces, mixed case) resolves to the same canonical entry.
-     */
-    static String fairCategory(String testId) {
-        String normId = normTestId(testId);
-        String cat = FAIR_MAP.get(normId);
-        if (cat != null) return cat;
-        return normId.isEmpty() ? null : String.valueOf(normId.charAt(0));
+    private int computeMaturity(Set<String> passedNorm) {
+        if (!maturityLevel3Tests.isEmpty()
+                && passedNorm.containsAll(maturityLevel3Tests)) return 3;
+        if (!maturityLevel2Tests.isEmpty()
+                && passedNorm.containsAll(maturityLevel2Tests)) return 2;
+        if (!maturityLevel1Tests.isEmpty()
+                && passedNorm.containsAll(maturityLevel1Tests)) return 1;
+        return 0;
+    }
+
+    private static Map<String, String> normaliseFairMap(Map<String, String> fairMap) {
+        Map<String, String> normalised = new LinkedHashMap<>();
+        if (fairMap == null) return normalised;
+        for (Map.Entry<String, String> e : fairMap.entrySet()) {
+            String key = e.getKey();
+            String value = e.getValue();
+            if (key == null || value == null) continue;
+            String cat = value.trim().toUpperCase();
+            if (!FAIR_CATEGORIES.contains(cat)) continue;
+            normalised.put(normTestId(key), cat);
+        }
+        return normalised;
+    }
+
+    private static Set<String> normaliseTestIdSet(List<String> rawTests) {
+        Set<String> out = new HashSet<>();
+        if (rawTests == null) return out;
+        for (String test : rawTests) {
+            if (test == null || test.isBlank()) continue;
+            out.add(normTestId(test));
+        }
+        return out;
     }
 
     // ── Inner class ──────────────────────────────────────────────────────────
 
-    private static class SetStats {
+    private class SetStats {
         @SuppressWarnings("unused")
         private String set = null;
+        private final Map<String, String> fairMap;
         int records   = 0;
         int pass      = 0;
         int fail      = 0;
@@ -498,9 +477,10 @@ public class GenerateManifest {
          */
         final int[] maturityCounts = new int[4];
 
-        SetStats(String set) {
+        SetStats(String set, Map<String, String> fairMap) {
             this.set = set;
-            for (String cat : List.of("F","A","I","R")) fair.put(cat, new int[2]);
+            this.fairMap = fairMap;
+            for (String cat : FAIR_CATEGORIES) fair.put(cat, new int[2]);
         }
 
         void addTestResult(String testId, String result) {
@@ -512,22 +492,22 @@ public class GenerateManifest {
                 default -> indet++;
             }
 
-            if (!FAIR_MAP.containsKey(normId)) return;
-
+            String cat = fairMap.get(normId);
+            if (cat == null) return;
             int[] bucket = tests.computeIfAbsent(normId, k -> new int[3]);
-            String cat = FAIR_MAP.get(normId);
             switch (result) {
                 case "pass" -> {
                     bucket[0]++;
-                    if (cat != null) { fair.get(cat)[0]++; fair.get(cat)[1]++; }
+                    fair.get(cat)[0]++;
+                    fair.get(cat)[1]++;
                 }
                 case "fail" -> {
                     bucket[1]++;
-                    if (cat != null) fair.get(cat)[1]++;
+                    fair.get(cat)[1]++;
                 }
                 default -> {
                     bucket[2]++;
-                    if (cat != null) fair.get(cat)[1]++;
+                    fair.get(cat)[1]++;
                 }
             }
         }
