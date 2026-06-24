@@ -77,52 +77,52 @@ tenants:
         sl-SI: Slovenian (SI)
         sv: Swedish
       fair-map:
-        F1-PID: F
-        F1-GUID: F
+        F1_PID: F
+        F1_GUID: F
         F2A: F
         F2B: F
         F4: F
-        A1-1: A
-        A1-2: A
-        I1-A: I
-        I2-A: I
-        R1-2-CPI: R
-        R1-3-CEK: R
-        R1-3-CTV: R
-        R1-3-DMOCV: R
-        R1-3-DAUV: R
-        R1-3-DTMV: R
-        R1-3-DSPV: R
+        A1_1: A
+        A1_2: A
+        I1_A: I
+        I2_A: I
+        R1_2_CPI: R
+        R1_3_CEK: R
+        R1_3_CTV: R
+        R1_3_DMOCV: R
+        R1_3_DAUV: R
+        R1_3_DTMV: R
+        R1_3_DSPV: R
       maturity-levels:
         level1:
-          - F1-GUID
+          - F1_GUID
           - F2B
           - F4
-          - A1-1
+          - A1_1
         level2:
-          - F1-GUID
+          - F1_GUID
           - F2B
           - F4
-          - A1-1
+          - A1_1
           - F2A
-          - I1-A
-          - R1-2-CPI
+          - I1_A
+          - R1_2_CPI
         level3:
-          - F1-GUID
+          - F1_GUID
           - F2B
           - F4
-          - A1-1
+          - A1_1
           - F2A
-          - I1-A
-          - R1-2-CPI
-          - F1-PID
-          - I2-A
-          - R1-3-CEK
-          - R1-3-CTV
-          - R1-3-DMOCV
-          - R1-3-DAUV
-          - R1-3-DTMV
-          - R1-3-DSPV
+          - I1_A
+          - R1_2_CPI
+          - F1_PID
+          - I2_A
+          - R1_3_CEK
+          - R1_3_CTV
+          - R1_3_DMOCV
+          - R1_3_DAUV
+          - R1_3_DTMV
+          - R1_3_DSPV
     oxford:
       algorithm: https://docs.google.com/spreadsheets/d/1Lbo0KzlN-RPRJ5POqHKh8YE2GXSv0bnaKZzwkaCOP9M
       runner: https://champion.fairsharing.org/champion/assess/algorithm
@@ -200,4 +200,4 @@ tenants:
           - R1_2_FundROR
           - R1_2_Affil
           - R1_2_Pubs
-          - R1_3_ISO639
+          - R1_3_ISO639ƒ
