@@ -578,6 +578,9 @@
       border-radius: 3px;
       font-weight: 500;
       letter-spacing: 0.2px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
     }
 
     .chip.pass {
@@ -1107,6 +1110,7 @@
     // Both maps start empty; init() populates them before any rendering occurs.
     let SET_NAMES = {};
     let FAIR_MAP  = {};
+    let FAIR_MAP_NORMALISED = {};
 
     // ── Tenant API key ────────────────────────────────────────────────────────
     // Prefer the key from query string, otherwise fall back to the key stored
@@ -1149,11 +1153,41 @@
     // ── Utilities ─────────────────────────────────────────────────────────────
     function pct(n, d) { return d ? Math.round((n / d) * 100) : 0; }
 
+    function normaliseTestId(testId) {
+      return (testId || '')
+        .trim()
+        .toUpperCase()
+        .replace(/[\s-]+/g, '_');
+    }
+
+    function normaliseFairCategory(category) {
+      const cat = (category || '').trim().toUpperCase();
+      return ['F', 'A', 'I', 'R'].includes(cat) ? cat : null;
+    }
+
+    function buildNormalisedFairMap(fairMap) {
+      const normalised = {};
+      for (const [testId, category] of Object.entries(fairMap || {})) {
+        const key = normaliseTestId(testId);
+        const cat = normaliseFairCategory(category);
+        if (key && cat) normalised[key] = cat;
+      }
+      return normalised;
+    }
+
     function fairCategory(testId) {
-      if (FAIR_MAP[testId]) return FAIR_MAP[testId];
-      const t = testId.trim();
-      if (FAIR_MAP[t]) return FAIR_MAP[t];
-      return t[0] || null;
+      const t = (testId || '').trim();
+      if (!t) return null;
+
+      const direct = normaliseFairCategory(FAIR_MAP[testId])
+        || normaliseFairCategory(FAIR_MAP[t]);
+      if (direct) return direct;
+
+      const mapped = FAIR_MAP_NORMALISED[normaliseTestId(t)];
+      if (mapped) return mapped;
+
+      const first = t[0].toUpperCase();
+      return ['F', 'A', 'I', 'R'].includes(first) ? first : null;
     }
 
     function pageUrl(p) {
@@ -1434,7 +1468,11 @@
 
         const chips = Object.entries(results).map(([tid, v]) => {
           const cls = v.result === 'indeterminate' ? 'indet' : v.result;
-          return `<span class="chip ${cls}">${tid.trim()}</span>`;
+          const cat = fairCategory(tid);
+          const fairBadge = cat
+            ? `<span class="test-fair-badge badge-${cat}">${cat}</span>`
+            : '';
+          return `<span class="chip ${cls}">${tid.trim()}${fairBadge}</span>`;
         });
 
         const identifier = rec.identifier || extractIdentifier(rec.testedguid || '');
@@ -1578,9 +1616,11 @@
         const cfg = await res.json();
         SET_NAMES = cfg.setNames || {};
         FAIR_MAP  = cfg.fairMap  || {};
+        FAIR_MAP_NORMALISED = buildNormalisedFairMap(FAIR_MAP);
       } catch (e) {
         // Non-fatal: fall back to empty maps; set codes display as-is.
         console.warn('Could not load /api/config:', e.message);
+        FAIR_MAP_NORMALISED = {};
       }
 
       document.getElementById('hdr-set').textContent    = set;
