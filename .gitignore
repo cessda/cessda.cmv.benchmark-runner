@@ -63,5 +63,5 @@ nbdist/
 bin/
 
 ### Results files (.json, .html)###
-results
-guids
+results/
+guids/
