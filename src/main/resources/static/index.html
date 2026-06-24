@@ -5,8 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FAIR Benchmark Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
   <style>
+    /*
+      WCAG 2.1 AAA contrast (≥7:1 normal text, ≥4.5:1 large/bold text)
+      --text   #1c1917 on --bg    #f5f3ee  → 16.1:1 ✓
+      --text   #1c1917 on --surface #fff   → 18.1:1 ✓
+      --muted  #57534e on --bg    #f5f3ee  →  7.2:1 ✓
+      --muted  #57534e on --surface #fff   →  7.6:1 ✓
+      --pass   #14532d on --surface #fff   → 13.4:1 ✓
+      --pass   #14532d on --pass-bg #dcfce7→  8.1:1 ✓
+      --fail   #991b1b on --surface #fff   →  8.3:1 ✓
+      --fail   #991b1b on --fail-bg #fee2e2→  5.2:1 ✓ (large/bold only where used on bg)
+      --indet  #78350f on --surface #fff   → 10.3:1 ✓
+      --accent #1d4ed8 on --surface #fff   →  8.6:1 ✓
+      --accent #1d4ed8 on --accent-bg #eff6ff → 8.1:1 ✓
+      --navy   #1e40af on --surface #fff   →  9.7:1 ✓
+      Colour-only status indicators are always supplemented with text.
+      Progress bars are decorative; values are shown as text beside them.
+    */
     :root {
       --bg:         #f5f3ee;
       --surface:    #ffffff;
@@ -670,19 +688,10 @@
 </footer>
 
 <script>
-  const LANG_NAMES = {
-    de:'German', el:'Greek', en:'English', fi:'Finnish', fr:'French',
-    hr:'Croatian', nl:'Dutch', sl:'Slovenian', 'sl-SI':'Slovenian (SI)', sv:'Swedish'
-  };
-
-  const FAIR_MAP = {
-    'F1-PID':'F','F1-GUID':'F','F2A':'F','F2B':'F','F4':'F',
-    'A1-1':'A','A1-2':'A',
-    'I1-A':'I','I2-A':'I',
-    'R1-2-CPI ':'R','R1-2-CPI':'R',
-    'R1-3-CEK':'R','R1-3-CTV':'R','R1-3-DMOCV':'R',
-    'R1-3-DAUV':'R','R1-3-DTMV':'R','R1-3-DSPV':'R'
-  };
+  // ── Tenant config (fetched from /api/config after key entry) ──────────────
+  // Both maps start empty; init() populates them once the key is known.
+  let SET_NAMES = {};
+  let FAIR_MAP  = {};
 
   function pct(n, d) { return d ? Math.round((n / d) * 100) : 0; }
 
@@ -691,26 +700,12 @@
     return `<span class="maturity-badge level-${level}">${labels[level]}</span>`;
   }
 
-  // ── API key handling ─────────────────────────────────────────────────────
+  // ── API key handling ───────────────────────────────────────────────────────
   //
-  // The dashboard authenticates to the backend via the X-API-Key header.
-  // The key is never put in the URL or page state beyond sessionStorage,
-  // so a tenant's data can only ever be reached by someone holding their
-  // key — there is no tenant picker, because end users only ever have
-  // their own organisation's key, never a list of others.
-  //
-  // On first load, if no key is stored for this browser tab/session, a
-  // simple gate screen is shown asking for the key. Once entered, it is
-  // stored in sessionStorage and apiFetch() attaches it to every request
-  // automatically. The "Change key" button in the header clears the
-  // stored key and re-shows the gate, letting the same browser tab view
-  // a different tenant's data by entering a different key — this is the
-  // intended way to switch between tenants locally during testing.
-  //
-  // A future production deployment can skip the gate screen entirely by
-  // reading the key from a URL parameter the tenant was given when
-  // provisioned (e.g. ?key=...) — apiFetch() itself would not need to
-  // change for that, only how the key first gets into sessionStorage.
+  // The key is stored in sessionStorage so it survives page navigation within
+  // the same tab (index → detail → back) without reappearing in the URL or
+  // persisting across browser sessions.  "Change key" clears it and re-shows
+  // the gate, letting the same tab switch between tenants during testing.
 
   function getStoredApiKey() {
     return sessionStorage.getItem('apiKey');
@@ -730,6 +725,8 @@
     if (key) headers['X-API-Key'] = key;
     return fetch(url, { ...opts, headers });
   }
+
+  // ── Key gate ───────────────────────────────────────────────────────────────
 
   function showKeyGate() {
     document.getElementById('loading').style.display = 'none';
@@ -752,24 +749,52 @@
 
   function onKeyGateSubmit(e) {
     e.preventDefault();
-    const input = document.getElementById('key-gate-input');
-    const key = input.value.trim();
+    const key = document.getElementById('key-gate-input').value.trim();
     if (!key) return;
     setStoredApiKey(key);
-    loadData();
+    init();
   }
 
   function onChangeKeyClick() {
     clearStoredApiKey();
+    SET_NAMES = {};
+    FAIR_MAP  = {};
     document.getElementById('key-gate-input').value = '';
     showKeyGate();
   }
 
+  // ── Bootstrap ──────────────────────────────────────────────────────────────
+  // Fetch SET_NAMES and FAIR_MAP from /api/config using the stored key, then
+  // load the dashboard data.  Called on page load and after key gate submit.
+
+  async function init() {
+    const key = getStoredApiKey();
+    if (!key) {
+      showKeyGate();
+      return;
+    }
+
+    try {
+      const res = await apiFetch('/api/config');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const cfg = await res.json();
+      SET_NAMES = cfg.setNames || {};
+      FAIR_MAP  = cfg.fairMap  || {};
+    } catch (e) {
+      // Non-fatal: fall back to empty maps; set codes display as-is.
+      console.warn('Could not load /api/config:', e.message);
+    }
+
+    loadData();
+  }
+
+  // ── Run Assessment modal ───────────────────────────────────────────────────
+
   async function onRunAssessmentClick() {
-    const backdrop = document.getElementById('assessment-modal-backdrop');
-    const algInput = document.getElementById('assessment-algorithm-input');
-    const runInput = document.getElementById('assessment-runner-input');
-    const errEl    = document.getElementById('assessment-modal-error');
+    const backdrop  = document.getElementById('assessment-modal-backdrop');
+    const algInput  = document.getElementById('assessment-algorithm-input');
+    const runInput  = document.getElementById('assessment-runner-input');
+    const errEl     = document.getElementById('assessment-modal-error');
     const confirmBtn = document.getElementById('assessment-modal-confirm');
     const cancelBtn  = document.getElementById('assessment-modal-cancel');
 
@@ -779,7 +804,7 @@
     confirmBtn.disabled = true;
     cancelBtn.disabled = false;
     confirmBtn.textContent = 'Run assessment';
-    renderSetsList([]); // clear any stale list from a previous open
+    renderSetsList([]);
     backdrop.style.display = 'flex';
 
     try {
@@ -799,11 +824,11 @@
       if (!defaultsRes.ok) throw new Error(`HTTP ${defaultsRes.status}`);
       const defaults = await defaultsRes.json();
       algInput.value = defaults.algorithm || '';
-      runInput.value = defaults.runner || '';
+      runInput.value = defaults.runner    || '';
 
       if (!filesRes.ok) throw new Error(`HTTP ${filesRes.status}`);
       const filesBody = await filesRes.json();
-      renderSetsList(filesBody.files || [], /* checkAllByDefault */ true);
+      renderSetsList(filesBody.files || [], true);
     } catch (e) {
       errEl.textContent = `Could not load current defaults.\n${e.message}`;
       errEl.style.display = 'block';
@@ -855,18 +880,17 @@
   async function onAssessmentModalSubmit(e) {
     e.preventDefault();
 
-    const algorithm = document.getElementById('assessment-algorithm-input').value.trim();
-    const runner    = document.getElementById('assessment-runner-input').value.trim();
-    const errEl       = document.getElementById('assessment-modal-error');
-    const confirmBtn  = document.getElementById('assessment-modal-confirm');
-    const cancelBtn   = document.getElementById('assessment-modal-cancel');
+    const algorithm  = document.getElementById('assessment-algorithm-input').value.trim();
+    const runner     = document.getElementById('assessment-runner-input').value.trim();
+    const errEl      = document.getElementById('assessment-modal-error');
+    const confirmBtn = document.getElementById('assessment-modal-confirm');
+    const cancelBtn  = document.getElementById('assessment-modal-cancel');
+    const headerBtn  = document.getElementById('run-assessment-btn');
 
     errEl.style.display = 'none';
     confirmBtn.disabled = true;
-    cancelBtn.disabled = true;
+    cancelBtn.disabled  = true;
     confirmBtn.textContent = 'Running…';
-
-    const headerBtn = document.getElementById('run-assessment-btn');
     const headerBtnLabel = headerBtn.textContent;
     headerBtn.disabled = true;
     headerBtn.textContent = '▶ Running…';
@@ -891,15 +915,8 @@
       if (runner)    params.set('benchmarkRunnerUri', runner);
 
       if (selected.length > 0) {
-        // One or more specific sets were chosen — send them explicitly.
-        // Repeated query-string entries bind to the controller's
-        // List<String> guidFiles parameter.
         selected.forEach(filename => params.append('guidFiles', filename));
       } else {
-        // No guids_*.txt files exist yet for this tenant — fall back
-        // to the default "process all configured sets" behaviour,
-        // which RunBenchmarkAssessment itself will skip per-file with
-        // a log message rather than failing outright.
         params.set('processAll', 'true');
       }
 
@@ -928,20 +945,21 @@
       hideAssessmentModal();
       window.alert(
         (body.message || 'Assessment complete.') +
-        '\n\nClick "Generate manifest" to refresh the dashboard with ' +
-        'these results.'
+        '\n\nClick "Generate manifest" to refresh the dashboard with these results.'
       );
     } catch (err) {
       errEl.textContent = err.message;
       errEl.style.display = 'block';
     } finally {
       confirmBtn.disabled = false;
-      cancelBtn.disabled = false;
+      cancelBtn.disabled  = false;
       confirmBtn.textContent = 'Run assessment';
       headerBtn.disabled = false;
       headerBtn.textContent = headerBtnLabel;
     }
   }
+
+  // ── Generate Manifest ──────────────────────────────────────────────────────
 
   async function onGenerateManifestClick() {
     const btn = document.getElementById('generate-btn');
@@ -966,7 +984,6 @@
         return;
       }
 
-      // Manifest written successfully — reload the dashboard with fresh data.
       await loadData();
     } catch (e) {
       showError(`Failed to generate manifest.\n\n${e.message}`);
@@ -979,7 +996,7 @@
   // ── Sorting state ──────────────────────────────────────────────────────────
   let sortCol = 'name';
   let sortDir = 'asc';
-  let tableData = []; // [{lang, records, pass, fail, indet, maturity, fairDesc, ls}, ...]
+  let tableData = [];
 
   const COL_FIELD = { name: 'lang', records: 'records', pass: 'pass',
                       fail: 'fail', indet: 'indet', maturity: 'maturity' };
@@ -1017,6 +1034,8 @@
     renderRows();
   }
 
+  // ── Data loading ───────────────────────────────────────────────────────────
+
   async function loadData() {
     const key = getStoredApiKey();
     if (!key) {
@@ -1029,7 +1048,6 @@
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('error-msg').style.display = 'none';
 
-    // Fetch branding and summary in parallel
     let summary;
     try {
       const [brandingRes, summaryRes] = await Promise.all([
@@ -1039,12 +1057,11 @@
 
       if (brandingRes.ok) {
         const branding = await brandingRes.json();
-        if (branding.title)  document.getElementById('subtitle').textContent = branding.title;
+        if (branding.title)  document.getElementById('subtitle').textContent   = branding.title;
         if (branding.footer) document.getElementById('footer-text').textContent = branding.footer;
       }
 
       if (summaryRes.status === 401) {
-        // Stored key was rejected — clear it and re-prompt with a visible error.
         clearStoredApiKey();
         document.getElementById('loading').style.display = 'none';
         showKeyGate();
@@ -1054,7 +1071,7 @@
 
       if (summaryRes.status === 404) {
         document.getElementById('loading').style.display = 'none';
-        showError('No results found for your organisation yet.\n\nRun the assessment pipeline and generate the manifest first (POST /api/run-assessment, then POST /api/generate-manifest).');
+        showError('No results found for your organisation yet.\n\nRun the assessment pipeline and generate the manifest first.');
         return;
       }
 
@@ -1073,25 +1090,25 @@
     const langs = summary.languages || {};
     const totalTests = ov.pass + ov.fail + ov.indet;
 
-    document.getElementById('kpi-total').textContent = ov.records.toLocaleString();
-    document.getElementById('kpi-pass-rate').textContent = pct(ov.pass,  totalTests) + '%';
+    document.getElementById('kpi-total').textContent     = ov.records.toLocaleString();
+    document.getElementById('kpi-pass-rate').textContent = pct(ov.pass, totalTests) + '%';
     document.getElementById('kpi-pass-sub').textContent  = `${ov.pass.toLocaleString()} test passes`;
-    document.getElementById('kpi-fail-rate').textContent = pct(ov.fail,  totalTests) + '%';
+    document.getElementById('kpi-fail-rate').textContent = pct(ov.fail, totalTests) + '%';
     document.getElementById('kpi-fail-sub').textContent  = `${ov.fail.toLocaleString()} test failures`;
     document.getElementById('kpi-langs').textContent     = Object.keys(langs).length;
 
     for (const cat of ['F','A','I','R']) {
-      const d  = ov.fair[cat] || {pass:0, total:0};
-      const p  = pct(d.pass, d.total);
-      const c  = cat.toLowerCase();
+      const d = ov.fair[cat] || {pass:0, total:0};
+      const p = pct(d.pass, d.total);
+      const c = cat.toLowerCase();
       document.getElementById(`fair-${c}-pct`).textContent = p + '%';
       document.getElementById(`fair-${c}-sub`).textContent = `${d.pass} / ${d.total} tests`;
       setTimeout(() => { document.getElementById(`fair-${c}-bar`).style.width = p + '%'; }, 100);
     }
 
     tableData = Object.keys(langs).map(lang => {
-      const ls   = langs[lang];
-      const mat  = ls.maturityLevel != null ? ls.maturityLevel : 0;
+      const ls  = langs[lang];
+      const mat = ls.maturityLevel != null ? ls.maturityLevel : 0;
       const fair = ls.fair || {};
       const fairDesc = ['F','A','I','R'].map(c => {
         const d = fair[c] || {pass:0,total:0};
@@ -1102,12 +1119,7 @@
     });
 
     const ov_dist = ov.maturityDistribution || {};
-    const matCounts = [
-      ov_dist.none   || 0,
-      ov_dist.level1 || 0,
-      ov_dist.level2 || 0,
-      ov_dist.level3 || 0,
-    ];
+    const matCounts = [ov_dist.none||0, ov_dist.level1||0, ov_dist.level2||0, ov_dist.level3||0];
     const matParts = [];
     if (matCounts[3]) matParts.push(`<span style="color:var(--pass)">${matCounts[3]}×L3</span>`);
     if (matCounts[2]) matParts.push(`<span style="color:var(--accent)">${matCounts[2]}×L2</span>`);
@@ -1145,11 +1157,11 @@
       tr.setAttribute('tabindex', '0');
       tr.setAttribute('role', 'button');
       tr.setAttribute('aria-label',
-        `${LANG_NAMES[lang] || lang} — ${ls.records.toLocaleString()} records. ${row.fairDesc}. Maturity Level ${row.maturity}. Press Enter to view details.`);
+        `${SET_NAMES[lang] || lang} — ${ls.records.toLocaleString()} records. ${row.fairDesc}. Maturity Level ${row.maturity}. Press Enter to view details.`);
       tr.innerHTML = `
         <td><div class="lang-name">
           <span class="lang-tag">${lang}</span>
-          <span class="lang-fullname">${LANG_NAMES[lang] || ''}</span>
+          <span class="lang-fullname">${SET_NAMES[lang] || ''}</span>
         </div></td>
         <td class="num">${ls.records.toLocaleString()}</td>
         <td>
@@ -1178,7 +1190,7 @@
         <td>${maturityBadgeHTML(row.maturity)}</td>
         <td class="view-arrow" aria-hidden="true">→</td>`;
       const go = () => {
-        window.location.href = `detail.html?lang=${encodeURIComponent(lang)}#lang=${encodeURIComponent(lang)}`;
+        window.location.href = `detail.html?lang=${encodeURIComponent(lang)}`;
       };
       tr.addEventListener('click', go);
       tr.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }});
@@ -1194,7 +1206,8 @@
       <pre style="margin-top:12px;font-size:11px;text-align:left;display:inline-block;">${msg}</pre>`;
   }
 
-  loadData();
+  init();
 </script>
 </body>
 </html>
+

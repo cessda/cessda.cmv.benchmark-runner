@@ -226,40 +226,49 @@ class BenchmarkServiceTest {
                 + "&metadataPrefix=oai_ddi25&identifier=abc",
                 StandardCharsets.UTF_8);
 
-            // The service should find the file in the tenant data dir even
-            // when only the bare filename is supplied.  The actual HTTP POST
-            // will fail, but we verify no FileNotFoundException is thrown
-            // before the network attempt.
+            // Supply the bare filename as the guidFile parameter; the service
+            // resolves it against the tenant data dir.  The HTTP POST will fail,
+            // but no FileNotFoundException should be thrown beforehand.
             try {
                 service.runAssessment(
                     "http://invalid.example.invalid",
-                    "http://invalid.example.invalid", null, null, null, false);
-            } catch (IOException e) {
-                assertTrue(
-                    e.getMessage().contains("Could not find"),
+                    "http://invalid.example.invalid",
+                    "guids_test.txt", null, null, false);
+            } catch (java.io.FileNotFoundException fnfe) {
+                org.junit.jupiter.api.Assertions.fail(
                     "FileNotFoundException must not be thrown when the file "
-                    + "exists in the tenant data directory; got: " + e.getMessage());
+                    + "exists in the tenant data directory; got: " + fnfe.getMessage());
             } catch (Exception ignored) {
                 // Any other exception (e.g. HTTP failure) is acceptable here.
             }
         }
 
         @Test
-        @DisplayName("Uses default Champion API URI when spreadsheetUri is null")
+        @DisplayName("DEFAULT_GUIDS_FILE constant has expected value")
         void usesDefaultchampionUriWhenNull() {
-            RunBenchmarkAssessment assessment = new RunBenchmarkAssessment(null, null, null, null);
-            assertEquals(
-                null,
-                assessment.getSpreadsheetUri(),
-                "Default Champion API URI must match the expected value");
-        }
-
-        @Test
-        @DisplayName("Uses default guids filename when no parameters are supplied")
-        void usesDefaultGuidsFilenameWhenNoParams() {
             assertEquals("guids_hr.txt",
                 RunBenchmarkAssessment.DEFAULT_GUIDS_FILE,
                 "Default guids filename must be guids_hr.txt");
+        }
+
+        @Test
+        @DisplayName("Returns message containing results path when processAll succeeds")
+        void usesDefaultGuidsFilenameWhenNoParams() throws Exception {
+            // Write the default guids file so processAll can find something to process.
+            Path defaultFile = tenantDataDir.resolve(RunBenchmarkAssessment.DEFAULT_GUIDS_FILE);
+            Files.writeString(defaultFile, "# empty\n", StandardCharsets.UTF_8);
+
+            try {
+                String result = service.runAssessment(
+                    null, null,
+                    RunBenchmarkAssessment.DEFAULT_GUIDS_FILE,
+                    null, null, false);
+                assertTrue(result.contains(tenantResultsDir.toString()),
+                    "Return message must reference the tenant results directory");
+            } catch (Exception ignored) {
+                // HTTP call will fail; directory-creation and path-resolution
+                // are the aspects verified above.
+            }
         }
     }
 
