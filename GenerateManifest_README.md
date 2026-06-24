@@ -9,7 +9,7 @@ the HTML dashboard.
 subdirectories (each named `guids_<lang>/`) and produces:
 
 - `results/summary.json` — fully aggregated statistics for every
-  language and overall totals. Loaded once by both `index.html` and
+  set and overall totals. Loaded once by both `index.html` and
   `language.html`; no individual record files are fetched by the
   browser.
 - `results/guids_<lang>/pages/page-NNN.json` — slim, paginated slices
@@ -161,7 +161,7 @@ counts but still appear in the per-test breakdown.
 
 1. The results directory is scanned for subdirectories whose names
    begin with `guids_`.
-2. For each language directory, all `*.json` files that do not begin
+2. For each set directory, all `*.json` files that do not begin
    with `error_` are collected and sorted.
 3. Each file is parsed; `test_results` fields are aggregated into pass,
    fail, and indeterminate counts, broken down by test ID and FAIR
@@ -169,7 +169,7 @@ counts but still appear in the per-test breakdown.
 4. A slim record object is built for each file and buffered. When the
    buffer reaches 200 records it is flushed to the next page file.
 5. After all languages are processed, `summary.json` is written with
-   the per-language and overall aggregated statistics.
+   the per-set and overall aggregated statistics.
 
 ## Dependencies
 

@@ -50,8 +50,8 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.springframework.boot.WebApplicationType;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -113,7 +113,7 @@ public class RunBenchmarkAssessment {
     private static final ObjectMapper mapper = new ObjectMapper();
 
     /**
-     * Language codes whose {@code guids_XX.txt} files are processed
+     * Set codes whose {@code guids_XX.txt} files are processed
      * by the {@code -P} / {@code --process-all} flag.
      */
     public static final String[] DEFAULT_SETS = {
@@ -468,8 +468,8 @@ public class RunBenchmarkAssessment {
             throws IOException, InterruptedException {
 
         logInfo("Processing GUID files for all sets...");
-        for (String lang : DEFAULT_SETS) {
-            String filename = "guids_" + lang + ".txt";
+        for (String set : DEFAULT_SETS) {
+            String filename = "guids_" + set + ".txt";
             logInfo("--- Processing file: %s ---", filename);
             try {
                 processSingleFile(filename);
@@ -506,9 +506,9 @@ public class RunBenchmarkAssessment {
                 return;
             }
             logInfo(FOUNDGUIDS + " in " + filename, guids.size());
-            String lang = extractLangFromFilename(filename);
+            String set = extractSetFromFilename(filename);
             String subDir = deriveSubdirectory(filename);
-            processGuids(guids, lang, subDir);
+            processGuids(guids, set, subDir);
             logInfo(PROCCOMP + " (" + filename + ")");
         } finally {
             guidsFilename = previousFilename;
@@ -600,7 +600,7 @@ public class RunBenchmarkAssessment {
      * of five workers and awaits completion for up to ten minutes.
      *
      * @param guids  list of GetRecord URLs to submit
-     * @param set    language / set name used for error-file naming
+     * @param set    set name used for error-file naming
      *               (may be {@code null})
      * @param subDir subdirectory under {@code resultsDir} for
      *               results (may be {@code null})
@@ -665,7 +665,7 @@ public class RunBenchmarkAssessment {
      * @param guid   full GetRecord URL to submit as the {@code "guid"}
      *               payload field
      * @param index  zero-based position in the batch (for log messages)
-     * @param set    language / set name for error-file naming
+     * @param set    set name for error-file naming
      *               (may be {@code null})
      * @param subDir subdirectory under {@code resultsDir} for
      *               results (may be {@code null})
@@ -816,7 +816,7 @@ public class RunBenchmarkAssessment {
      * overwriting it.
      *
      * @param guid   the GUID that caused the error
-     * @param set    language / set name (may be {@code null})
+     * @param set    set name (may be {@code null})
      * @param error  the exception that was caught
      * @param subDir subdirectory under {@code resultsDir}
      *               (may be {@code null})
@@ -884,7 +884,7 @@ public class RunBenchmarkAssessment {
     }
 
     /**
-     * Extracts the language / set code from a {@code guids_XX.txt}
+     * Extracts the set code from a {@code guids_XX.txt}
      * filename.
      *
      * @param filename e.g. {@code "guids_de.txt"} or a full path
@@ -892,7 +892,7 @@ public class RunBenchmarkAssessment {
      * @return the set code (e.g. {@code "de"}), or {@code null} if
      *         the filename does not match the expected pattern
      */
-    private static String extractLangFromFilename(String filename) {
+    private static String extractSetFromFilename(String filename) {
         String name = Paths.get(filename).getFileName().toString();
         if (name.startsWith("guids_") && name.endsWith(".txt")) {
             return name.substring(6, name.length() - 4);

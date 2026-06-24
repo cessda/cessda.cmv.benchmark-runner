@@ -22,11 +22,11 @@ one file per set.
 
 ## Default values
 
-| Parameter       | Default value                                              |
-|-----------------|------------------------------------------------------------|
-| Base URL        | `https://datacatalogue.cessda.eu/oai-pmh/v0/oai`          |
-| Verb            | `ListIdentifiers`                                          |
-| Metadata prefix | `oai_ddi25`                                                |
+| Parameter       | Default value                                                 |
+|-----------------|---------------------------------------------------------------|
+| Base URL        | `https://datacatalogue.cessda.eu/oai-pmh/v0/oai`              |
+| Verb            | `ListIdentifiers`                                             |
+| Metadata prefix | `oai_ddi25`                                                   |
 | Sets            | `de`, `el`, `en`, `fi`, `fr`, `hr`, `nl`, `sl`, `sl-SI`, `sv` |
 
 ## Command-line options

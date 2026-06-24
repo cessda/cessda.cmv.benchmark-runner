@@ -54,27 +54,27 @@ public class DashboardController {
     }
 
     /**
-     * GET /api/results/guids_{lang}/pages/page-NNN.json
-     * Returns a single paginated records file for the given language set.
+     * GET /api/results/guids_{set}/pages/page-NNN.json
+     * Returns a single paginated records file for the given set.
      *
-     * The {lang} path variable is validated to contain only word characters
+     * The {set} path variable is validated to contain only word characters
      * and hyphens, preventing directory traversal.
      */
     @GetMapping(
-        value = "/guids_{lang}/pages/{page}",
+        value = "/guids_{set}/pages/{page}",
         produces = MediaType.APPLICATION_JSON_VALUE
     )
     public ResponseEntity<Resource> getPage(
-            @PathVariable String lang,
+            @PathVariable String set,
             @PathVariable String page) {
 
-        // Validate inputs — lang is e.g. "de", "sl-SI"; page is "page-001.json"
-        if (!lang.matches("[\\w\\-]+") || !page.matches("page-\\d{3}\\.json")) {
+        // Validate inputs — set is e.g. "de", "sl-SI"; page is "page-001.json"
+        if (!set.matches("[\\w\\-]+") || !page.matches("page-\\d{3}\\.json")) {
             return ResponseEntity.badRequest().build();
         }
 
         Path file = tenantResultsDir()
-                .resolve("guids_" + lang)
+                .resolve("guids_" + set)
                 .resolve("pages")
                 .resolve(page);
 

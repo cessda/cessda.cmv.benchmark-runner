@@ -182,7 +182,7 @@ class BenchmarkServiceTest {
             assertArrayEquals(
                 new String[]{"de","el","en","fi","fr","hr","nl","sl","sl-SI","sv"},
                 GetOaiPmhIdentifiers.DEFAULT_SETS,
-                "Default sets must match the expected language codes");
+                "Default sets must match the expected set codes");
         }
     }
 
@@ -301,8 +301,8 @@ class BenchmarkServiceTest {
         tenantContext.setTenantId("legacy-tenant");
 
         TenantConfig legacyConfig = new TenantConfig();
-        legacyConfig.setSpreadsheetUri("https://legacy.example.org/spreadsheet");
-        legacyConfig.setChampionUri("https://legacy.example.org/champion");
+        legacyConfig.setAlgorithm("https://legacy.example.org/spreadsheet");
+        legacyConfig.setRunner("https://legacy.example.org/champion");
         legacyConfig.setTitle("Legacy title");
         legacyConfig.setFooter("Legacy footer");
 
@@ -401,10 +401,10 @@ class BenchmarkServiceTest {
 
             String summaryContent = Files.readString(
                 summaryFile, StandardCharsets.UTF_8);
-            assertTrue(summaryContent.contains("\"languages\""),
-                "summary.json must contain a languages section");
+            assertTrue(summaryContent.contains("\"sets\""),
+                "summary.json must contain a sets section");
             assertTrue(summaryContent.contains("\"en\""),
-                "summary.json must contain an entry for the 'en' language set");
+                "summary.json must contain an entry for the 'en' set set");
         }
 
         @Test
@@ -433,7 +433,7 @@ class BenchmarkServiceTest {
 
             Path pagesDir = langDir.resolve("pages");
             assertTrue(Files.isDirectory(pagesDir),
-                "A pages/ sub-directory must be created for each language set");
+                "A pages/ sub-directory must be created for each GUID set");
             assertTrue(Files.exists(pagesDir.resolve("page-001.json")),
                 "At least one page file must be written");
         }
@@ -493,60 +493,54 @@ class BenchmarkServiceTest {
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("failsFastForMissingAlgorithmConfiguration")
+    @DisplayName("Throws IllegalStateException when algorithm is not configured")
     void failsFastForMissingAlgorithmConfiguration() {
-        String[] algorithmAndRunner = service.getDefaultAlgorithmAndRunner();
-        assertTrue(algorithmAndRunner[0] == null || algorithmAndRunner[0].isBlank(),
-            "Algorithm should be null or blank when not configured");
+        TenantContext tenantContext = new TenantContext();
+        tenantContext.setTenantId("no-algorithm-tenant");
+
+        TenantConfig cfg = new TenantConfig();
+        cfg.setRunner("https://example.org/runner");
+        cfg.setTitle("T");
+        cfg.setFooter("F");
+
+        TenantProperties tenantProperties = new TenantProperties();
+        tenantProperties.setConfig(java.util.Map.of("no-algorithm-tenant", cfg));
+
+        BenchmarkProperties props = new BenchmarkProperties();
+        props.setDataDir(rootDataDir.toString());
+        props.setResultsDir(rootResultsDir.toString());
+        // Deliberately leave algorithm unset
+
+        BenchmarkService unconfigured = new BenchmarkService(props, tenantContext, tenantProperties);
+
+        assertThrows(IllegalStateException.class,
+            unconfigured::getDefaultAlgorithmAndRunner,
+            "getDefaultAlgorithmAndRunner must throw when no algorithm is configured");
     }
 
     @Test
-    @DisplayName("failsFastForMissingRunnerConfiguration")
+    @DisplayName("Throws IllegalStateException when runner is not configured")
     void failsFastForMissingRunnerConfiguration() {
-        String[] algorithmAndRunner = service.getDefaultAlgorithmAndRunner();
-        assertTrue(algorithmAndRunner[1] == null || algorithmAndRunner[1].isBlank(),
-            "Runner should be null or blank when not configured");
-    }
+        TenantContext tenantContext = new TenantContext();
+        tenantContext.setTenantId("no-runner-tenant");
 
-    @Test
-    @DisplayName("returnsTenantAlgorithmAndRunnerFromConfiguration")
-    void returnsTenantAlgorithmAndRunnerFromConfiguration() {
-        TenantContext testTenantContext = new TenantContext();
-        testTenantContext.setTenantId(TENANT_ID);
+        TenantConfig cfg = new TenantConfig();
+        cfg.setAlgorithm("https://example.org/algorithm");
+        cfg.setTitle("T");
+        cfg.setFooter("F");
 
         TenantProperties tenantProperties = new TenantProperties();
-        TenantProperties.TenantConfig tenantConfig = new TenantProperties.TenantConfig();
-        tenantConfig.setSpreadsheetUri("https://example.org/algorithm");
-        tenantConfig.setChampionUri("https://example.org/runner");
-        tenantProperties.getConfig().put(TENANT_ID, tenantConfig);
+        tenantProperties.setConfig(java.util.Map.of("no-runner-tenant", cfg));
 
-        BenchmarkService serviceWithConfig = new BenchmarkService(testTenantContext, tenantProperties);
-        String[] algorithmAndRunner = serviceWithConfig.getDefaultAlgorithmAndRunner();
+        BenchmarkProperties props = new BenchmarkProperties();
+        props.setDataDir(rootDataDir.toString());
+        props.setResultsDir(rootResultsDir.toString());
+        // Deliberately leave runner unset
 
-        assertEquals("https://example.org/algorithm", algorithmAndRunner[0],
-            "Algorithm should be resolved from tenant config");
-        assertEquals("https://example.org/runner", algorithmAndRunner[1],
-            "Runner should be resolved from tenant config");
-    }
+        BenchmarkService unconfigured = new BenchmarkService(props, tenantContext, tenantProperties);
 
-    @Test
-    @DisplayName("returnsTenantBrandingFromConfiguration")
-    void returnsTenantBrandingFromConfiguration() {
-        TenantContext testTenantContext = new TenantContext();
-        testTenantContext.setTenantId(TENANT_ID);
-
-        TenantProperties tenantProperties = new TenantProperties();
-        TenantProperties.TenantConfig tenantConfig = new TenantProperties.TenantConfig();
-        tenantConfig.setTitle("Test tenant title");
-        tenantConfig.setFooter("Test tenant footer");
-        tenantProperties.getConfig().put(TENANT_ID, tenantConfig);
-
-        BenchmarkService serviceWithConfig = new BenchmarkService(testTenantContext, tenantProperties);
-        BenchmarkService.Branding branding = serviceWithConfig.getTenantBranding();
-
-        assertEquals("Test tenant title", branding.title(),
-            "Title should be resolved from tenant config");
-        assertEquals("Test tenant footer", branding.footer(),
-            "Footer should be resolved from tenant config");
+        assertThrows(IllegalStateException.class,
+            unconfigured::getDefaultAlgorithmAndRunner,
+            "getDefaultAlgorithmAndRunner must throw when no runner is configured");
     }
 }

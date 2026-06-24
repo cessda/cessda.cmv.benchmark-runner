@@ -39,10 +39,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  *
  * <ol>
  *   <li>{@code results/summary.json} — fully aggregated statistics for every
- *       language and overall totals. Loaded once by both {@code index.html}
- *       and {@code language.html}; no individual record files are fetched by
+ *       set and overall totals. Loaded once by both {@code index.html}
+ *       and {@code detail.html}; no individual record files are fetched by
  *       the browser.</li>
- *   <li>{@code results/guids_<lang>/pages/page-NNN.json} — slim, paginated
+ *   <li>{@code results/guids_<set>/pages/page-NNN.json} — slim, paginated
  *       slices of the record list (200 records per page). Only the current
  *       page is fetched when the user browses the records table.</li>
  * </ol>
@@ -173,7 +173,7 @@ public class GenerateManifest {
 
     private final Path resultsDir;
     private final ObjectMapper mapper = new ObjectMapper();
-    private final Map<String, LangStats> langStats = new TreeMap<>();
+    private final Map<String, SetStats> setStats = new TreeMap<>();
 
     // ── Constructor ──────────────────────────────────────────────────────────
 
@@ -192,27 +192,27 @@ public class GenerateManifest {
                 if (!Files.isDirectory(entry)) continue;
                 String dirName = entry.getFileName().toString();
                 if (!dirName.startsWith("guids_")) continue;
-                String lang = dirName.substring(6);
-                processLanguage(lang, entry);
+                String set = dirName.substring(6);
+                processSet(set, entry);
             }
         }
         writeSummary();
-        int totalRecords = langStats.values().stream().mapToInt(s -> s.records).sum();
-        LOG.info(String.format("Done. %d language(s), %d total records.", langStats.size(), totalRecords));
+        int totalRecords = setStats.values().stream().mapToInt(s -> s.records).sum();
+        LOG.info(String.format("Done. %d set(s), %d total records.", setStats.size(), totalRecords));
     }
 
     /** 
-     * @param lang
-     * @param langDir
+     * @param set
+     * @param setDir
      * @throws IOException
      */
-    // ── Per-language processing ──────────────────────────────────────────────
+    // ── Per-set processing ──────────────────────────────────────────────
 
-    private void processLanguage(String lang, Path langDir) throws IOException {
-        LOG.info("Processing language: " + lang);
+    private void processSet(String set, Path setDir) throws IOException {
+        LOG.info("Processing set: " + set);
 
         List<Path> files = new ArrayList<>();
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(langDir, "*.json")) {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(setDir, "*.json")) {
             for (Path f : stream) {
                 String name = f.getFileName().toString();
                 if (!name.startsWith("error_")) {
@@ -223,16 +223,16 @@ public class GenerateManifest {
         files.sort(null);
 
         if (files.isEmpty()) {
-            LOG.warning("  No result files found in " + langDir);
+            LOG.warning("  No result files found in " + setDir);
             return;
         }
         LOG.info(String.format("  %d result file(s) found", files.size()));
 
-        LangStats stats = new LangStats(lang);
-        langStats.put(lang, stats);
+        SetStats stats = new SetStats(set);
+        setStats.put(set, stats);
 
         // Create (or clear) the pages directory
-        Path pagesDir = langDir.resolve("pages");
+        Path pagesDir = setDir.resolve("pages");
         Files.createDirectories(pagesDir);
         try (DirectoryStream<Path> old = Files.newDirectoryStream(pagesDir, "page-*.json")) {
             for (Path p : old) Files.deleteIfExists(p);
@@ -341,7 +341,7 @@ public class GenerateManifest {
      *     "fair": { "F": {"pass": N, "total": N}, ... },
      *     "tests": { "F1-GUID": {"pass": N, "fail": N, "indet": N}, ... }
      *   },
-     *   "languages": {
+     *   "sets": {
      *     "de": { "records": N, "pageCount": N, "pass": N, "fail": N, "indet": N,
      *             "fair": {...}, "tests": {...} },
      *     ...
@@ -354,8 +354,8 @@ public class GenerateManifest {
         root.put("generated", java.time.Instant.now().toString());
 
         // Overall aggregation
-        LangStats overall = new LangStats("_overall");
-        for (LangStats ls : langStats.values()) {
+        SetStats overall = new SetStats("_overall");
+        for (SetStats ls : setStats.values()) {
             overall.records += ls.records;
             overall.pass    += ls.pass;
             overall.fail    += ls.fail;
@@ -373,12 +373,12 @@ public class GenerateManifest {
         }
         root.set("overall", statsToJson(overall, false));
 
-        ObjectNode langsNode = mapper.createObjectNode();
-        for (Map.Entry<String, LangStats> e : langStats.entrySet()) {
+        ObjectNode setsNode = mapper.createObjectNode();
+        for (Map.Entry<String, SetStats> e : setStats.entrySet()) {
             ObjectNode ls = statsToJson(e.getValue(), true);
-            langsNode.set(e.getKey(), ls);
+            setsNode.set(e.getKey(), ls);
         }
-        root.set("languages", langsNode);
+        root.set("sets", setsNode);
 
         Path out = resultsDir.resolve("summary.json");
         mapper.writerWithDefaultPrettyPrinter().writeValue(out.toFile(), root);
@@ -392,7 +392,7 @@ public class GenerateManifest {
      */
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private ObjectNode statsToJson(LangStats s, boolean includePageCount) {
+    private ObjectNode statsToJson(SetStats s, boolean includePageCount) {
         ObjectNode node = mapper.createObjectNode();
         node.put("records", s.records);
         if (includePageCount) node.put("pageCount", s.pageCount);
@@ -402,7 +402,7 @@ public class GenerateManifest {
 
         // Maturity level for this set: the highest level achieved by at
         // least one record, derived from the per-record maturityCounts
-        // already accumulated in processLanguage().
+        // already accumulated in processSet().
         //
         // The previous approach (checking which tests have at least one
         // pass across the whole set) incorrectly returned L0 whenever a
@@ -477,7 +477,7 @@ public class GenerateManifest {
 
     // ── Inner class ──────────────────────────────────────────────────────────
 
-    private static class LangStats {
+    private static class SetStats {
         @SuppressWarnings("unused")
         private String set = null;
         int records   = 0;
@@ -493,12 +493,12 @@ public class GenerateManifest {
 
         /**
          * Count of records at each maturity level: index 0 = none, 1 = L1, 2 = L2, 3 = L3.
-         * For the set-level summary this is populated by processLanguage(); for _overall it
+         * For the set-level summary this is populated by processSet(); for _overall it
          * is summed in writeSummary().
          */
         final int[] maturityCounts = new int[4];
 
-        LangStats(String set) {
+        SetStats(String set) {
             this.set = set;
             for (String cat : List.of("F","A","I","R")) fair.put(cat, new int[2]);
         }

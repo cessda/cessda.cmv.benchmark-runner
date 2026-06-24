@@ -83,16 +83,16 @@ class RunBenchmarkAssessmentTest {
                                 () -> assertTrue(sets.contains("sl-SI")));
         }
 
-        // ── extractLangFromFilename (package-private via reflection or
+        // ── extractSetFromFilename (package-private via reflection or
         // tested indirectly; exposed here via a helper shim) ────────────────────
-        // Because extractLangFromFilename is private static we test its
+        // Because extractSetFromFilename is private static we test its
         // contract through the observable behaviour of processSingleFile,
         // and we also call it via reflection for fine-grained coverage.
 
         @Test
-        void extractLangFromFilenameReturnsCorrectCode() throws Exception {
+        void extractSetFromFilenameReturnsCorrectCode() throws Exception {
                 var method = RunBenchmarkAssessment.class
-                                .getDeclaredMethod("extractLangFromFilename", String.class);
+                                .getDeclaredMethod("extractSetFromFilename", String.class);
                 method.setAccessible(true);
                 assertEquals("de", method.invoke(null, "guids_de.txt"));
                 assertEquals("sl-SI", method.invoke(null, "guids_sl-SI.txt"));
@@ -100,10 +100,10 @@ class RunBenchmarkAssessmentTest {
         }
 
         @Test
-        void extractLangFromFilenameReturnsNullForUnrecognisedPattern()
+        void extractSetFromFilenameReturnsNullForUnrecognisedPattern()
                         throws Exception {
                 var method = RunBenchmarkAssessment.class
-                                .getDeclaredMethod("extractLangFromFilename", String.class);
+                                .getDeclaredMethod("extractSetFromFilename", String.class);
                 method.setAccessible(true);
                 assertNull(method.invoke(null, "something_else.txt"));
                 assertNull(method.invoke(null, "guids_de.csv"));

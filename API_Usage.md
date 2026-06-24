@@ -46,10 +46,10 @@ HTTP 500.
 `POST /api/fetch-identifiers`
 
 Fetches record identifiers from an OAI-PMH endpoint and writes one
-`guids_<set>.txt` file per language set to the `benchmark-data`
+`guids_<set>.txt` file per set to the `benchmark-data`
 volume. All parameters are optional.
 
-### Fetch all default language sets
+### Fetch all default sets
 
 Fetches identifiers for all ten default sets: `de`, `el`, `en`, `fi`,
 `fr`, `hr`, `nl`, `sl`, `sl-SI`, `sv`.
@@ -67,7 +67,7 @@ Expected response:
 }
 ```
 
-### Fetch a single language set
+### Fetch a single set
 
 Use the `fetchSet` parameter to fetch one set only. The `sets`
 parameter is ignored when `fetchSet` is present.
@@ -86,7 +86,7 @@ Expected response:
 }
 ```
 
-### Fetch a custom list of language sets
+### Fetch a custom list of sets
 
 Use the `sets` parameter with a comma-separated list of set names.
 
@@ -140,7 +140,7 @@ parameters are optional.
 This step can take a significant amount of time depending on the
 number of identifiers in the input files.
 
-### Process all default language sets
+### Process all default sets
 
 ```bash
 curl -X POST \
@@ -156,7 +156,7 @@ Expected response:
 }
 ```
 
-### Process a single language file
+### Process a single file
 
 ```bash
 curl -X POST \
@@ -309,7 +309,7 @@ default settings. Run each command and wait for a success response
 before proceeding to the next.
 
 ```bash
-# Stage 1 - fetch identifiers for all default language sets
+# Stage 1 - fetch identifiers for all default sets
 curl -X POST http://localhost:8080/api/fetch-identifiers
 
 # Stage 2 - run the FAIR benchmark assessment for all sets

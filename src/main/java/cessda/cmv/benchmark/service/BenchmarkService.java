@@ -179,7 +179,7 @@ public class BenchmarkService {
                 new GetOaiPmhIdentifiers(resolvedBase, resolvedVerb, resolvedPrefix, tDataDir);
 
         if (fetchSet != null && !fetchSet.isBlank()) {
-            client.fetchIdentifiersForLanguage(fetchSet.trim());
+            client.fetchIdentifiersForSet(fetchSet.trim());
             return "Fetched identifiers for set: " + fetchSet.trim()
                     + " -> " + tDataDir + "/guids_" + fetchSet.trim() + ".txt";
         }
@@ -188,7 +188,7 @@ public class BenchmarkService {
                 ? sets.split(",")
                 : GetOaiPmhIdentifiers.DEFAULT_SETS;
 
-        client.fetchAllLanguageIdentifiers(resolvedSets);
+        client.fetchAllSetIdentifiers(resolvedSets);
         return "Fetched identifiers for " + resolvedSets.length + " set(s) -> " + tDataDir;
     }
 

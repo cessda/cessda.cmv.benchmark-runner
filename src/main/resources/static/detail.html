@@ -112,7 +112,7 @@
       color: var(--text);
     }
 
-    .lang-badge {
+    .set-badge {
       background: var(--accent-bg);
       color: var(--accent);
       border: 1px solid #bfdbfe;
@@ -953,7 +953,7 @@
 
   <header>
     <a href="index.html" class="back-btn">← Dashboard</a>
-    <span class="lang-badge" id="hdr-lang">—</span>
+    <span class="set-badge" id="hdr-set">—</span>
     <h1 id="hdr-title">Set Detail</h1>
     <div class="header-right" id="hdr-count"></div>
   </header>
@@ -1092,7 +1092,7 @@
     </div>
   </main>
 
-  <footer>CESSDA FAIR Benchmark · <span id="footer-lang"></span> detail view</footer>
+  <footer>CESSDA FAIR Benchmark · <span id="footer-set"></span> detail view</footer>
 
   <!-- Side panel -->
   <div class="detail-overlay" id="overlay" onclick="closePanel()"></div>
@@ -1135,7 +1135,7 @@
     }
 
     // ── State ─────────────────────────────────────────────────────────────────
-    let lang = '';
+    let set = '';
     let pageCount = 0;    // total pages for this set (from summary.json)
     let currentPage = 1;   // 1-based, current page displayed
     let searchMode = false; // true when filtering across all pages
@@ -1157,7 +1157,7 @@
     }
 
     function pageUrl(p) {
-      return `/api/results/guids_${lang}/pages/page-${String(p).padStart(3, '0')}.json`;
+      return `/api/results/guids_${set}/pages/page-${String(p).padStart(3, '0')}.json`;
     }
 
     // ── Bootstrap: load summary.json ─────────────────────────────────────────
@@ -1172,9 +1172,9 @@
         return;
       }
 
-      const ls = summary.languages && summary.languages[lang];
+      const ls = summary.languages && summary.languages[set];
       if (!ls) {
-        showError(`No data found for set "${lang}" in summary.json.`);
+        showError(`No data found for set "${set}" in summary.json.`);
         return;
       }
 
@@ -1555,15 +1555,15 @@
     // depends on those maps.  Header text and page title are set here so they
     // always reflect the fetched names.
     async function init() {
-      // Resolve lang from URL first
-      (function initLang() {
+      // Resolve set from URL first
+      (function initSet() {
         const qp = new URLSearchParams(window.location.search);
         const hp = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-        lang = qp.get('lang') || hp.get('lang') || '';
-        if (lang) lang = decodeURIComponent(lang);
+        set = qp.get('set') || hp.get('set') || '';
+        if (set) set = decodeURIComponent(set.trim());
       })();
 
-      if (!lang) {
+      if (!set) {
         showError('No set specified. Return to the dashboard and click a set row.');
         return;
       }
@@ -1583,10 +1583,10 @@
         console.warn('Could not load /api/config:', e.message);
       }
 
-      document.getElementById('hdr-lang').textContent    = lang;
-      document.getElementById('hdr-title').textContent   = SET_NAMES[lang] || lang;
-      document.getElementById('footer-lang').textContent = lang;
-      document.title = `FAIR Benchmark · ${SET_NAMES[lang] || lang}`;
+      document.getElementById('hdr-set').textContent    = set;
+      document.getElementById('hdr-title').textContent   = SET_NAMES[set] || set;
+      document.getElementById('footer-set').textContent = set;
+      document.title = `FAIR Benchmark · ${SET_NAMES[set] || set} detail view`;
 
       loadData();
     }

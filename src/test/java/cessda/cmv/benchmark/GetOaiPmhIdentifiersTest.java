@@ -245,18 +245,18 @@ class GetOaiPmhIdentifiersTest {
                 "https://example.org/oai", "ListIdentifiers", "oai_dc", null));
     }
 
-    // ── Integration-style: write guids file via fetchIdentifiersForLanguage ──
+    // ── Integration-style: write guids file via fetchIdentifiersForSet ──
     // These tests use a WireMock or local HTTP server in a real project;
     // here we verify behaviour that does not require network access.
 
     @Test
-    void fetchAllLanguageIdentifiersWithEmptySetsArrayDoesNotThrow() {
+    void fetchAllSetIdentifiersWithEmptySetsArrayDoesNotThrow() {
         // With an empty set array the loop exits immediately without any
         // HTTP calls, so no exception should be thrown even without a server.
         GetOaiPmhIdentifiers noOpClient = new GetOaiPmhIdentifiers(
                 "https://127.0.0.1:1", "ListIdentifiers", "oai_ddi25", null);
         assertDoesNotThrow(
-                () -> noOpClient.fetchAllLanguageIdentifiers(new String[]{}));
+                () -> noOpClient.fetchAllSetIdentifiers(new String[]{}));
     }
 
     // ── Parameterised: URL encoding covers all default sets ──────────────────

@@ -177,14 +177,14 @@ public class GetOaiPmhIdentifiers {
                     logSevere("A set must be specified with -s / --fetch-set");
                     return;
                 }
-                client.fetchIdentifiersForLanguage(lang);
+                client.fetchIdentifiersForSet(lang);
             } else {
                 // Default: fetch all sets (also triggered by -F / --fetch-all-sets)
                 String[] sets = DEFAULT_SETS;
                 if (cmd.hasOption(SETS_ARG)) {
                     sets = cmd.getOptionValue(SETS_ARG).split(",");
                 }
-                client.fetchAllLanguageIdentifiers(sets);
+                client.fetchAllSetIdentifiers(sets);
             }
         } catch (IOException | InterruptedException e) {
             logSevere("Error: %s", e.getMessage());
@@ -201,29 +201,29 @@ public class GetOaiPmhIdentifiers {
     /**
      * Fetches identifier lists for every set in the supplied array.
      *
-     * @param sets array of OAI-PMH set names (language codes)
+     * @param sets array of OAI-PMH set names (set codes)
      * @throws IOException          if an I/O error occurs
      * @throws InterruptedException if interrupted while waiting for HTTP responses
      */
-    public void fetchAllLanguageIdentifiers(String[] sets)
+    public void fetchAllSetIdentifiers(String[] sets)
             throws IOException, InterruptedException {
         logInfo("Starting OAI-PMH identifier fetch for all sets...");
         for (String set : sets) {
-            fetchIdentifiersForLanguage(set);
+            fetchIdentifiersForSet(set);
         }
         logInfo("Finished fetching identifiers for all sets.");
     }
 
     /**
-     * Fetches all identifiers for one language set from the OAI-PMH endpoint,
+     * Fetches all identifiers for one set from the OAI-PMH endpoint,
      * following resumption tokens until the full list has been retrieved, then
-     * writes them as full GetRecord URLs to {@code guids_<lang>.txt}.
+     * writes them as full GetRecord URLs to {@code guids_<set>.txt}.
      *
      * @param set the set name, e.g. {@code "de"}
      * @throws IOException          if an I/O error occurs
      * @throws InterruptedException if interrupted
      */
-    public void fetchIdentifiersForLanguage(String set)
+    public void fetchIdentifiersForSet(String set)
             throws IOException, InterruptedException {
         logInfo("Fetching identifiers for set: %s", set);
         List<String> identifiers = new ArrayList<>();
