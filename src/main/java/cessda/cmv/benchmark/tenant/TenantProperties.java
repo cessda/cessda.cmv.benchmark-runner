@@ -1,6 +1,7 @@
 package cessda.cmv.benchmark.tenant;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -100,15 +101,14 @@ public class TenantProperties {
          */
         private String championUri;
 
+        private Map<String, String> setNames = new LinkedHashMap<>();
+        private Map<String, String> fairMap  = new LinkedHashMap<>();
+
         @NotBlank
         private String title;
 
         @NotBlank
         private String footer;
-
-        private Map<String, String> setNames = new HashMap<>();
-
-        private Map<String, String> fairMap = new HashMap<>();
 
         public String getAlgorithm() { return algorithm; }
         public void setAlgorithm(String algorithm) { this.algorithm = algorithm; }
@@ -129,14 +129,10 @@ public class TenantProperties {
         public void setFooter(String footer) { this.footer = footer; }
 
         public Map<String, String> getSetNames() { return setNames; }
-        public void setSetNames(Map<String, String> setNames) {
-            this.setNames = setNames != null ? setNames : new HashMap<>();
-        }
+        public void setSetNames(Map<String, String> setNames) { this.setNames = setNames; }
 
         public Map<String, String> getFairMap() { return fairMap; }
-        public void setFairMap(Map<String, String> fairMap) {
-            this.fairMap = fairMap != null ? fairMap : new HashMap<>();
-        }
+        public void setFairMap(Map<String, String> fairMap) { this.fairMap = fairMap; }
 
         public String effectiveAlgorithm() {
             if (algorithm != null && !algorithm.isBlank()) {
