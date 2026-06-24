@@ -373,8 +373,8 @@ class BenchmarkServiceTest {
         void writesSummaryJsonForPopulatedResultsDir() throws Exception {
             // Create a minimal result directory structure with one record file
             // inside the tenant results dir.
-            Path langDir = tenantResultsDir.resolve("guids_en");
-            Files.createDirectories(langDir);
+            Path setDir = tenantResultsDir.resolve("guids_en");
+            Files.createDirectories(setDir);
 
             String recordJson = """
                 {
@@ -389,7 +389,7 @@ class BenchmarkServiceTest {
                 }
                 """;
             Files.writeString(
-                langDir.resolve("abc123.json"),
+                setDir.resolve("abc123.json"),
                 recordJson,
                 StandardCharsets.UTF_8);
 
@@ -410,8 +410,8 @@ class BenchmarkServiceTest {
         @Test
         @DisplayName("Writes paginated page files alongside summary.json")
         void writesPageFilesForPopulatedResultsDir() throws Exception {
-            Path langDir = tenantResultsDir.resolve("guids_de");
-            Files.createDirectories(langDir);
+            Path setDir = tenantResultsDir.resolve("guids_de");
+            Files.createDirectories(setDir);
 
             String recordJson = """
                 {
@@ -425,13 +425,13 @@ class BenchmarkServiceTest {
                 }
                 """;
             Files.writeString(
-                langDir.resolve("xyz789.json"),
+                setDir.resolve("xyz789.json"),
                 recordJson,
                 StandardCharsets.UTF_8);
 
             service.generateManifest(null);
 
-            Path pagesDir = langDir.resolve("pages");
+            Path pagesDir = setDir.resolve("pages");
             assertTrue(Files.isDirectory(pagesDir),
                 "A pages/ sub-directory must be created for each GUID set");
             assertTrue(Files.exists(pagesDir.resolve("page-001.json")),
@@ -441,11 +441,11 @@ class BenchmarkServiceTest {
         @Test
         @DisplayName("Ignores error_*.json files when aggregating results")
         void ignoresErrorFilesInResultsDir() throws Exception {
-            Path langDir = tenantResultsDir.resolve("guids_fr");
-            Files.createDirectories(langDir);
+            Path setDir = tenantResultsDir.resolve("guids_fr");
+            Files.createDirectories(setDir);
 
             Files.writeString(
-                langDir.resolve("error_abc.json"),
+                setDir.resolve("error_abc.json"),
                 "{\"error\": \"timeout\"}",
                 StandardCharsets.UTF_8);
 
@@ -461,7 +461,7 @@ class BenchmarkServiceTest {
                 }
                 """;
             Files.writeString(
-                langDir.resolve("rec1.json"),
+                setDir.resolve("rec1.json"),
                 recordJson,
                 StandardCharsets.UTF_8);
 

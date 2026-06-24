@@ -21,11 +21,11 @@ import cessda.cmv.benchmark.tenant.TenantContext;
  *
  * The HTML dashboard fetches two URL patterns:
  *   GET /api/results/summary.json
- *   GET /api/results/guids_{lang}/pages/page-NNN.json
+ *   GET /api/results/guids_{set}/pages/page-NNN.json
  *
  * Both are answered from the tenant's own results directory:
  *   {resultsDir}/{tenantId}/summary.json
- *   {resultsDir}/{tenantId}/guids_{lang}/pages/page-NNN.json
+ *   {resultsDir}/{tenantId}/guids_{set}/pages/page-NNN.json
  *
  * Authentication is handled upstream by TenantAuthFilter; by the time a
  * request reaches here, TenantContext.getTenantId() is guaranteed non-null.

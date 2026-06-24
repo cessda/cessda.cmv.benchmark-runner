@@ -172,12 +172,12 @@ public class GetOaiPmhIdentifiers {
 
         try {
             if (cmd.hasOption(FETCH_SET_ARG)) {
-                String lang = cmd.getOptionValue(FETCH_SET_ARG);
-                if (lang == null || lang.isBlank()) {
+                String set = cmd.getOptionValue(FETCH_SET_ARG);
+                if (set == null || set.isBlank()) {
                     logSevere("A set must be specified with -s / --fetch-set");
                     return;
                 }
-                client.fetchIdentifiersForSet(lang);
+                client.fetchIdentifiersForSet(set);
             } else {
                 // Default: fetch all sets (also triggered by -F / --fetch-all-sets)
                 String[] sets = DEFAULT_SETS;
@@ -369,7 +369,7 @@ public class GetOaiPmhIdentifiers {
     // -----------------------------------------------------------------------
 
     /**
-     * Writes a list of identifiers to {@code guids_<lang>.txt} as full
+     * Writes a list of identifiers to {@code guids_<set>.txt} as full
      * GetRecord URLs, under the {@code outputDir} supplied at construction time.
      *
      * @param set         set name, e.g. "de", used in the output filename

@@ -6,13 +6,13 @@ the HTML dashboard.
 ## Overview
 
 `GenerateManifest` scans a `results/` directory for per-set
-subdirectories (each named `guids_<lang>/`) and produces:
+subdirectories (each named `guids_<set>/`) and produces:
 
 - `results/summary.json` — fully aggregated statistics for every
   set and overall totals. Loaded once by both `index.html` and
   `detail.html`; no individual record files are fetched by the
   browser.
-- `results/guids_<lang>/pages/page-NNN.json` — slim, paginated slices
+- `results/guids_<set>/pages/page-NNN.json` — slim, paginated slices
   of the record list (200 records per page). Only the current page is
   fetched when the user browses the records table.
 

@@ -198,7 +198,7 @@
     .A .fair-bar-fill { background: var(--pass); }
     .I .fair-bar-fill { background: var(--purple); }
     .R .fair-bar-fill { background: var(--indet); }
-    .lang-section { margin-bottom: 48px; }
+    .set-section { margin-bottom: 48px; }
     .table-wrap {
       border: 1px solid var(--border2);
       border-radius: 8px;
@@ -227,8 +227,8 @@
     tbody tr:hover { background: var(--accent-bg); }
     tbody td { padding: 16px 20px; vertical-align: middle; }
     tbody td.num { text-align: right; }
-    .lang-name { display: flex; align-items: center; gap: 12px; }
-    .lang-tag {
+    .set-name { display: flex; align-items: center; gap: 12px; }
+    .set-tag {
       background: var(--accent-bg);
       color: var(--accent);
       border: 1px solid #bfdbfe;
@@ -237,7 +237,7 @@
       font-size: 12px;
       font-weight: 500;
     }
-    .lang-fullname { color: var(--muted); font-size: 12px; }
+    .set-fullname { color: var(--muted); font-size: 12px; }
     .pill-row { display: flex; gap: 3px; align-items: center; }
     .pill { height: 8px; border-radius: 4px; min-width: 4px; }
     .pill.pass  { background: var(--pass); }
@@ -613,7 +613,7 @@
       </div>
       <div class="kpi-cell">
         <p class="kpi-label">Sets</p>
-        <p class="kpi-value" id="kpi-langs">—</p>
+        <p class="kpi-value" id="kpi-sets">—</p>
         <p class="kpi-sub">sets</p>
       </div>
       <div class="kpi-cell">
@@ -657,10 +657,10 @@
       </div>
     </div>
 
-    <div class="lang-section fade-in stagger-3">
-      <p class="section-label" id="lang-label">By Set</p>
+    <div class="set-section fade-in stagger-3">
+      <p class="section-label" id="set-label">By Set</p>
       <div class="table-wrap">
-        <table aria-labelledby="lang-label">
+        <table aria-labelledby="set-label">
           <thead>
             <tr>
               <th scope="col" class="sortable" data-col="name" data-type="str">Set name</th>
@@ -674,7 +674,7 @@
               <th scope="col"><span class="sr-only">Open detail view</span></th>
             </tr>
           </thead>
-          <tbody id="lang-table-body"></tbody>
+          <tbody id="set-table-body"></tbody>
         </table>
       </div>
     </div>
@@ -998,7 +998,7 @@
   let sortDir = 'asc';
   let tableData = [];
 
-  const COL_FIELD = { name: 'lang', records: 'records', pass: 'pass',
+  const COL_FIELD = { name: 'set', records: 'records', pass: 'pass',
                       fail: 'fail', indet: 'indet', maturity: 'maturity' };
 
   function applySort() {
@@ -1087,7 +1087,7 @@
 
   function renderDashboard(summary) {
     const ov = summary.overall;
-    const langs = summary.sets || {};
+    const sets = summary.sets || {};
     const totalTests = ov.pass + ov.fail + ov.indet;
 
     document.getElementById('kpi-total').textContent     = ov.records.toLocaleString();
@@ -1095,7 +1095,7 @@
     document.getElementById('kpi-pass-sub').textContent  = `${ov.pass.toLocaleString()} test passes`;
     document.getElementById('kpi-fail-rate').textContent = pct(ov.fail, totalTests) + '%';
     document.getElementById('kpi-fail-sub').textContent  = `${ov.fail.toLocaleString()} test failures`;
-    document.getElementById('kpi-langs').textContent     = Object.keys(langs).length;
+    document.getElementById('kpi-sets').textContent     = Object.keys(sets).length;
 
     for (const cat of ['F','A','I','R']) {
       const d = ov.fair[cat] || {pass:0, total:0};
@@ -1106,15 +1106,15 @@
       setTimeout(() => { document.getElementById(`fair-${c}-bar`).style.width = p + '%'; }, 100);
     }
 
-    tableData = Object.keys(langs).map(lang => {
-      const ls  = langs[lang];
+    tableData = Object.keys(sets).map(set => {
+      const ls  = sets[set];
       const mat = ls.maturityLevel != null ? ls.maturityLevel : 0;
       const fair = ls.fair || {};
       const fairDesc = ['F','A','I','R'].map(c => {
         const d = fair[c] || {pass:0,total:0};
         return `${c}: ${pct(d.pass, d.total)}%`;
       }).join(', ');
-      return { lang, records: ls.records, pass: ls.pass, fail: ls.fail, indet: ls.indet,
+      return { set, records: ls.records, pass: ls.pass, fail: ls.fail, indet: ls.indet,
                maturity: mat, fairDesc, ls };
     });
 
@@ -1141,10 +1141,10 @@
   }
 
   function renderRows() {
-    const tbody = document.getElementById('lang-table-body');
+    const tbody = document.getElementById('set-table-body');
     tbody.innerHTML = '';
     for (const row of tableData) {
-      const { lang, ls } = row;
+      const { set, ls } = row;
       const pass  = ls.pass, fail = ls.fail, indet = ls.indet;
       const total = pass + fail + indet;
       const fair  = ls.fair || {};
@@ -1157,11 +1157,11 @@
       tr.setAttribute('tabindex', '0');
       tr.setAttribute('role', 'button');
       tr.setAttribute('aria-label',
-        `${SET_NAMES[lang] || lang} — ${ls.records.toLocaleString()} records. ${row.fairDesc}. Maturity Level ${row.maturity}. Press Enter to view details.`);
+        `${SET_NAMES[set] || set} — ${ls.records.toLocaleString()} records. ${row.fairDesc}. Maturity Level ${row.maturity}. Press Enter to view details.`);
       tr.innerHTML = `
-        <td><div class="lang-name">
-          <span class="lang-tag">${lang}</span>
-          <span class="lang-fullname">${SET_NAMES[lang] || ''}</span>
+        <td><div class="set-name">
+          <span class="set-tag">${set}</span>
+          <span class="set-fullname">${SET_NAMES[set] || ''}</span>
         </div></td>
         <td class="num">${ls.records.toLocaleString()}</td>
         <td>
@@ -1190,7 +1190,7 @@
         <td>${maturityBadgeHTML(row.maturity)}</td>
         <td class="view-arrow" aria-hidden="true">→</td>`;
       const go = () => {
-        window.location.href = `detail.html?lang=${encodeURIComponent(lang)}`;
+        window.location.href = `detail.html?set=${encodeURIComponent(set)}`;
       };
       tr.addEventListener('click', go);
       tr.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }});

@@ -43,14 +43,14 @@ REST endpoint and operates on a single tenant's data at a time.
 OAI-PMH endpoint
       │
       ▼
-GetOaiPmhIdentifiers   →   data/<tenant>/guids_<lang>.txt
+GetOaiPmhIdentifiers   →   data/<tenant>/guids_<set>.txt
       │
       ▼
-RunBenchmarkAssessment →   results/<tenant>/guids_<lang>/<identifier>.json
+RunBenchmarkAssessment →   results/<tenant>/guids_<set>/<identifier>.json
       │
       ▼
 GenerateManifest       →   results/<tenant>/summary.json
-                           results/<tenant>/guids_<lang>/pages/page-NNN.json
+                           results/<tenant>/guids_<set>/pages/page-NNN.json
 ```
 
 The three stages are intended to be run in order, once per tenant. The
@@ -64,7 +64,7 @@ tenant never reads or writes another tenant's files.
 
 Queries an OAI-PMH endpoint using the `ListIdentifiers` verb,
 following resumption tokens until all pages have been retrieved. For
-each set it writes a `guids_<lang>.txt` file, under the
+each set it writes a `guids_<set>.txt` file, under the
 calling tenant's data directory, in which every non-comment line is a
 complete OAI-PMH `GetRecord` URL ready for the next stage. By default
 it targets the CESSDA Data Catalogue endpoint and processes ten
@@ -76,12 +76,12 @@ for full usage and options.
 
 ### RunBenchmarkAssessment
 
-Reads the `guids_<lang>.txt` files produced by the previous stage and
+Reads the `guids_<set>.txt` files produced by the previous stage and
 POSTs each `GetRecord` URL to a configurable FAIR Champion championUri
 endpoint, with the configured benchmark algorithm URI included in the
 request payload.
 Results are saved as JSON files under the calling tenant's results
-directory, in `guids_<lang>/`. Processing is parallelised across five
+directory, in `guids_<set>/`. Processing is parallelised across five
 threads. Errors are captured in separate `error_*.json` files so that
 a single failure does not interrupt the rest of the batch.
 
@@ -95,7 +95,7 @@ per-record JSON files into two artefacts used by the HTML dashboard.
 It writes a single `summary.json` containing aggregated pass, fail,
 and indeterminate counts broken down by set, test ID, and FAIR
 category (F, A, I, R). It also writes paginated
-`guids_<lang>/pages/page-NNN.json` files (200 records per page)
+`guids_<set>/pages/page-NNN.json` files (200 records per page)
 containing only the fields the browser needs, keeping page loads
 small.
 
@@ -128,12 +128,12 @@ directories:
 ```text
 data/
   <tenant-id>/
-    guids_<lang>.txt
+    guids_<set>.txt
 
 results/
   <tenant-id>/
     summary.json
-    guids_<lang>/
+    guids_<set>/
       <identifier>.json
       pages/
         page-NNN.json
@@ -238,7 +238,7 @@ non-functional files have been omitted.
 ```text
 <ROOT>
 ├── README.md           # This file
-├── data                # Per-tenant guids_<lang>.txt files
+├── data                # Per-tenant guids_<set>.txt files
 ├── results             # Per-tenant outputs from RunBenchmarkAssessment
 ├── src                 # Contains all source code and assets for the
 │                          application

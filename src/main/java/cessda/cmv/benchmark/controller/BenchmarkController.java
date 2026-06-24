@@ -51,7 +51,7 @@ public class BenchmarkController {
         // GET /api/config
         // -------------------------------------------------------------------------
 
-        @GetMapping("/api/config")
+        @GetMapping({ "/config", "/api/config" })
         public Map<String, Object> getConfig() {
                 TenantConfig cfg = service.getCurrentTenantConfig();
                 return Map.of(
@@ -230,7 +230,7 @@ public class BenchmarkController {
 
         @Operation(summary = "Generate dashboard manifest", description = "Reads JSON result files from the results volume and produces "
                         +
-                        "results/summary.json and paginated results/guids_<lang>/pages/page-NNN.json " +
+                        "results/summary.json and paginated results/guids_<set>/pages/page-NNN.json " +
                         "files consumed by the HTML dashboard. " +
                         "Equivalent to running GenerateManifest from the command line or " +
                         "the first step of start-dashboard.sh.", responses = {

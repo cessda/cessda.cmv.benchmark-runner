@@ -356,12 +356,12 @@ class RunBenchmarkAssessmentTest {
         @ParameterizedTest
         @ValueSource(strings = { "de", "el", "en", "fi", "fr", "hr", "nl",
                         "sl", "sl-SI", "sv" })
-        void defaultSetsMatchGetOaiPmhIdentifiersDefaults(String lang) {
+        void defaultSetsMatchGetOaiPmhIdentifiersDefaults(String set) {
                 List<String> runSets = List.of(RunBenchmarkAssessment.DEFAULT_SETS);
                 List<String> fetchSets = List.of(GetOaiPmhIdentifiers.DEFAULT_SETS);
-                assertTrue(runSets.contains(lang),
-                                "RunBenchmarkAssessment.DEFAULT_SETS must contain " + lang);
-                assertTrue(fetchSets.contains(lang),
-                                "GetOaiPmhIdentifiers.DEFAULT_SETS must contain " + lang);
+                assertTrue(runSets.contains(set),
+                                "RunBenchmarkAssessment.DEFAULT_SETS must contain " + set);
+                assertTrue(fetchSets.contains(set),
+                                "GetOaiPmhIdentifiers.DEFAULT_SETS must contain " + set);
         }
 }

@@ -238,7 +238,7 @@ produces two artefacts consumed by the HTML dashboard:
 
 - `results/summary.json` — aggregated pass, fail, and indeterminate
   counts broken down by set, test ID, and FAIR category
-- `results/guids_<lang>/pages/page-NNN.json` — paginated slices of
+- `results/guids_<set>/pages/page-NNN.json` — paginated slices of
   the record list (200 records per page)
 
 This endpoint is the API equivalent of the first command in the
