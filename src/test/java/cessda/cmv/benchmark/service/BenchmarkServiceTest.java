@@ -478,4 +478,66 @@ class BenchmarkServiceTest {
                 "Return message must contain the absolute tenant results path");
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Configuration resolution
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("failsFastForMissingAlgorithmConfiguration")
+    void failsFastForMissingAlgorithmConfiguration() {
+        String[] algorithmAndRunner = service.getDefaultAlgorithmAndRunner();
+        assertTrue(algorithmAndRunner[0] == null || algorithmAndRunner[0].isBlank(),
+            "Algorithm should be null or blank when not configured");
+    }
+
+    @Test
+    @DisplayName("failsFastForMissingRunnerConfiguration")
+    void failsFastForMissingRunnerConfiguration() {
+        String[] algorithmAndRunner = service.getDefaultAlgorithmAndRunner();
+        assertTrue(algorithmAndRunner[1] == null || algorithmAndRunner[1].isBlank(),
+            "Runner should be null or blank when not configured");
+    }
+
+    @Test
+    @DisplayName("returnsTenantAlgorithmAndRunnerFromConfiguration")
+    void returnsTenantAlgorithmAndRunnerFromConfiguration() {
+        TenantContext testTenantContext = new TenantContext();
+        testTenantContext.setTenantId(TENANT_ID);
+
+        TenantProperties tenantProperties = new TenantProperties();
+        TenantProperties.TenantConfig tenantConfig = new TenantProperties.TenantConfig();
+        tenantConfig.setSpreadsheetUri("https://example.org/algorithm");
+        tenantConfig.setChampionUri("https://example.org/runner");
+        tenantProperties.getConfig().put(TENANT_ID, tenantConfig);
+
+        BenchmarkService serviceWithConfig = new BenchmarkService(testTenantContext, tenantProperties);
+        String[] algorithmAndRunner = serviceWithConfig.getDefaultAlgorithmAndRunner();
+
+        assertEquals("https://example.org/algorithm", algorithmAndRunner[0],
+            "Algorithm should be resolved from tenant config");
+        assertEquals("https://example.org/runner", algorithmAndRunner[1],
+            "Runner should be resolved from tenant config");
+    }
+
+    @Test
+    @DisplayName("returnsTenantBrandingFromConfiguration")
+    void returnsTenantBrandingFromConfiguration() {
+        TenantContext testTenantContext = new TenantContext();
+        testTenantContext.setTenantId(TENANT_ID);
+
+        TenantProperties tenantProperties = new TenantProperties();
+        TenantProperties.TenantConfig tenantConfig = new TenantProperties.TenantConfig();
+        tenantConfig.setTitle("Test tenant title");
+        tenantConfig.setFooter("Test tenant footer");
+        tenantProperties.getConfig().put(TENANT_ID, tenantConfig);
+
+        BenchmarkService serviceWithConfig = new BenchmarkService(testTenantContext, tenantProperties);
+        BenchmarkService.Branding branding = serviceWithConfig.getTenantBranding();
+
+        assertEquals("Test tenant title", branding.title(),
+            "Title should be resolved from tenant config");
+        assertEquals("Test tenant footer", branding.footer(),
+            "Footer should be resolved from tenant config");
+    }
 }
