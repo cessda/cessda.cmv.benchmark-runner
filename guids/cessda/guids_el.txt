@@ -1,4 +1,4 @@
-# Identifiers for set: el
+# Identifiers for language: el
 # Fetched: 2026-03-13T13:00:54.250895Z
 # Count: 621
 e3a8ed3d2775eb1e82f5a7fb3a0cb1325a10f367502241a84a66a32835dfcabf
