@@ -16,7 +16,7 @@ RUN mvn package -DskipTests -q
 # Minimal JRE-only image keeps the final image small.
 # Use a non-alpine Temurin JRE base to avoid known Alpine vulnerabilities
 # and receive regular security updates (Ubuntu Jammy-based image).
-FROM eclipse-temurin:21-jre-jammy-latest
+FROM eclipse-temurin:21-jre-jammy
 
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
