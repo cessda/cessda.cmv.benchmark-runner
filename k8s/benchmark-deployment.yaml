@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: benchmark
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: benchmark
+
+  template:
+    metadata:
+      labels:
+        app: benchmark
+
+    spec:
+      containers:
+        - name: benchmark
+          image: benchmark:latest
+
+          ports:
+            - containerPort: 8080
+
+          env:
+            - name: DATA_DIR
+              value: /storage/guids
+
+            - name: RESULTS_DIR
+              value: /storage/results
+
+          volumeMounts:
+            - name: benchmark-storage
+              mountPath: /storage
+
+      volumes:
+        - name: benchmark-storage
+          persistentVolumeClaim:
+            claimName: benchmark-data

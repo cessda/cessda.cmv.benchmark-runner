@@ -1,0 +1,23 @@
+
+services:
+  benchmark-runner:
+    build: .
+    image: benchmark-runner:3.0.0
+    container_name: benchmark-runner
+    ports:
+      - "8080:8080"
+    volumes:
+         # local folders → container folders
+      - ./guids:/data
+      - ./results:/results
+    environment:
+      # Override volume paths if needed (these match application.yaml)
+      - benchmark.data-dir=/data
+      - benchmark.results-dir=/results
+    restart: unless-stopped
+
+volumes:
+  benchmark-data:
+    name: benchmark-data
+  benchmark-results:
+    name: benchmark-results

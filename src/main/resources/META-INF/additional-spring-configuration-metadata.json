@@ -1,0 +1,24 @@
+{
+  "properties": [
+    {
+      "name": "benchmark.data-dir",
+      "type": "java.lang.String",
+      "description": "Root directory for tenant-scoped guids_*.txt input files."
+    },
+    {
+      "name": "benchmark.results-dir",
+      "type": "java.lang.String",
+      "description": "Root directory for tenant-scoped JSON results and generated manifest files."
+    },
+    {
+      "name": "benchmark.algorithm",
+      "type": "java.lang.String",
+      "description": "Default benchmark algorithm URI for standalone CLI execution."
+    },
+    {
+      "name": "benchmark.runner",
+      "type": "java.lang.String",
+      "description": "Default FAIR Champion runner URI for standalone CLI execution."
+    }
+  ]
+}

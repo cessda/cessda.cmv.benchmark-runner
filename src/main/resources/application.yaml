@@ -1,0 +1,203 @@
+# ── Server ──────────────────────────────────────────────────────────────────
+server:
+  port: 8080
+
+# ── Data and results directories ─────────────────────────────────────────────
+# In a Docker deployment these would typically be absolute paths to
+# mounted volumes (e.g. /data, /results). For local development they
+# are relative paths under the project root.
+# benchmark.data-dir    - root directory for per-tenant guids_*.txt
+#                         files, resolved as {data-dir}/{tenant-id}/
+# benchmark.results-dir - root directory for per-tenant JSON result
+#                         files and summary.json, resolved as
+#                         {results-dir}/{tenant-id}/
+#
+# ── Benchmark Algorithm ───────────────────────────────────────────────────────
+# benchmark.algorithm - URI of the Benchmark Assessment Algorithm to use
+# benchmark.runner    - URI of the instance of FAIR Champion to run
+benchmark:
+  data-dir: ./guids
+  results-dir: ./results
+  algorithm: https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw
+  runner: https://tools.ostrails.eu/champion/assess/algorithm
+
+# ── SpringDoc / Swagger UI ────────────────────────────────────────────────────
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /api-docs/ui
+    operationsSorter: alpha
+  info:
+    title: CESSDA FAIR Benchmark Runner API
+    description: REST API for the CESSDA CMV FAIR benchmark pipeline
+    version: 2.0.0
+
+# ── Static resources (HTML dashboard) ────────────────────────────────────────
+# Spring Boot serves src/main/resources/static/ at / by default.
+# This covers index.html and detail.html.
+# The /results/** URL prefix is mapped to the results volume by WebConfig.java,
+# matching the relative fetch() paths used in the dashboard JavaScript.
+spring:
+  web:
+    resources:
+      static-locations: classpath:/static/
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+logging:
+  level:
+    cessda.cmv.benchmark: INFO
+
+# ── Multi-tenancy ─────────────────────────────────────────────────────────────
+tenants:
+  enabled: true
+  keys:
+    "key-cessda": "cessda"
+    "key-oxford": "oxford"
+    
+  # Each tenant has its own Benchmark Assessment Algorithm and FAIR
+  # Champion runner — these are not shared across tenants, since one
+  # tenant's algorithm configuration is not meaningful for another
+  # tenant's data.
+  config:
+    cessda:
+      algorithm: https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw
+      runner: https://tools.ostrails.eu/champion/assess/algorithm
+      title: CESSDA Data Catalogue · Assessment Results
+      footer: CESSDA FAIR Benchmark Dashboard
+      set-names:
+        de: German
+        el: Greek
+        en: English
+        fi: Finnish
+        fr: French
+        hr: Croatian
+        nl: Dutch
+        sl: Slovenian
+        sl-SI: Slovenian (SI)
+        sv: Swedish
+      fair-map:
+        F1_PID: F
+        F1_GUID: F
+        F2A: F
+        F2B: F
+        F4: F
+        A1_1: A
+        A1_2: A
+        I1_A: I
+        I2_A: I
+        R1_2_CPI: R
+        R1_3_CEK: R
+        R1_3_CTV: R
+        R1_3_DMOCV: R
+        R1_3_DAUV: R
+        R1_3_DTMV: R
+        R1_3_DSPV: R
+      maturity-levels:
+        level1:
+          - F1_GUID
+          - F2B
+          - F4
+          - A1_1
+        level2:
+          - F1_GUID
+          - F2B
+          - F4
+          - A1_1
+          - F2A
+          - I1_A
+          - R1_2_CPI
+        level3:
+          - F1_GUID
+          - F2B
+          - F4
+          - A1_1
+          - F2A
+          - I1_A
+          - R1_2_CPI
+          - F1_PID
+          - I2_A
+          - R1_3_CEK
+          - R1_3_CTV
+          - R1_3_DMOCV
+          - R1_3_DAUV
+          - R1_3_DTMV
+          - R1_3_DSPV
+    oxford:
+      algorithm: https://docs.google.com/spreadsheets/d/1Lbo0KzlN-RPRJ5POqHKh8YE2GXSv0bnaKZzwkaCOP9M
+      runner: https://champion.fairsharing.org/champion/assess/algorithm
+      title: Oxford Research Archive · Assessment Results
+      footer: Oxford FAIR Benchmark Dashboard
+      set-names:
+        bhf: British Heart Foundation
+        epsrc: Engineering and Physical Sciences Research Council
+        mrc: Medical Research Council
+        nerc: Natural Environment Research Council
+        wellcome: Wellcome Trust
+      fair-map:
+        F1_Unique: F
+        F1_Resolve: F
+        F1_Persist: F
+        F2_PublisherInfo: F
+        F3_SelfID: F
+        F3_DataID: F
+        F4_GenericSearch: F
+        F2_Fields: F
+        F2_Tags: F
+        A1_1_HTTP: A
+        A1_2_Auth: A
+        A1_2_FS_Auth: A
+        A2_Policy: A
+        I1_Semant: I
+        I1_DBSem: I
+        I3_Related: I
+        R1_3_GenFormat: R
+        R1_1_DBLic: R
+        R1_1_DataLic: R
+        R1_2_ORCID: R
+        R1_2_Fund: R
+        R1_2_FundROR: R
+        R1_2_Affil: R
+        R1_2_Pubs: R
+        R1_3_ISO639: R
+      maturity-levels:
+        level1:
+          - F1_Unique
+          - F1_Resolve
+          - F2_PublisherInfo
+          - A1_1_HTTP
+        level2:
+          - F1_Unique
+          - F1_Resolve
+          - F2_PublisherInfo
+          - A1_1_HTTP
+          - F1_Persist
+          - F3_SelfID
+          - I1_Semant
+          - R1_1_DataLic
+        level3:
+          - F1_Unique
+          - F1_Resolve
+          - F2_PublisherInfo
+          - A1_1_HTTP
+          - F1_Persist
+          - F3_SelfID
+          - I1_Semant
+          - R1_1_DataLic
+          - F3_DataID
+          - F4_GenericSearch
+          - F2_Fields
+          - F2_Tags
+          - A1_2_Auth
+          - A1_2_FS_Auth
+          - A2_Policy
+          - I1_DBSem
+          - I3_Related
+          - R1_3_GenFormat
+          - R1_1_DBLic
+          - R1_2_ORCID
+          - R1_2_Fund
+          - R1_2_FundROR
+          - R1_2_Affil
+          - R1_2_Pubs
+          - R1_3_ISO639ƒ

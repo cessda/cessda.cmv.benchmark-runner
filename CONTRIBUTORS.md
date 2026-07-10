@@ -2,6 +2,6 @@
 
 ## Contributors
 
-Name            | Email                     | Role
-:---            | :---                      | :---
+Name             | Email                                 | Role
+:---             | :---                                  | :---
 John Shepherdson | john DOT shepherdson AT cessda DOT eu | Project Consultant
