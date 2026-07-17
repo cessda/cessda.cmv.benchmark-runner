@@ -1,6 +1,6 @@
 # ── Stage 1: Build ───────────────────────────────────────────────────────────
 # Uses the official Maven + JDK 21 image to compile and package the fat JAR.
-FROM maven:3.9.11-eclipse-temurin-21 AS build
+FROM maven:3.9.15-eclipse-temurin-21 AS build
 
 WORKDIR /build
 

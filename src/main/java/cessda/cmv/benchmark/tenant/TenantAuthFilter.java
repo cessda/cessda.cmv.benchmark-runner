@@ -39,7 +39,9 @@ public class TenantAuthFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
 
-        // Exempt health checks and the static dashboard HTML/assets.
+        // Exempt health checks, the static dashboard HTML/assets, and
+        // the SpringDoc/Swagger UI paths so the API documentation is
+        // accessible without an API key.
         //
         // Spring Boot's WelcomePageHandlerMapping internally forwards
         // "GET /" to "/index.html" before this filter evaluates the
@@ -54,7 +56,8 @@ public class TenantAuthFilter extends OncePerRequestFilter {
             || path.equals("/detail.html")
             || path.startsWith("/css/")
             || path.startsWith("/js/")
-            || path.equals("/favicon.ico");
+            || path.equals("/favicon.ico")
+            || path.startsWith("/api-docs");
     }
 
     @Override

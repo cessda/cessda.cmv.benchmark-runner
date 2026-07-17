@@ -1,3 +1,7 @@
+#!/bin/bash
+
+# Run in a directory containing JSON files with Champion test results.
+# Generates a CSV file with the non-pass results.
 {
   echo "file,test_name,result"
   for f in *.json; do

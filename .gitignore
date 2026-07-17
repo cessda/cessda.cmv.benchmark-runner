@@ -62,6 +62,6 @@ nbdist/
 .vscode/
 bin/
 
-### Results files (.json, .html)###
-results/
-guids/
+### Input and output files (.txt, .json)###
+results/*.json
+guids/**/*.txt
