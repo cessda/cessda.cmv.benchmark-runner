@@ -63,5 +63,5 @@ nbdist/
 bin/
 
 ### Input and output files (.txt, .json)###
-results/*.json
+results/**/*.json
 guids/**/*.txt
