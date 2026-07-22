@@ -88,20 +88,6 @@ a single failure does not interrupt the rest of the batch.
 See [RunBenchmarkAssessment_README.md](RunBenchmarkAssessment_README.md)
 for full usage and options.
 
-PLACEHOLDER
-PLACEHOLDER
-PLACEHOLDER
-PLACEHOLDER
-PLACEHOLDER
-PLACEHOLDER
-PLACEHOLDER
-PLACEHOLDER
-PLACEHOLDER
-PLACEHOLDER
-PLACEHOLDER
-PLACEHOLDER
-PLACEHOLDER
-
 ## HTTP API overview
 
 All `/api/**` endpoints require an `X-API-Key` header. The key selects
