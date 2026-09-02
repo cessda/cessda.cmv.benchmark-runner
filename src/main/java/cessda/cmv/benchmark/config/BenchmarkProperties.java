@@ -41,6 +41,15 @@ public class BenchmarkProperties {
 
     private String runner;
 
+    /**
+     * Pause, in milliseconds, observed before submitting each GUID
+     * after the first within a batch during a benchmark run — see
+     * {@code RunBenchmarkAssessment.DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS}.
+     * {@code null} (the default when unset) leaves that compiled-in
+     * default in place.
+     */
+    private Long backoffBetweenProcessGuidMs;
+
     public String getDataDir() {
         return dataDir;
     }
@@ -71,6 +80,14 @@ public class BenchmarkProperties {
 
     public void setRunner(String runner) {
         this.runner = runner;
+    }
+
+    public Long getBackoffBetweenProcessGuidMs() {
+        return backoffBetweenProcessGuidMs;
+    }
+
+    public void setBackoffBetweenProcessGuidMs(Long backoffBetweenProcessGuidMs) {
+        this.backoffBetweenProcessGuidMs = backoffBetweenProcessGuidMs;
     }
 
     public Path getDataDirPath() {

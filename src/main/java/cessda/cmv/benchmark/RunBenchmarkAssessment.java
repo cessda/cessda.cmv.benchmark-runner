@@ -150,6 +150,18 @@ public class RunBenchmarkAssessment {
     private static final Logger logger = Logger.getLogger(RunBenchmarkAssessment.class.getName());
 
     private static final Semaphore REQUEST_SEMAPHORE = new Semaphore(2);
+
+    /**
+     * Default pause, in milliseconds, observed before submitting each
+     * GUID after the first within a batch (see
+     * {@link #backoffBetweenProcessGuid}). Champion occasionally
+     * returns transient errors when hit with bursts of concurrent
+     * requests, so this default pacing is applied even when no
+     * {@code benchmark.backoff-between-process-guid-ms} value is
+     * configured.
+     */
+    private static final long DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS = 1_000;
+
     // -----------------------------------------------------------------------
     // Instance state
     // -----------------------------------------------------------------------
@@ -179,6 +191,17 @@ public class RunBenchmarkAssessment {
     private Path dataDir = Paths.get("data");
 
     private Path resultsDir = Paths.get(OUTPUT_DIR);
+
+    /**
+     * Pause, in milliseconds, observed before submitting each GUID
+     * after the first within a batch (see {@link #processGuids}).
+     * Defaults to {@link #DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS} and
+     * is overwritten with the configured
+     * {@code benchmark.backoff-between-process-guid-ms} value, when
+     * present, by both {@link #main(String[])} (via {@link CliConfig})
+     * and {@code BenchmarkService}.
+     */
+    private long backoffBetweenProcessGuid = DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS;
 
 
     // -----------------------------------------------------------------------
@@ -299,6 +322,32 @@ public class RunBenchmarkAssessment {
         return championUri;
     }
 
+    /**
+     * Returns the pause, in milliseconds, observed before submitting
+     * each GUID after the first within a batch.
+     *
+     * @return the configured backoff, in milliseconds
+     */
+    public long getBackoffBetweenProcessGuid() {
+        return backoffBetweenProcessGuid;
+    }
+
+    /**
+     * Overrides the default pause between successive GUID submissions.
+     * Called with the configured
+     * {@code benchmark.backoff-between-process-guid-ms} value, when
+     * present, by both {@link #main(String[])} and
+     * {@code BenchmarkService} — the compiled-in
+     * {@link #DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS} applies
+     * otherwise.
+     *
+     * @param backoffBetweenProcessGuidMs the backoff to use, in
+     *                                    milliseconds
+     */
+    public void setBackoffBetweenProcessGuid(long backoffBetweenProcessGuidMs) {
+        this.backoffBetweenProcessGuid = backoffBetweenProcessGuidMs;
+    }
+
     // -----------------------------------------------------------------------
     // Entry point
     // -----------------------------------------------------------------------
@@ -344,9 +393,14 @@ public class RunBenchmarkAssessment {
         @Bean
         RunBenchmarkAssessment runBenchmarkAssessment(
                 BenchmarkProperties benchmarkProperties) {
-            return new RunBenchmarkAssessment(
+            RunBenchmarkAssessment runner = new RunBenchmarkAssessment(
                     benchmarkProperties.getAlgorithm(),
                     benchmarkProperties.getRunner());
+            if (benchmarkProperties.getBackoffBetweenProcessGuidMs() != null) {
+                runner.setBackoffBetweenProcessGuid(
+                        benchmarkProperties.getBackoffBetweenProcessGuidMs());
+            }
+            return runner;
         }
     }
 
@@ -598,6 +652,9 @@ public class RunBenchmarkAssessment {
     /**
      * Submits all GUIDs to the Champion API using a fixed thread pool
      * of five workers and awaits completion for up to ten minutes.
+     * Every submission after the first ({@code index > 0}) is preceded
+     * by a {@link #backoffBetweenProcessGuid}-millisecond pause, to
+     * ease the burst of concurrent requests Champion otherwise sees.
      *
      * @param guids  list of GetRecord URLs to submit
      * @param set    set name used for error-file naming
@@ -629,6 +686,9 @@ public class RunBenchmarkAssessment {
                     try {
                         REQUEST_SEMAPHORE.acquire();
                         try {
+                            if (index > 0) {
+                                Thread.sleep(backoffBetweenProcessGuid);
+                            }
                             processOneGuid(guid, index, set, subDir, championUri);
                         } finally {
                             REQUEST_SEMAPHORE.release();
@@ -722,9 +782,10 @@ public class RunBenchmarkAssessment {
                         .replaceAll("[^a-zA-Z0-9._-]", "_");
                 Path jsonOutputPath = outputDir.resolve(sanitisedGuid + ".json");
 
-                if (response.statusCode() == 504 || response.statusCode() == 502) {
+                if (response.statusCode() == 500 || response.statusCode() == 502
+                        || response.statusCode() == 504) {
                     lastException = new IOException(
-                            "Gateway error: HTTP " + response.statusCode());
+                            "Server error: HTTP " + response.statusCode());
                     logSevere("Attempt %d failed for GUID %d: HTTP %d",
                             attempt + 1, index + 1, response.statusCode());
                     continue; // trigger next retry iteration
