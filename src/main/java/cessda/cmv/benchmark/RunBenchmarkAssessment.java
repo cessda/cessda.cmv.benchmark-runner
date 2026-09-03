@@ -32,6 +32,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -56,6 +57,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -694,8 +696,14 @@ public class RunBenchmarkAssessment {
                             REQUEST_SEMAPHORE.release();
                         }
                     } catch (IOException ioe) {
+                        // processOneGuid already calls saveErrorFile itself
+                        // before throwing, on every path that reaches here
+                        // (the immediate non-transient failure, and retries
+                        // exhausted) — saving again here would just write a
+                        // second, less specific error_<guid>.json for the
+                        // same failure (see saveErrorFile's collision
+                        // handling), so this only needs to log.
                         logSevere(PROCERROR, guid, ioe.getMessage());
-                        saveErrorFile(guid, set, ioe, subDir);
                     } catch (InterruptedException ie) {
                         logSevere(PROCERROR, guid, ie.getMessage());
                         Thread.currentThread().interrupt();
@@ -717,8 +725,11 @@ public class RunBenchmarkAssessment {
     /**
      * Submits a single GUID to the Champion API and saves the response.
      * This method implements a retry mechanism for transient errors such as
-     * SSL handshake failures and timeouts, with exponential backoff between
-     * attempts.
+     * SSL handshake failures, timeouts, 500/502/504 responses, and — since
+     * Champion can also return HTTP 200 while silently failing to evaluate
+     * one or more indicators under load — a response body containing an
+     * {@link #OVERWHELMED_RESULT_MARKER overwhelmed indicator}, all with
+     * exponential backoff between attempts.
      * If all attempts fail, a structured error file is saved with details of the
      * failure.
      *
@@ -736,6 +747,51 @@ public class RunBenchmarkAssessment {
      */
     private static final int MAX_RETRIES = 3;
     private static final long INITIAL_BACKOFF_MS = 2_000;
+
+    /**
+     * Substring Champion writes into an indicator's {@code "result"}
+     * field — with {@code "log": null} — when it was too overloaded to
+     * actually evaluate that indicator, rather than genuinely finding
+     * it indeterminate. A normal indeterminate result instead carries
+     * a populated {@code "log"} such as
+     * {@code "Test result is indeterminate."}. Unlike a 500/502/504,
+     * this shows up on an otherwise-successful HTTP response, so it
+     * has to be detected by inspecting the response body rather than
+     * the status code.
+     */
+    private static final String OVERWHELMED_RESULT_MARKER = "result data not found";
+
+    /**
+     * Thrown (as {@code processOneGuid}'s {@code lastException}) once
+     * an attempt's response body is found to contain at least one
+     * overwhelmed indicator — see {@link #findOverwhelmedIndicatorNames}.
+     * If every retry attempt ends up overwhelmed, this is the
+     * exception {@link #saveErrorFile} ultimately writes out, and it
+     * writes the indicator names as a structured
+     * {@code "overwhelmedIndicators"} JSON array rather than requiring
+     * downstream analysis to parse them back out of a message string.
+     * {@link Class#getSimpleName()} on this type also becomes
+     * {@code error_<guid>.json}'s {@code "errorType"} value, so that
+     * field alone unambiguously distinguishes this failure kind from
+     * a persistent HTTP 500/502/504 or an SSL/timeout failure (which
+     * all otherwise shared the generic {@code IOException}
+     * {@code errorType}).
+     */
+    private static final class OverwhelmedIndicatorException extends IOException {
+
+        private final List<String> indicators;
+
+        OverwhelmedIndicatorException(String guid, List<String> indicators) {
+            super("Champion response for GUID " + guid
+                    + " contained overwhelmed indicator(s): "
+                    + String.join(", ", indicators));
+            this.indicators = List.copyOf(indicators);
+        }
+
+        List<String> getIndicators() {
+            return indicators;
+        }
+    }
 
     private void processOneGuid(
             String guid,
@@ -791,6 +847,26 @@ public class RunBenchmarkAssessment {
                     continue; // trigger next retry iteration
                 }
 
+                List<String> overwhelmedIndicators =
+                        findOverwhelmedIndicatorNames(response.body());
+                if (!overwhelmedIndicators.isEmpty()) {
+                    // A dedicated exception type — rather than folding the
+                    // names into a generic IOException's message — lets
+                    // saveErrorFile write them as a structured
+                    // "overwhelmedIndicators" array (and errorType itself
+                    // becomes an unambiguous category), instead of
+                    // downstream analysis having to regex a free-text
+                    // message whose wording can (and has) changed.
+                    lastException = new OverwhelmedIndicatorException(
+                            guid, overwhelmedIndicators);
+                    logSevere("Attempt %d failed for GUID %d: HTTP %d response body"
+                                    + " contained %d overwhelmed indicator(s): %s",
+                            attempt + 1, index + 1, response.statusCode(),
+                            overwhelmedIndicators.size(),
+                            String.join(", ", overwhelmedIndicators));
+                    continue; // trigger next retry iteration
+                }
+
                 writeResponseBodyAsJson(jsonOutputPath, response.body(),
                         guid, response.statusCode());
 
@@ -817,6 +893,77 @@ public class RunBenchmarkAssessment {
         logSevere(PROCFAIL + (index + 1) + ": all %d attempts failed", MAX_RETRIES);
         saveErrorFile(guid, set, lastException, subDir);
         throw new IOException("All retries exhausted for GUID: " + guid, lastException);
+    }
+
+    /**
+     * Finds the name(s) of every indicator in a Champion response body
+     * whose {@code "result"} field carries
+     * {@link #OVERWHELMED_RESULT_MARKER}, i.e. Champion was overloaded
+     * and could not actually evaluate that indicator. Non-JSON or
+     * unparseable bodies yield an empty list, since
+     * {@link #writeResponseBodyAsJson} already handles those by
+     * wrapping the raw body rather than expecting indicator objects.
+     *
+     * @param responseBody raw HTTP response body
+     * @return the overwhelmed indicators' names (e.g. {@code "F1_GUID"}),
+     *         in encounter order; empty if none (or the body isn't
+     *         parseable JSON)
+     */
+    private List<String> findOverwhelmedIndicatorNames(String responseBody) {
+        try {
+            List<String> found = new ArrayList<>();
+            collectOverwhelmedIndicatorNames(mapper.readTree(responseBody), null, found);
+            return found;
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    /**
+     * Recursively walks a parsed Champion response collecting the
+     * name of every indicator object whose {@code "result"} field
+     * contains {@link #OVERWHELMED_RESULT_MARKER}. Recursion (rather
+     * than assuming indicators sit at the top level) keeps this
+     * working across the differently-shaped responses different
+     * tenants' algorithms may return.
+     *
+     * <p>
+     * {@code nameHint} carries the most recently descended-through
+     * object key — the same approach a downstream Python analysis
+     * script independently uses to attribute a match to its test name
+     * — so the indicator's own key (e.g. {@code "F1_GUID"}) is what
+     * ends up in {@code found}, not one of its ancestors'.
+     * </p>
+     *
+     * @param node     current node being inspected
+     * @param nameHint the most recent object key descended through, or
+     *                 {@code null} at the root
+     * @param found    accumulator for overwhelmed indicator names
+     */
+    private static void collectOverwhelmedIndicatorNames(
+            JsonNode node, String nameHint, List<String> found) {
+
+        if (node == null || !(node.isObject() || node.isArray())) {
+            return;
+        }
+        if (node.isObject()) {
+            JsonNode resultNode = node.get("result");
+            if (resultNode != null && resultNode.isTextual()
+                    && resultNode.asText().contains(OVERWHELMED_RESULT_MARKER)) {
+                found.add(nameHint != null ? nameHint : "(unknown)");
+            }
+            var fields = node.fields();
+            while (fields.hasNext()) {
+                var field = fields.next();
+                collectOverwhelmedIndicatorNames(field.getValue(), field.getKey(), found);
+            }
+        } else {
+            // Arrays carry no key of their own — propagate the hint
+            // from whichever object key held this array.
+            for (JsonNode child : node) {
+                collectOverwhelmedIndicatorNames(child, nameHint, found);
+            }
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -913,6 +1060,12 @@ public class RunBenchmarkAssessment {
             if (error.getCause() != null) {
                 errorJson.put("cause",
                         error.getCause().getMessage());
+            }
+            if (error instanceof OverwhelmedIndicatorException overwhelmed) {
+                var indicatorsArray = errorJson.putArray("overwhelmedIndicators");
+                for (String indicator : overwhelmed.getIndicators()) {
+                    indicatorsArray.add(indicator);
+                }
             }
 
             Files.write(errorPath,
