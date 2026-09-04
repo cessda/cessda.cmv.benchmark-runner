@@ -550,8 +550,6 @@ public class RunBenchmarkAssessment {
 
     /**
      * Reads GUIDs from the file identified by {@link #guidsFilename}.
-     * The classpath (resources) is checked first, then the path as
-     * given, then the configured {@link #dataDir}.
      *
      * @return an immutable list of GUID / GetRecord URL strings
      * @throws IOException if the file cannot be found or read
