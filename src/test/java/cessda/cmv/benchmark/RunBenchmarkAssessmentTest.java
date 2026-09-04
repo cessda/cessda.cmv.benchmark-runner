@@ -29,6 +29,9 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import cessda.cmv.benchmark.config.BenchmarkProperties;
+import cessda.cmv.benchmark.tenant.TenantProperties;
+
 /**
  * Unit tests for {@link RunBenchmarkAssessment}.
  *
@@ -311,10 +314,125 @@ class RunBenchmarkAssessmentTest {
         }
 
         @Test
+        void parseArgsRecognisesTenantShortOption() throws IOException {
+                CommandLine cmd = RunBenchmarkAssessment.parseArgs(
+                                new String[] { "-t", "cessda" });
+                assertTrue(cmd.hasOption("tenant"));
+                assertEquals("cessda", cmd.getOptionValue("tenant"));
+        }
+
+        @Test
+        void parseArgsRecognisesTenantLongOption() throws IOException {
+                CommandLine cmd = RunBenchmarkAssessment.parseArgs(
+                                new String[] { "--tenant", "oxford" });
+                assertTrue(cmd.hasOption("tenant"));
+                assertEquals("oxford", cmd.getOptionValue("tenant"));
+        }
+
+        @Test
+        void parseArgsWithNoTenantOptionLeavesTenantAbsent() throws IOException {
+                CommandLine cmd = RunBenchmarkAssessment.parseArgs(
+                                new String[] { "-s", "https://custom.example.org/spreadsheet" });
+                assertFalse(cmd.hasOption("tenant"));
+        }
+
+        @Test
         void parseArgsThrowsOnUnrecognisedOption() {
                 assertThrows(IOException.class,
                                 () -> RunBenchmarkAssessment.parseArgs(
                                                 new String[] { "--no-such-option" }));
+        }
+
+        // ── resolveTenant ────────────────────────────────────────────────────────
+        // Exercises the same tenant-scoped resolution formula main() uses for
+        // -t/--tenant, without booting a Spring context: algorithm/runner from
+        // tenants.config.<tenantId> (with legacy alias fallback), and
+        // data/results directories scoped under {data,results}-dir/<tenantId>/,
+        // mirroring BenchmarkService's resolution for the REST API.
+
+        private static BenchmarkProperties benchmarkPropertiesWithDirs(String dataDir, String resultsDir) {
+                BenchmarkProperties props = new BenchmarkProperties();
+                props.setDataDir(dataDir);
+                props.setResultsDir(resultsDir);
+                return props;
+        }
+
+        private static TenantProperties tenantPropertiesWith(String tenantId,
+                        TenantProperties.TenantConfig config) {
+                TenantProperties props = new TenantProperties();
+                props.setConfig(java.util.Map.of(tenantId, config));
+                return props;
+        }
+
+        @Test
+        void resolveTenantReturnsNullForUnconfiguredTenant() {
+                TenantProperties tenantProperties = new TenantProperties();
+                BenchmarkProperties benchmarkProperties = benchmarkPropertiesWithDirs("./guids", "./results");
+
+                RunBenchmarkAssessment.TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
+                                tenantProperties, benchmarkProperties, "no-such-tenant");
+
+                assertNull(resolution);
+        }
+
+        @Test
+        void resolveTenantUsesTenantAlgorithmAndRunner() {
+                TenantProperties.TenantConfig config = new TenantProperties.TenantConfig();
+                config.setAlgorithm("https://example.org/algorithm");
+                config.setRunner("https://example.org/runner");
+                config.setTitle("Example · Assessment Results");
+                config.setFooter("Example FAIR Benchmark Dashboard");
+
+                TenantProperties tenantProperties = tenantPropertiesWith("example", config);
+                BenchmarkProperties benchmarkProperties = benchmarkPropertiesWithDirs("./guids", "./results");
+
+                RunBenchmarkAssessment.TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
+                                tenantProperties, benchmarkProperties, "example");
+
+                assertAll(
+                                () -> assertEquals("https://example.org/algorithm", resolution.algorithm()),
+                                () -> assertEquals("https://example.org/runner", resolution.runner()));
+        }
+
+        @Test
+        void resolveTenantFallsBackToLegacyAliasFields() {
+                TenantProperties.TenantConfig config = new TenantProperties.TenantConfig();
+                config.setSpreadsheetUri("https://example.org/legacy-algorithm");
+                config.setChampionUri("https://example.org/legacy-runner");
+                config.setTitle("Legacy · Assessment Results");
+                config.setFooter("Legacy FAIR Benchmark Dashboard");
+
+                TenantProperties tenantProperties = tenantPropertiesWith("legacy", config);
+                BenchmarkProperties benchmarkProperties = benchmarkPropertiesWithDirs("./guids", "./results");
+
+                RunBenchmarkAssessment.TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
+                                tenantProperties, benchmarkProperties, "legacy");
+
+                assertAll(
+                                () -> assertEquals("https://example.org/legacy-algorithm", resolution.algorithm()),
+                                () -> assertEquals("https://example.org/legacy-runner", resolution.runner()));
+        }
+
+        @Test
+        void resolveTenantScopesDataAndResultsDirsUnderTenantId() {
+                TenantProperties.TenantConfig config = new TenantProperties.TenantConfig();
+                config.setAlgorithm("https://example.org/algorithm");
+                config.setRunner("https://example.org/runner");
+                config.setTitle("CESSDA · Assessment Results");
+                config.setFooter("CESSDA FAIR Benchmark Dashboard");
+
+                TenantProperties tenantProperties = tenantPropertiesWith("cessda", config);
+                BenchmarkProperties benchmarkProperties = benchmarkPropertiesWithDirs("./guids", "./results");
+
+                RunBenchmarkAssessment.TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
+                                tenantProperties, benchmarkProperties, "cessda");
+
+                Path expectedDataDir = benchmarkProperties.getDataDirPath().resolve("cessda").normalize();
+                Path expectedResultsDir = benchmarkProperties.getResultsDirPath().resolve("cessda").normalize();
+
+                assertAll(
+                                () -> assertEquals(expectedDataDir, resolution.dataDir()),
+                                () -> assertEquals(expectedResultsDir, resolution.resultsDir()));
         }
 
         // ── Logging helpers ──────────────────────────────────────────────────────
