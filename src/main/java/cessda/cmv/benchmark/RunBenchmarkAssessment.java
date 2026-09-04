@@ -824,7 +824,7 @@ public class RunBenchmarkAssessment {
      * subdirectory name, rooted at {@link #resultsDir}.
      *
      * @param subDir subdirectory under {@code resultsDir}, or
-     *               {@code null} / blank to use {@code resultsDir} itself
+     *               {@code null} to use {@code resultsDir} itself
      * @return resolved {@link Path}
      */
     private Path resolveOutputDir(Path subDir) {
