@@ -62,6 +62,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import cessda.cmv.benchmark.config.BenchmarkProperties;
+import cessda.cmv.benchmark.tenant.TenantProperties;
 
 /**
  * Reads GUID files produced by {@link GetOaiPmhIdentifiers} (each line
@@ -86,6 +87,11 @@ import cessda.cmv.benchmark.config.BenchmarkProperties;
  * <pre>
  *   -s, --spreadsheetUri &lt;uri&gt;   SpreadsheetUri URI (overrides benchmark.algorithm)
  *   -r, --championUri &lt;uri&gt;        championUri URI (overrides benchmark.runner)
+ *   -t, --tenant &lt;tenant-id&gt;  Resolve algorithm/runner and data/results
+ *                              directories from tenants.config.&lt;tenant-id&gt;
+ *                              (an explicit -s/-r still overrides the
+ *                              resolved algorithm/runner). Omit for the
+ *                              shared top-level benchmark.* defaults.
  *   -p, --process-file &lt;file&gt; Process a single named GUID file
  *   -P, --process-all         Process all guids_XX.txt files for the
  *                              default set list
@@ -99,6 +105,19 @@ import cessda.cmv.benchmark.config.BenchmarkProperties;
  * If none of the mode flags are given, the file specified by
  * {@code -f} / {@code --filename} (default: {@value #DEFAULT_GUIDS_FILE})
  * is processed (legacy single-file mode).
+ * </p>
+ *
+ * <p>
+ * {@code -t} / {@code --tenant} makes this CLI tenant-aware, resolving
+ * the same {@code tenants.config.<tenant-id>} entry the REST API uses
+ * ({@code algorithm}, {@code runner}, and per-tenant
+ * {@code {data,results}-dir/<tenant-id>/} subdirectories) instead of
+ * the shared top-level {@code benchmark.*} defaults. This is intended
+ * for driving a per-tenant run from an external pipeline (e.g. CI/QA
+ * automation) without going through the REST API. It is not accepted
+ * by {@link GetOaiPmhIdentifiers}'s own {@code -t} / {@code --tenant}
+ * flag, which only selects an output subdirectory and does not affect
+ * which OAI-PMH endpoint is queried.
  * </p>
  */
 public class RunBenchmarkAssessment {
@@ -146,6 +165,7 @@ public class RunBenchmarkAssessment {
     private static final String PROCESS_FILE_ARG = "process-file";
     private static final String GUID_ARG = "guid";
     private static final String FILENAME_ARG = "filename";
+    private static final String TENANT_ARG = "tenant";
 
     private final Duration requestTimeout;
 
@@ -358,19 +378,34 @@ public class RunBenchmarkAssessment {
      * Spring configuration used only by {@link #main(String[])} to
      * load {@code application.yml} and bind the shared
      * {@code benchmark.algorithm} / {@code benchmark.runner}
-     * properties for standalone command-line use.
+     * properties, plus {@code tenants.config}, for standalone
+     * command-line use.
      *
      * <p>
      * This is deliberately separate from {@link RunBenchmarkAssessment}
      * itself, which is never a Spring bean — see the class-level
      * Javadoc for why a shared singleton is incompatible with
      * multi-tenancy. Standalone CLI use has no concept of "the current
-     * tenant", so it falls back to the shared top-level
+     * tenant" unless {@code -t} / {@code --tenant} is given, in which
+     * case {@link #main(String[])} resolves that tenant's algorithm,
+     * runner, and data/results directories from {@code tenants.config}
+     * itself, the same way {@code BenchmarkService} does for the REST
+     * API. Without {@code -t}, it falls back to the shared top-level
      * {@code benchmark.algorithm} / {@code benchmark.runner}
-     * properties rather than any {@code tenants.config} entry. Both
-     * properties default to an empty string if absent, rather than
-     * failing context startup, since a CLI user may always supply
-     * {@code -s} / {@code -r} instead.
+     * properties. Both of those top-level properties default to an
+     * empty string if absent, rather than failing context startup,
+     * since a CLI user may always supply {@code -s} / {@code -r}
+     * instead.
+     * </p>
+     *
+     * <p>
+     * Registering {@link TenantProperties} here means the CLI now also
+     * performs the same bean validation the REST API's context does:
+     * if {@code application.yml} configures any {@code tenants.config}
+     * entry missing a {@code title} or {@code footer}, context startup
+     * fails — even for a run that never passes {@code -t}. Every
+     * tenant configured for the REST API should already satisfy this,
+     * since it is validated there too.
      * </p>
      *
      * <p>
@@ -383,12 +418,14 @@ public class RunBenchmarkAssessment {
      * the classpath (this one and {@code BenchmarkApplication}) makes
      * that auto-discovery ambiguous and fails every slice test in the
      * application. No {@code @ComponentScan} is needed here either,
-     * since this configuration declares its one {@code @Bean} method
-     * directly.
+     * since {@link TenantProperties} is registered explicitly via
+     * {@code @EnableConfigurationProperties} rather than discovered as
+     * a {@code @Component}, and this configuration declares its one
+     * {@code @Bean} method directly.
      * </p>
      */
     @Configuration
-    @EnableConfigurationProperties(BenchmarkProperties.class)
+    @EnableConfigurationProperties({BenchmarkProperties.class, TenantProperties.class})
     @org.springframework.boot.autoconfigure.EnableAutoConfiguration
     static class CliConfig {
 
@@ -416,13 +453,23 @@ public class RunBenchmarkAssessment {
      * is ready.
      *
      * <p>
-     * This standalone entry point uses the shared top-level
-     * {@code benchmark.algorithm} / {@code benchmark.runner}
-     * properties, not any tenant-specific {@code tenants.config}
-     * entry — the CLI has no concept of "the current tenant". For
-     * per-tenant runs, use the REST API
+     * By default this standalone entry point uses the shared top-level
+     * {@code benchmark.algorithm} / {@code benchmark.runner} properties
+     * and the shared top-level {@code benchmark.data-dir} /
+     * {@code benchmark.results-dir} directories, not any
+     * tenant-specific {@code tenants.config} entry. Passing {@code -t}
+     * / {@code --tenant <tenant-id>} switches to that tenant's own
+     * algorithm, runner, and {@code {data,results}-dir/<tenant-id>/}
+     * directories, resolved from {@code tenants.config.<tenant-id>} —
+     * mirroring exactly how the REST API
      * ({@code POST /api/run-assessment} with a tenant's
-     * {@code X-API-Key}) instead.
+     * {@code X-API-Key}) resolves them for that same tenant. An
+     * explicit {@code -s} / {@code -r} always overrides the resolved
+     * algorithm/runner, whether or not {@code -t} is also given, so a
+     * one-off algorithm/runner substitution for a tenant run is still
+     * possible. If {@code -t} names a tenant with no
+     * {@code tenants.config} entry, an error is logged and processing
+     * stops before anything is submitted.
      * </p>
      *
      * @param args command-line arguments
@@ -445,6 +492,32 @@ public class RunBenchmarkAssessment {
         } catch (IOException e) {
             logSevere("Failed to parse arguments: %s", e.getMessage());
             return;
+        }
+
+        // Resolve tenant-scoped algorithm/runner/data-dir/results-dir
+        // first, if -t/--tenant was given. This runs before the -s/-r
+        // override blocks below, so an explicit -s/-r flag still always
+        // wins even for a tenant-scoped run — the same precedence
+        // BenchmarkService applies for the REST API (explicit override
+        // > tenant config > shared top-level default).
+        if (cmd.hasOption(TENANT_ARG)) {
+            String tenantId = cmd.getOptionValue(TENANT_ARG);
+            TenantResolution resolution = resolveTenant(
+                    ctx.getBean(TenantProperties.class),
+                    ctx.getBean(BenchmarkProperties.class),
+                    tenantId);
+            if (resolution == null) {
+                logSevere("Unknown tenant '%s' — no tenants.config.%s entry in application.yml.",
+                        tenantId, tenantId);
+                return;
+            }
+
+            client.spreadsheetUri = resolution.algorithm();
+            client.championUri = resolution.runner();
+            client.dataDir = resolution.dataDir();
+            client.resultsDir = resolution.resultsDir();
+            logInfo("Using tenant '%s' (data-dir: %s, results-dir: %s)",
+                    tenantId, client.dataDir, client.resultsDir);
         }
 
         // Allow the CLI to override the injected championUri URI.
@@ -505,6 +578,54 @@ public class RunBenchmarkAssessment {
                     ie.getMessage());
             Thread.currentThread().interrupt();
         }
+    }
+
+    /**
+     * The algorithm, runner, and data/results directories resolved for
+     * one tenant by {@link #resolveTenant}.
+     *
+     * @param algorithm  the tenant's effective algorithm URI
+     * @param runner     the tenant's effective runner URI
+     * @param dataDir    {@code {data-dir}/{tenantId}/}, absolute and
+     *                   normalized
+     * @param resultsDir {@code {results-dir}/{tenantId}/}, absolute and
+     *                   normalized
+     */
+    record TenantResolution(String algorithm, String runner, Path dataDir, Path resultsDir) {
+    }
+
+    /**
+     * Resolves one tenant's algorithm, runner, and data/results
+     * directories from {@code tenants.config.<tenantId>}, mirroring
+     * {@code BenchmarkService}'s own {@code resolveAlgorithm} /
+     * {@code resolveRunner} / {@code tenantDataDir} /
+     * {@code tenantResultsDir} logic for the REST API.
+     *
+     * @param tenantProperties    the bound {@code tenants.*} properties
+     * @param benchmarkProperties the bound shared {@code benchmark.*}
+     *                            properties, used for their
+     *                            {@code data-dir} / {@code results-dir}
+     *                            roots only
+     * @param tenantId            the tenant ID to resolve (not an API
+     *                            key)
+     * @return the resolved algorithm/runner/directories, or
+     *         {@code null} if no {@code tenants.config.<tenantId>}
+     *         entry exists
+     */
+    static TenantResolution resolveTenant(
+            TenantProperties tenantProperties,
+            BenchmarkProperties benchmarkProperties,
+            String tenantId) {
+
+        TenantProperties.TenantConfig tenantConfig = tenantProperties.getConfigFor(tenantId);
+        if (tenantConfig == null) {
+            return null;
+        }
+        return new TenantResolution(
+                tenantConfig.effectiveAlgorithm(),
+                tenantConfig.effectiveRunner(),
+                benchmarkProperties.getDataDirPath().resolve(tenantId).normalize(),
+                benchmarkProperties.getResultsDirPath().resolve(tenantId).normalize());
     }
 
     // -----------------------------------------------------------------------
@@ -1158,6 +1279,12 @@ public class RunBenchmarkAssessment {
                 "Process a single named GUID file");
         options.addOption("g", GUID_ARG, true,
                 "Process a single GetRecord URL on the command line");
+        options.addOption("t", TENANT_ARG, true,
+                "Tenant ID (resolves algorithm/runner and data/results "
+                        + "directories from tenants.config.<tenant-id>; "
+                        + "an explicit -s/-r still overrides the resolved "
+                        + "algorithm/runner). Omit for the shared "
+                        + "top-level benchmark.* defaults.");
         options.addOption("h", "help", false, "Show this help message");
 
         CommandLineParser parser = new DefaultParser();

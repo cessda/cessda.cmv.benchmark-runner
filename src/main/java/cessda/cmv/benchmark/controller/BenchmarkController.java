@@ -122,6 +122,70 @@ public class BenchmarkController {
         }
 
         // -------------------------------------------------------------------------
+        // 1a. GET /api/fetch-identifiers/defaults
+        // -------------------------------------------------------------------------
+
+        @Operation(summary = "Get default OAI-PMH base URL", description = "Returns the OAI-PMH base URL that would be used for the "
+                        +
+                        "current tenant if fetch-identifiers were called with no explicit " +
+                        "override. Used by the dashboard to populate the \"Fetch " +
+                        "identifiers\" page's URL field before the operator optionally " +
+                        "changes it for this run.", responses = {
+                                        @ApiResponse(responseCode = "200", description = "Default retrieved successfully", content = @Content(schema = @Schema(example = "{\"baseUrl\":\"https://datacatalogue.cessda.eu/oai-pmh/v0/oai\"}"))),
+                                        @ApiResponse(responseCode = "500", description = "Failed to resolve default")
+                        })
+        @GetMapping("/fetch-identifiers/defaults")
+        public ResponseEntity<Map<String, String>> getFetchIdentifiersDefaults() {
+                try {
+                        Map<String, String> body = new LinkedHashMap<>();
+                        body.put("baseUrl", service.getDefaultOaiPmhBaseUrl());
+                        return ResponseEntity.ok(body);
+                } catch (Exception e) {
+                        return ResponseEntity.internalServerError()
+                                        .body(response("error", e.getMessage()));
+                }
+        }
+
+        // -------------------------------------------------------------------------
+        // 1b. GET /api/fetch-identifiers/sets
+        // -------------------------------------------------------------------------
+
+        @Operation(summary = "List sets available from an OAI-PMH endpoint", description = "Calls verb=ListSets against the given (or, if omitted, "
+                        +
+                        "the current tenant's default) OAI-PMH endpoint and returns every " +
+                        "set it reports, live. There is no static or compiled-in " +
+                        "fallback list: a hand-maintained copy inevitably drifts out of " +
+                        "sync with the actual repository, so the dashboard's checkable " +
+                        "set list always reflects exactly what that specific endpoint " +
+                        "currently offers, including after the URL is overridden for a " +
+                        "one-off run.", responses = {
+                                        @ApiResponse(responseCode = "200", description = "Sets listed successfully", content = @Content(schema = @Schema(example = "{\"sets\":[{\"setSpec\":\"language:hr\",\"setName\":\"Language hr\"}]}"))),
+                                        @ApiResponse(responseCode = "500", description = "Failed to list sets")
+                        })
+        @GetMapping("/fetch-identifiers/sets")
+        public ResponseEntity<Map<String, Object>> getFetchIdentifiersSets(
+
+                        @Parameter(description = "OAI-PMH base URL, for this request only. " +
+                                        "Default: the current tenant's configured oai-pmh-base-url.") @RequestParam(required = false) String baseUrl,
+
+                        @Parameter(description = "OAI-PMH verb. Default: ListIdentifiers " +
+                                        "(unused by ListSets itself, accepted for consistency with " +
+                                        "the other fetch-identifiers endpoints).") @RequestParam(required = false) String verb
+
+        ) {
+                try {
+                        Map<String, Object> body = new LinkedHashMap<>();
+                        body.put("sets", service.listAvailableSets(baseUrl, verb));
+                        return ResponseEntity.ok(body);
+                } catch (Exception e) {
+                        Map<String, Object> body = new LinkedHashMap<>();
+                        body.put("status", "error");
+                        body.put("message", e.getMessage());
+                        return ResponseEntity.internalServerError().body(body);
+                }
+        }
+
+        // -------------------------------------------------------------------------
         // 2. GET /api/run-assessment/defaults
         // -------------------------------------------------------------------------
 
