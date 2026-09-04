@@ -8,6 +8,7 @@ package cessda.cmv.benchmark.config;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -42,13 +43,22 @@ public class BenchmarkProperties {
     private String runner;
 
     /**
-     * Pause, in milliseconds, observed before submitting each GUID
-     * after the first within a batch during a benchmark run — see
-     * {@code RunBenchmarkAssessment.DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS}.
-     * {@code null} (the default when unset) leaves that compiled-in
-     * default in place.
+     * Default pause observed before submitting each GUID after the
+     * first within a batch during a benchmark run, applied when
+     * {@code benchmark.backoff-between-process-guid-ms} is not
+     * configured. Champion occasionally returns transient errors when
+     * hit with bursts of concurrent requests, so this default pacing
+     * is applied even when nothing is configured.
      */
-    private Long backoffBetweenProcessGuidMs;
+    public static final Duration DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS = Duration.ofMillis(1_000);
+
+    /**
+     * Pause observed before submitting each GUID after the first
+     * within a batch during a benchmark run. Defaults to
+     * {@link #DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS} when
+     * {@code benchmark.backoff-between-process-guid-ms} is not set.
+     */
+    private Duration backoffBetweenProcessGuidMs = DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS;
 
     public String getDataDir() {
         return dataDir;
@@ -82,11 +92,11 @@ public class BenchmarkProperties {
         this.runner = runner;
     }
 
-    public Long getBackoffBetweenProcessGuidMs() {
+    public Duration getBackoffBetweenProcessGuidMs() {
         return backoffBetweenProcessGuidMs;
     }
 
-    public void setBackoffBetweenProcessGuidMs(Long backoffBetweenProcessGuidMs) {
+    public void setBackoffBetweenProcessGuidMs(Duration backoffBetweenProcessGuidMs) {
         this.backoffBetweenProcessGuidMs = backoffBetweenProcessGuidMs;
     }
 
