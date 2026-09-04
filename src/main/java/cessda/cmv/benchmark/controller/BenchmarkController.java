@@ -6,16 +6,6 @@
 
 package cessda.cmv.benchmark.controller;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-
 import cessda.cmv.benchmark.service.BenchmarkService;
 import cessda.cmv.benchmark.service.BenchmarkService.Branding;
 import cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig;
@@ -25,6 +15,12 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.net.URI;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * REST controller exposing the three benchmark pipeline operations as HTTP
@@ -135,17 +131,12 @@ public class BenchmarkController {
                                         @ApiResponse(responseCode = "500", description = "Failed to resolve defaults")
                         })
         @GetMapping("/run-assessment/defaults")
-        public ResponseEntity<Map<String, String>> getRunAssessmentDefaults() {
-                try {
-                        String[] defaults = service.getDefaultAlgorithmAndRunner();
-                        Map<String, String> body = new LinkedHashMap<>();
-                        body.put("algorithm", defaults[0]);
-                        body.put("runner", defaults[1]);
-                        return ResponseEntity.ok(body);
-                } catch (Exception e) {
-                        return ResponseEntity.internalServerError()
-                                        .body(response("error", e.getMessage()));
-                }
+        public ResponseEntity<Map<String, URI>> getRunAssessmentDefaults() {
+                URI[] defaults = service.getDefaultAlgorithmAndRunner();
+                Map<String, URI> body = new LinkedHashMap<>();
+                body.put("algorithm", defaults[0]);
+                body.put("runner", defaults[1]);
+                return ResponseEntity.ok(body);
         }
 
         // -------------------------------------------------------------------------
@@ -191,10 +182,10 @@ public class BenchmarkController {
         public ResponseEntity<Map<String, String>> runAssessment(
 
                         @Parameter(description = "Algorithm runner URI. " +
-                                        "Configurable via 'benchmark.algorithm' property.") @RequestParam(required = false) String spreadsheetUri,
+                                "Configurable via 'benchmark.algorithm' property.") @RequestParam(required = false) URI spreadsheetUri,
 
                         @Parameter(description = "FAIR Champion API URI to POST GUIDs to. " +
-                                        "Configurable via 'benchmark.runner' property.") @RequestParam(required = false) String runnerUri,
+                                "Configurable via 'benchmark.runner' property.") @RequestParam(required = false) URI runnerUri,
 
                         @Parameter(description = "Name of a specific guids_*.txt file to process " +
                                         "(e.g. guids_de.txt). Ignored when 'guidFiles', 'guid', or " +
