@@ -374,7 +374,7 @@ public class RunBenchmarkAssessment {
             if (cmd.hasOption(FILENAME_ARG)) {
                 client.guidsFilename = Path.of(cmd.getOptionValue(FILENAME_ARG));
             }
-            List<String> guids = client.readGuidsFromResource();
+            List<String> guids = client.readGuidsFromResource(client.guidsFilename);
             if (guids.isEmpty()) {
                 logger.info(NOGUIDS);
             } else {
@@ -394,11 +394,18 @@ public class RunBenchmarkAssessment {
      * @return subdirectory name, or {@code "unknown"} if the filename
      *         is null or blank
      */
-    private static Path deriveSubdirectory(Path filename) {
-        String name = filename.getFileName().toString();
-        int dot = name.lastIndexOf('.');
-        var string = dot > 0 ? name.substring(0, dot) : name;
-        return Path.of(string);
+    static Path deriveSubdirectory(Path filename) {
+        Path name = filename.getFileName();
+
+        if (name == null) {
+            throw new IllegalArgumentException("Path has no file name");
+        }
+
+        String nameString = name.toString();
+
+        int dot = nameString.lastIndexOf('.');
+        var subdirectory = dot > 0 ? nameString.substring(0, dot) : nameString;
+        return Path.of(subdirectory);
     }
 
     // -----------------------------------------------------------------------
@@ -519,7 +526,7 @@ public class RunBenchmarkAssessment {
         Path previousFilename = guidsFilename;
         guidsFilename = filename;
         try {
-            List<String> guids = readGuidsFromResource();
+            List<String> guids = readGuidsFromResource(guidsFilename);
             if (guids.isEmpty()) {
                 logger.log(Level.INFO, "No GUIDs found in {0}. Skipping.", filename);
                 return;
@@ -555,7 +562,7 @@ public class RunBenchmarkAssessment {
      * @return an immutable list of GUID / GetRecord URL strings
      * @throws IOException if the file cannot be found or read
      */
-    private List<String> readGuidsFromResource() throws IOException {
+    List<String> readGuidsFromResource(Path guidsFilename) throws IOException {
         List<String> guidsFromFile;
 
         try {
@@ -827,7 +834,7 @@ public class RunBenchmarkAssessment {
      *               {@code null} to use {@code resultsDir} itself
      * @return resolved {@link Path}
      */
-    private Path resolveOutputDir(Path subDir) {
+    Path resolveOutputDir(Path subDir) {
         if (subDir == null) {
             return resultsDir;
         } else if (!subDir.isAbsolute()) {

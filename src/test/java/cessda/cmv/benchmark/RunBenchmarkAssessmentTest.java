@@ -12,10 +12,13 @@ import org.apache.commons.cli.UnrecognizedOptionException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.List;
@@ -60,6 +63,66 @@ class RunBenchmarkAssessmentTest {
                                 () -> assertTrue(sets.contains("en")),
                                 () -> assertTrue(sets.contains("fr")),
                                 () -> assertTrue(sets.contains("sl-SI")));
+        }
+
+        // ── deriveSubdirectory ───────────────────────────────────────────────────
+
+        @Test
+        void deriveSubdirectoryStripsExtension() {
+                assertEquals(Path.of("guids_de"), RunBenchmarkAssessment.deriveSubdirectory(Path.of("guids_de.txt")));
+                assertEquals(Path.of("guids_sl-SI"), RunBenchmarkAssessment.deriveSubdirectory(Path.of("guids_sl-SI.txt")));
+        }
+
+        @Test
+        void deriveSubdirectoryWithNoExtensionReturnsFilename() {
+                var testPath = Path.of("guids_de");
+                assertEquals(testPath, RunBenchmarkAssessment.deriveSubdirectory(testPath));
+        }
+
+        @Test
+        void deriveSubdirectoryWithRootThrowsException() {
+                var testPath = Path.of("/");
+                assertThrows(IllegalArgumentException.class, () -> RunBenchmarkAssessment.deriveSubdirectory(testPath));
+        }
+
+        // ── resolveOutputDir ─────────────────────────────────────────────────────
+
+        @Test
+        void resolveOutputDirWithSubDirIncludesSubDir() {
+                Path result = assessment.resolveOutputDir(Path.of("guids_de"));
+                assertTrue(result.endsWith("guids_de"),
+                        "Output dir must end with the subdir name");
+                assertTrue(result.toString().contains("results"),
+                        "Output dir must be under 'results'");
+        }
+
+        @Test
+        void resolveOutputDirWithNullSubDirPointsToResultsRoot() {
+                Path result = assessment.resolveOutputDir(null);
+                assertEquals(Path.of("results"), result);
+        }
+
+        @Test
+        void resolveOutputDirWithAbsoluteSubDirThrows() {
+                var absolutePath = Path.of("").toAbsolutePath();
+                assertThrows(IllegalArgumentException.class, () -> assessment.resolveOutputDir(absolutePath));
+        }
+
+        // ── processSingleFile: empty file (all comments) ─────────────────────────
+
+        @Test
+        void processSingleFileSkipsWhenAllLinesAreComments(@TempDir Path tempDir)
+                throws Exception {
+                Path guidFile = tempDir.resolve("guids_de.txt");
+                Files.writeString(guidFile,
+                        "# comment line 1\n# comment line 2\n",
+                        StandardCharsets.UTF_8);
+
+                RunBenchmarkAssessment localClient = new RunBenchmarkAssessment(assessment.getSpreadsheetUri(),
+                        assessment.getChampionUri());
+
+                List<String> guids = localClient.readGuidsFromResource(guidFile);
+                assertTrue(guids.isEmpty(), "Comment-only file must produce an empty GUID list");
         }
 
         // ── processSingleFile: missing file ──────────────────────────────────────
