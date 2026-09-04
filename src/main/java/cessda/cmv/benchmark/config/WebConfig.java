@@ -7,6 +7,7 @@
 package cessda.cmv.benchmark.config;
 
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.PathResource;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -45,7 +46,6 @@ public class WebConfig implements WebMvcConfigurer {
         //   -> ./results/summary.json (IDE / local run)
         registry
             .addResourceHandler("/results/**")
-            .addResourceLocations(
-                    "file:" + benchmarkProperties.getResultsDirPath() + "/");
+                .addResourceLocations(new PathResource(benchmarkProperties.getResultsDir()));
     }
 }

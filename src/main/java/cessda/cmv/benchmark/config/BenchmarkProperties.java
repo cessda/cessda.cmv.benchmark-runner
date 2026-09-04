@@ -6,14 +6,12 @@
 
 package cessda.cmv.benchmark.config;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
-
+import jakarta.validation.constraints.NotNull;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;
 
-import jakarta.validation.constraints.NotBlank;
+import java.net.URI;
+import java.nio.file.Path;
 
 /**
  * Application-wide benchmark runner configuration loaded from
@@ -26,58 +24,40 @@ import jakarta.validation.constraints.NotBlank;
  * points, where there is no tenant context.
  * </p>
  */
-@Component
-@Validated
 @ConfigurationProperties(prefix = "benchmark")
+@Validated
 public class BenchmarkProperties {
 
-    @NotBlank
-    private String dataDir;
+    @NotNull
+    private final Path dataDir;
 
-    @NotBlank
-    private String resultsDir;
+    @NotNull
+    private final Path resultsDir;
 
-    private String algorithm;
+    private final URI algorithm;
 
-    private String runner;
+    private final URI runner;
 
-    public String getDataDir() {
-        return dataDir;
-    }
-
-    public void setDataDir(String dataDir) {
+    public BenchmarkProperties(Path dataDir, Path resultsDir, URI algorithm, URI runner) {
         this.dataDir = dataDir;
-    }
-
-    public String getResultsDir() {
-        return resultsDir;
-    }
-
-    public void setResultsDir(String resultsDir) {
         this.resultsDir = resultsDir;
-    }
-
-    public String getAlgorithm() {
-        return algorithm;
-    }
-
-    public void setAlgorithm(String algorithm) {
         this.algorithm = algorithm;
-    }
-
-    public String getRunner() {
-        return runner;
-    }
-
-    public void setRunner(String runner) {
         this.runner = runner;
     }
 
-    public Path getDataDirPath() {
-        return Paths.get(dataDir).toAbsolutePath().normalize();
+    public Path getDataDir() {
+        return dataDir;
     }
 
-    public Path getResultsDirPath() {
-        return Paths.get(resultsDir).toAbsolutePath().normalize();
+    public Path getResultsDir() {
+        return resultsDir;
+    }
+
+    public URI getAlgorithm() {
+        return algorithm;
+    }
+
+    public URI getRunner() {
+        return runner;
     }
 }

@@ -1,15 +1,14 @@
 package cessda.cmv.benchmark.tenant;
 
-import java.io.IOException;
-
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Component;
-import org.springframework.web.filter.OncePerRequestFilter;
-
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
 
 /**
  * Reads the X-API-Key header, resolves it to a tenant ID, and stores it in
@@ -21,7 +20,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * require a valid API key.</p>
  */
 @Component
-@ConditionalOnProperty(name = "tenants.enabled", havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = "tenants.enabled", havingValue = "true")
 public class TenantAuthFilter extends OncePerRequestFilter {
 
     private static final String API_KEY_HEADER = "X-API-Key";
@@ -49,15 +48,7 @@ public class TenantAuthFilter extends OncePerRequestFilter {
         // "/" — both must be exempted explicitly. Only the /api/**
         // endpoints the dashboard JavaScript calls via fetch() require
         // an API key; the HTML shell and its static assets do not.
-        return path.startsWith("/actuator")
-            || path.startsWith("/static")
-            || path.equals("/")
-            || path.equals("/index.html")
-            || path.equals("/detail.html")
-            || path.startsWith("/css/")
-            || path.startsWith("/js/")
-            || path.equals("/favicon.ico")
-            || path.startsWith("/api-docs");
+        return !(path.startsWith("/api") || path.startsWith("/results"));
     }
 
     @Override
