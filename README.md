@@ -71,6 +71,12 @@ it targets the CESSDA Data Catalogue endpoint and processes ten
 sets (`de`, `el`, `en`, `fi`, `fr`, `hr`, `nl`, `sl`,
 `sl-SI`, `sv`).
 
+It can also query `verb=ListSets` to discover, live, exactly which
+sets an endpoint currently offers — used by the dashboard's "Fetch
+identifiers" page (see [HTTP API overview](#http-api-overview)) so
+the set list shown to an operator can never drift out of sync with
+the real catalogue, unlike a hand-maintained list.
+
 See [GetOaiPmhIdentifiers_README.md](GetOaiPmhIdentifiers_README.md)
 for full usage and options.
 
@@ -81,9 +87,14 @@ POSTs each `GetRecord` URL to a configurable FAIR Champion championUri
 endpoint, with the configured benchmark algorithm URI included in the
 request payload.
 Results are saved as JSON files under the calling tenant's results
-directory, in `guids_<set>/`. Processing is parallelised across five
-threads. Errors are captured in separate `error_*.json` files so that
-a single failure does not interrupt the rest of the batch.
+directory, in `guids_<set>/`. Each GUID runs on its own virtual
+thread, paced with a short backoff between submissions and capped at
+2 concurrent requests to Champion, and a transient failure (a
+timeout, an HTTP 500/502/504, or Champion silently overloaded on a
+200 response) is retried with backoff before giving up. Only once
+retries are exhausted is a failure captured, in a separate
+`error_*.json` file, so that it does not interrupt the rest of the
+batch.
 
 See [RunBenchmarkAssessment_README.md](RunBenchmarkAssessment_README.md)
 for full usage and options.
@@ -97,6 +108,8 @@ the current tenant before any data or configuration is read.
 |--------|------|---------|
 | `GET` | `/api/config` | Tenant's `setNames` and `fairMap` |
 | `GET` | `/api/tenant/branding` | Tenant's dashboard title and footer |
+| `GET` | `/api/fetch-identifiers/defaults` | Tenant's default OAI-PMH base URL |
+| `GET` | `/api/fetch-identifiers/sets` | Live set list from an OAI-PMH endpoint |
 | `POST` | `/api/fetch-identifiers` | Fetch OAI-PMH identifiers |
 | `GET` | `/api/run-assessment/defaults` | Tenant's default algorithm and runner |
 | `GET` | `/api/run-assessment/guid-files` | List available `guids_*.txt` files |
@@ -118,9 +131,11 @@ A request to any `/api/**` endpoint must include an `X-API-Key`
 header. A `TenantAuthFilter` resolves the key to a tenant ID before
 the request reaches a controller; requests with a missing or unknown
 key are rejected with `401 Unauthorized`. The static dashboard pages
-(`index.html`, `detail.html`) are served without a key, but the data
-they fetch via `/api/results/**` is not — the dashboard prompts for
-a key on first load and stores it for the browser session only.
+(`index.html`, `detail.html`, `fetch-identifiers.html`) are served
+without a key, but the data they fetch via `/api/**` is not — the
+dashboard prompts for a key on first load and stores it for the
+browser session only, and every other page reuses that stored key
+for its own `fetch()` calls.
 
 ### How tenant data is separated on disk
 
@@ -171,6 +186,9 @@ configuring its properties, and creating its directories on disk.
 
    - `algorithm` — FAIR Champion algorithm URI
    - `runner` — FAIR Champion runner URI
+   - `oai-pmh-base-url` — this tenant's OAI-PMH endpoint (optional;
+     falls back to the CESSDA Data Catalogue if unset — see
+     [GetOaiPmhIdentifiers_README.md](GetOaiPmhIdentifiers_README.md))
    - `title` — dashboard page title
    - `footer` — dashboard footer
    - `set-names` — friendly set names
@@ -237,10 +255,25 @@ mvn exec:java \
   -Dexec.mainClass="cessda.cmv.benchmark.GenerateManifest"
 ```
 
-Run this way, the classes use their default, non-tenant-scoped
-`data/` and `results/` directories rather than a tenant subdirectory.
-This mode is intended for local testing of the pipeline classes in
-isolation, not for the multi-tenanted deployment described above.
+Run this way, `GetOaiPmhIdentifiers` writes under `guids/cessda/`
+(its default tenant, overridable with `-t`/`--tenant`; see
+[GetOaiPmhIdentifiers_README.md](GetOaiPmhIdentifiers_README.md)).
+`RunBenchmarkAssessment` uses its own non-tenant-scoped `data/`/
+`results/` defaults unless it is also given `-t`/`--tenant
+<tenant-id>`, in which case it resolves that tenant's algorithm,
+runner, and `{data,results}-dir/<tenant-id>/` directories from
+`tenants.config.<tenant-id>` — see
+[RunBenchmarkAssessment_README.md](RunBenchmarkAssessment_README.md#tenant-aware-runs).
+`GenerateManifest` has no such flag and always uses its own
+non-tenant-scoped defaults. Without passing `-t` to
+`RunBenchmarkAssessment`, the three CLI stages above are not wired
+together via the same tenant directory. This mode is intended for
+local testing of the pipeline classes in isolation, or for driving an
+individual stage from an external pipeline; it is not a replacement
+for the multi-tenanted deployment described above, which still
+requires `GenerateManifest` (and, for identifier fetching plus
+manifest generation, the REST API or web UI) to complete a tenant's
+results.
 
 ## Project Structure
 
@@ -258,7 +291,8 @@ non-functional files have been omitted.
 │   │   ├── java        # Contains release source code of the
 │   │   │                 application
 │   │   ├── resources   # Contains release resource assets, including
-│   │   │                 application.yaml, index.html, and detail.html
+│   │   │                 application.yaml, index.html, detail.html, and
+│   │   │                 fetch-identifiers.html
 │   │   └── webapp
 │   └── test
 │       ├── java        # Contains test source code

@@ -15,11 +15,17 @@ server:
 # ── Benchmark Algorithm ───────────────────────────────────────────────────────
 # benchmark.algorithm - URI of the Benchmark Assessment Algorithm to use
 # benchmark.runner    - URI of the instance of FAIR Champion to run
+# benchmark.backoff-between-process-guid-ms - pause (ms) observed before
+#                         submitting each GUID after the first within a
+#                         batch, to ease the burst of concurrent requests
+#                         FAIR Champion otherwise sees. Leave unset to use
+#                         RunBenchmarkAssessment's compiled-in default.
 benchmark:
   data-dir: ./guids
   results-dir: ./results
   algorithm: https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw
   runner: https://tools.ostrails.eu/champion/assess/algorithm
+  backoff-between-process-guid-ms: 1000
 
 # ── SpringDoc / Swagger UI ────────────────────────────────────────────────────
 springdoc:
@@ -63,6 +69,7 @@ tenants:
     cessda:
       algorithm: https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw
       runner: https://tools.ostrails.eu/champion/assess/algorithm
+      oai-pmh-base-url: https://datacatalogue.cessda.eu/oai-pmh/v0/oai
       title: CESSDA Data Catalogue · Assessment Results
       footer: CESSDA FAIR Benchmark Dashboard
       set-names:
@@ -126,6 +133,12 @@ tenants:
     oxford:
       algorithm: https://docs.google.com/spreadsheets/d/1Lbo0KzlN-RPRJ5POqHKh8YE2GXSv0bnaKZzwkaCOP9M
       runner: https://champion.fairsharing.org/champion/assess/algorithm
+      # Placeholder — replace with Oxford's real OAI-PMH endpoint. Its
+      # setSpec scheme need not match CESSDA's "language:<code>" at
+      # all: the "Fetch identifiers" page discovers whatever sets a
+      # tenant's own endpoint reports via ListSets, rather than
+      # assuming any particular scheme.
+      oai-pmh-base-url: https://oxford.example.org/oai-pmh/v0/oai
       title: Oxford Research Archive · Assessment Results
       footer: Oxford FAIR Benchmark Dashboard
       set-names:
@@ -200,4 +213,4 @@ tenants:
           - R1_2_FundROR
           - R1_2_Affil
           - R1_2_Pubs
-          - R1_3_ISO639ƒ
+          - R1_3_ISO639

@@ -90,6 +90,82 @@ class GetOaiPmhIdentifiersTest {
         );
     }
 
+    @Test
+    void setSpecPrefixIsLanguageColon() {
+        // This repository's setSpecs are keyed by language (e.g.
+        // "language:hr" for the "hr" set, confirmed against
+        // verb=ListSets on the live endpoint) -- a bare code alone
+        // (e.g. "hr") is rejected with an OAI-PMH noRecordsMatch error.
+        assertEquals("language:", GetOaiPmhIdentifiers.SET_SPEC_PREFIX);
+    }
+
+    // ── qualifySetSpec ───────────────────────────────────────────────────────
+
+    @Test
+    void qualifySetSpecPrependsPrefixForBareCode() {
+        assertEquals("language:hr", GetOaiPmhIdentifiers.qualifySetSpec("hr"));
+    }
+
+    @Test
+    void qualifySetSpecLeavesAlreadyQualifiedValueUnchanged() {
+        // A setSpec obtained live from listSets() (this repository's own
+        // "language:hr", or a different tenant's own scheme entirely)
+        // must never be double-prefixed.
+        assertEquals("language:hr", GetOaiPmhIdentifiers.qualifySetSpec("language:hr"));
+    }
+
+    @Test
+    void qualifySetSpecLeavesDifferentSchemeUnchanged() {
+        // A different tenant's OAI-PMH backend need not use CESSDA's
+        // "language:" scheme at all -- qualifySetSpec must not assume it
+        // does for any value that already contains a colon.
+        assertEquals("collection:bhf", GetOaiPmhIdentifiers.qualifySetSpec("collection:bhf"));
+    }
+
+    // ── sanitizeSetSpecForFilename ───────────────────────────────────────────
+
+    @Test
+    void sanitizeSetSpecForFilenameStripsLanguagePrefix() {
+        assertEquals("hr", GetOaiPmhIdentifiers.sanitizeSetSpecForFilename("language:hr"));
+    }
+
+    @Test
+    void sanitizeSetSpecForFilenameLeavesBareCodeUnchanged() {
+        assertEquals("hr", GetOaiPmhIdentifiers.sanitizeSetSpecForFilename("hr"));
+    }
+
+    @Test
+    void sanitizeSetSpecForFilenameTakesTailOfNestedSpec() {
+        assertEquals("c", GetOaiPmhIdentifiers.sanitizeSetSpecForFilename("a:b:c"));
+    }
+
+    @Test
+    void sanitizeSetSpecForFilenameNeverContainsColon() {
+        assertFalse(GetOaiPmhIdentifiers.sanitizeSetSpecForFilename("language:hr").contains(":"));
+    }
+
+    @Test
+    void sanitizeSetSpecForFilenameReplacesUnsafeCharacters() {
+        String result = GetOaiPmhIdentifiers.sanitizeSetSpecForFilename("collection:bhf/2024 set");
+        assertAll(
+                () -> assertFalse(result.contains("/")),
+                () -> assertFalse(result.contains(" ")),
+                () -> assertTrue(result.matches("[a-zA-Z0-9._-]+"))
+        );
+    }
+
+    // ── SetInfo ──────────────────────────────────────────────────────────────
+
+    @Test
+    void setInfoExposesSetSpecAndSetName() {
+        GetOaiPmhIdentifiers.SetInfo info =
+                new GetOaiPmhIdentifiers.SetInfo("language:hr", "Language hr");
+        assertAll(
+                () -> assertEquals("language:hr", info.setSpec()),
+                () -> assertEquals("Language hr", info.setName())
+        );
+    }
+
     // ── buildGetRecordUrl ────────────────────────────────────────────────────
 
     @Test

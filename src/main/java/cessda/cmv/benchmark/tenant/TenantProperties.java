@@ -28,18 +28,20 @@ import jakarta.validation.constraints.NotBlank;
  *     cessda:
  *       algorithm: https://docs.google.com/spreadsheets/d/CESSDA_SHEET_ID
  *       runner: https://tools.ostrails.eu/champion/assess/algorithm
+ *       oai-pmh-base-url: https://datacatalogue.cessda.eu/oai-pmh/v0/oai
  *     oxford:
  *       algorithm: https://docs.google.com/spreadsheets/d/OXFORD_SHEET_ID
  *       runner: https://tools.ostrails.eu/champion/assess/algorithm
+ *       oai-pmh-base-url: https://oxford.example.org/oai-pmh/v0/oai
  * }</pre>
  *
- * <p>Each tenant has its own algorithm and runner URI, since different
- * organisations may use different FAIR Champion configurations or
- * runner instances. {@code keys} and {@code config} are deliberately
- * separate maps — {@code keys} maps an API key to a tenant ID, while
- * {@code config} maps a tenant ID to that tenant's settings — so a
- * tenant's secret key is never used as a lookup key for its own
- * configuration.</p>
+ * <p>Each tenant has its own algorithm, runner, and OAI-PMH base URI,
+ * since different organisations may use different FAIR Champion
+ * configurations, runner instances, or source catalogues entirely.
+ * {@code keys} and {@code config} are deliberately separate maps —
+ * {@code keys} maps an API key to a tenant ID, while {@code config}
+ * maps a tenant ID to that tenant's settings — so a tenant's secret
+ * key is never used as a lookup key for its own configuration.</p>
  */
 @Component
 @Validated
@@ -91,6 +93,16 @@ public class TenantProperties {
         private String runner;
 
         /**
+         * This tenant's OAI-PMH base URL, used by the "Fetch identifiers"
+         * dashboard page and the {@code /api/fetch-identifiers} endpoint
+         * when no explicit {@code baseUrl} override is supplied for a
+         * given run. Falls back to
+         * {@link cessda.cmv.benchmark.GetOaiPmhIdentifiers#DEFAULT_OAI_PMH_BASE_URL}
+         * if unset.
+         */
+        private String oaiPmhBaseUrl;
+
+        /**
          * Legacy alias for {@link #algorithm}. Kept for compatibility with
          * older tenant configuration keys.
          */
@@ -117,6 +129,9 @@ public class TenantProperties {
 
         public String getRunner() { return runner; }
         public void setRunner(String runner) { this.runner = runner; }
+
+        public String getOaiPmhBaseUrl() { return oaiPmhBaseUrl; }
+        public void setOaiPmhBaseUrl(String oaiPmhBaseUrl) { this.oaiPmhBaseUrl = oaiPmhBaseUrl; }
 
         public String getSpreadsheetUri() { return spreadsheetUri; }
         public void setSpreadsheetUri(String spreadsheetUri) { this.spreadsheetUri = spreadsheetUri; }
