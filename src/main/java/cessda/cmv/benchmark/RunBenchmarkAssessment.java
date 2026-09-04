@@ -173,17 +173,6 @@ public class RunBenchmarkAssessment {
 
     private static final Semaphore REQUEST_SEMAPHORE = new Semaphore(2);
 
-    /**
-     * Default pause, in milliseconds, observed before submitting each
-     * GUID after the first within a batch (see
-     * {@link #backoffBetweenProcessGuid}). Champion occasionally
-     * returns transient errors when hit with bursts of concurrent
-     * requests, so this default pacing is applied even when no
-     * {@code benchmark.backoff-between-process-guid-ms} value is
-     * configured.
-     */
-    private static final long DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS = 1_000;
-
     // -----------------------------------------------------------------------
     // Instance state
     // -----------------------------------------------------------------------
@@ -217,13 +206,15 @@ public class RunBenchmarkAssessment {
     /**
      * Pause, in milliseconds, observed before submitting each GUID
      * after the first within a batch (see {@link #processGuids}).
-     * Defaults to {@link #DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS} and
-     * is overwritten with the configured
+     * Defaults to
+     * {@link BenchmarkProperties#DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS}
+     * and is overwritten with the configured
      * {@code benchmark.backoff-between-process-guid-ms} value, when
      * present, by both {@link #main(String[])} (via {@link CliConfig})
      * and {@code BenchmarkService}.
      */
-    private long backoffBetweenProcessGuid = DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS;
+    private long backoffBetweenProcessGuid =
+            BenchmarkProperties.DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS.toMillis();
 
 
     // -----------------------------------------------------------------------
@@ -360,8 +351,8 @@ public class RunBenchmarkAssessment {
      * {@code benchmark.backoff-between-process-guid-ms} value, when
      * present, by both {@link #main(String[])} and
      * {@code BenchmarkService} — the compiled-in
-     * {@link #DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS} applies
-     * otherwise.
+     * {@link BenchmarkProperties#DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS}
+     * applies otherwise.
      *
      * @param backoffBetweenProcessGuidMs the backoff to use, in
      *                                    milliseconds
@@ -437,7 +428,7 @@ public class RunBenchmarkAssessment {
                     benchmarkProperties.getRunner());
             if (benchmarkProperties.getBackoffBetweenProcessGuidMs() != null) {
                 runner.setBackoffBetweenProcessGuid(
-                        benchmarkProperties.getBackoffBetweenProcessGuidMs());
+                        benchmarkProperties.getBackoffBetweenProcessGuidMs().toMillis());
             }
             return runner;
         }
@@ -846,7 +837,7 @@ public class RunBenchmarkAssessment {
     /**
      * Submits a single GUID to the Champion API and saves the response.
      * This method implements a retry mechanism for transient errors such as
-     * SSL handshake failures, timeouts, 500/502/504 responses, and — since
+     * SSL handshake failures, timeouts, any 5xx server error, and — since
      * Champion can also return HTTP 200 while silently failing to evaluate
      * one or more indicators under load — a response body containing an
      * {@link #OVERWHELMED_RESULT_MARKER overwhelmed indicator}, all with
@@ -875,7 +866,7 @@ public class RunBenchmarkAssessment {
      * actually evaluate that indicator, rather than genuinely finding
      * it indeterminate. A normal indeterminate result instead carries
      * a populated {@code "log"} such as
-     * {@code "Test result is indeterminate."}. Unlike a 500/502/504,
+     * {@code "Test result is indeterminate."}. Unlike a 5xx response,
      * this shows up on an otherwise-successful HTTP response, so it
      * has to be detected by inspecting the response body rather than
      * the status code.
@@ -894,7 +885,7 @@ public class RunBenchmarkAssessment {
      * {@link Class#getSimpleName()} on this type also becomes
      * {@code error_<guid>.json}'s {@code "errorType"} value, so that
      * field alone unambiguously distinguishes this failure kind from
-     * a persistent HTTP 500/502/504 or an SSL/timeout failure (which
+     * a persistent HTTP 5xx response or an SSL/timeout failure (which
      * all otherwise shared the generic {@code IOException}
      * {@code errorType}).
      */
@@ -959,8 +950,7 @@ public class RunBenchmarkAssessment {
                         .replaceAll("[^a-zA-Z0-9._-]", "_");
                 Path jsonOutputPath = outputDir.resolve(sanitisedGuid + ".json");
 
-                if (response.statusCode() == 500 || response.statusCode() == 502
-                        || response.statusCode() == 504) {
+                if (response.statusCode() >= 500 && response.statusCode() <= 599) {
                     lastException = new IOException(
                             "Server error: HTTP " + response.statusCode());
                     logSevere("Attempt %d failed for GUID %d: HTTP %d",

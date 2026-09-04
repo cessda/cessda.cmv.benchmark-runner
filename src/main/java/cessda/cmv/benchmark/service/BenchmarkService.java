@@ -328,7 +328,7 @@ public class BenchmarkService {
                                            tDataDir, tResultsDir);
         if (benchmarkProperties.getBackoffBetweenProcessGuidMs() != null) {
             runner.setBackoffBetweenProcessGuid(
-                    benchmarkProperties.getBackoffBetweenProcessGuidMs());
+                    benchmarkProperties.getBackoffBetweenProcessGuidMs().toMillis());
         }
 
         if (guid != null && !guid.isBlank()) {
