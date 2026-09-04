@@ -6,30 +6,25 @@
 
 package cessda.cmv.benchmark.service;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import cessda.cmv.benchmark.GetOaiPmhIdentifiers;
 import cessda.cmv.benchmark.RunBenchmarkAssessment;
 import cessda.cmv.benchmark.config.BenchmarkProperties;
 import cessda.cmv.benchmark.tenant.TenantContext;
 import cessda.cmv.benchmark.tenant.TenantProperties;
 import cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.io.IOException;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for {@link BenchmarkService}.
@@ -53,6 +48,8 @@ import cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig;
 class BenchmarkServiceTest {
 
     private static final String TENANT_ID = "test-tenant";
+    private static final URI ALGORITHM = URI.create("https://example.org/algorithm");
+    private static final URI RUNNER = URI.create("https://example.org/runner");
 
     @TempDir
     Path rootDataDir;
@@ -81,19 +78,20 @@ class BenchmarkServiceTest {
         tenantContext.setTenantId(TENANT_ID);
 
         TenantConfig tenantConfig = new TenantConfig();
-        tenantConfig.setAlgorithm("https://example.org/algorithm");
-        tenantConfig.setRunner("https://example.org/runner");
+        tenantConfig.setAlgorithm(ALGORITHM);
+        tenantConfig.setRunner(RUNNER);
         tenantConfig.setTitle("Test tenant title");
         tenantConfig.setFooter("Test tenant footer");
 
         TenantProperties tenantProperties = new TenantProperties();
         tenantProperties.setConfig(java.util.Map.of(TENANT_ID, tenantConfig));
 
-        benchmarkProperties = new BenchmarkProperties();
-        benchmarkProperties.setDataDir(rootDataDir.toString());
-        benchmarkProperties.setResultsDir(rootResultsDir.toString());
-        benchmarkProperties.setAlgorithm("https://example.org/algorithm");
-        benchmarkProperties.setRunner("https://example.org/runner");
+        benchmarkProperties = new BenchmarkProperties(
+                rootDataDir,
+                rootResultsDir,
+                ALGORITHM,
+                RUNNER
+        );
 
         service = new BenchmarkService(
                 benchmarkProperties, tenantContext, tenantProperties);
@@ -110,189 +108,17 @@ class BenchmarkServiceTest {
     // fetchIdentifiers
     // -------------------------------------------------------------------------
 
-    @Nested
-    @DisplayName("fetchIdentifiers")
-    class FetchIdentifiers {
-
-        @Test
-        @DisplayName("Creates the tenant data directory when it does not exist")
-        void createsTenantDataDirectoryWhenAbsent(@TempDir Path root)
-                throws Exception {
-            // Point the service at a fresh root; the tenant sub-dir must not
-            // yet exist.
-            Path newRootData = root.resolve("data");
-            Files.createDirectories(newRootData);
-            Path expectedTenantDir = newRootData.resolve(TENANT_ID);
-            assertFalse(Files.exists(expectedTenantDir));
-
-            benchmarkProperties.setDataDir(newRootData.toString());
-
-            try {
-                service.fetchIdentifiers(
-                    "http://invalid.example.invalid",
-                    null, null, "de", null);
-            } catch (Exception ignored) {
-                // Expected: the HTTP call will fail.
-            }
-
-            assertTrue(Files.isDirectory(expectedTenantDir),
-                "fetchIdentifiers must create the tenant-scoped data directory");
-        }
-
-        @Test
-        @DisplayName("Tenant data directories are isolated per tenant ID")
-        void tenantDataDirsAreIsolated() throws Exception {
-            // The directory created must be under the tenant ID sub-path,
-            // not at the root data dir level.
-            try {
-                service.fetchIdentifiers(
-                    "http://invalid.example.invalid",
-                    null, null, "de", null);
-            } catch (Exception ignored) { /* expected */ }
-
-            // The tenant sub-dir must exist; the root must not contain any
-            // guids files directly (they belong under the tenant sub-dir).
-            assertTrue(Files.isDirectory(rootDataDir.resolve(TENANT_ID)),
-                "Data files must be written under {dataDir}/{tenantId}/");
-            assertFalse(
-                Files.exists(rootDataDir.resolve("guids_de.txt")),
-                "guids files must not appear directly under the root data dir");
-        }
-
-        @Test
-        @DisplayName("Uses default OAI-PMH base URL when baseUrl is null")
-        void usesDefaultBaseUrlWhenNull() {
-            assertEquals(
-                "https://datacatalogue.cessda.eu/oai-pmh/v0/oai",
-                GetOaiPmhIdentifiers.DEFAULT_OAI_PMH_BASE_URL,
-                "Default OAI-PMH base URL must match the CESSDA endpoint");
-        }
-
-        @Test
-        @DisplayName("Uses default metadata prefix when metadataPrefix is null")
-        void usesDefaultMetadataPrefixWhenNull() {
-            assertEquals("oai_ddi25",
-                GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX,
-                "Default metadata prefix must be oai_ddi25");
-        }
-
-        @Test
-        @DisplayName("Uses default sets when sets parameter is null or blank")
-        void usesDefaultSetsWhenNull() {
-            assertArrayEquals(
-                new String[]{"de","el","en","fi","fr","hr","nl","sl","sl-SI","sv"},
-                GetOaiPmhIdentifiers.DEFAULT_SETS,
-                "Default sets must match the expected set codes");
-        }
+    @Test
+    @DisplayName("Returns tenant algorithm and runner from configuration")
+    void returnsTenantAlgorithmAndRunnerFromConfiguration() {
+        assertArrayEquals(
+                new URI[]{ALGORITHM, RUNNER},
+            service.getDefaultAlgorithmAndRunner());
     }
 
     // -------------------------------------------------------------------------
     // runAssessment
     // -------------------------------------------------------------------------
-
-    @Nested
-    @DisplayName("runAssessment")
-    class RunAssessment {
-
-        @Test
-        @DisplayName("Creates tenant data and results directories if absent")
-        void createsBothTenantDirectoriesWhenAbsent(@TempDir Path root)
-                throws Exception {
-            Path newRootData    = root.resolve("data");
-            Path newRootResults = root.resolve("results");
-            Files.createDirectories(newRootData);
-            Files.createDirectories(newRootResults);
-
-            Path expectedData    = newRootData.resolve(TENANT_ID);
-            Path expectedResults = newRootResults.resolve(TENANT_ID);
-            assertFalse(Files.exists(expectedData));
-            assertFalse(Files.exists(expectedResults));
-
-            benchmarkProperties.setDataDir(newRootData.toString());
-            benchmarkProperties.setResultsDir(newRootResults.toString());
-
-            try {
-                service.runAssessment(
-                    "http://invalid.example.invalid",
-                    null, null, null, null, false);
-            } catch (Exception ignored) {
-                // Expected: the file or HTTP call will fail.
-            }
-
-            assertTrue(Files.isDirectory(expectedData),
-                "runAssessment must create the tenant-scoped data directory");
-            assertTrue(Files.isDirectory(expectedResults),
-                "runAssessment must create the tenant-scoped results directory");
-        }
-
-        @Test
-        @DisplayName("Resolves a bare guid filename against the tenant data directory")
-        void resolvesGuidFilenameAgainstTenantDataDir() throws Exception {
-            // Write a minimal guids file directly into the tenant data dir.
-            Path guidFile = tenantDataDir.resolve("guids_test.txt");
-            Files.writeString(guidFile,
-                "# test\nhttps://example.org/oai?verb=GetRecord"
-                + "&metadataPrefix=oai_ddi25&identifier=abc",
-                StandardCharsets.UTF_8);
-
-            // Supply the bare filename as the guidFile parameter; the service
-            // resolves it against the tenant data dir.  The HTTP POST will fail,
-            // but no FileNotFoundException should be thrown beforehand.
-            try {
-                service.runAssessment(
-                    "http://invalid.example.invalid",
-                    "http://invalid.example.invalid",
-                    "guids_test.txt", null, null, false);
-            } catch (java.io.FileNotFoundException fnfe) {
-                org.junit.jupiter.api.Assertions.fail(
-                    "FileNotFoundException must not be thrown when the file "
-                    + "exists in the tenant data directory; got: " + fnfe.getMessage());
-            } catch (Exception ignored) {
-                // Any other exception (e.g. HTTP failure) is acceptable here.
-            }
-        }
-
-        @Test
-        @DisplayName("DEFAULT_GUIDS_FILE constant has expected value")
-        void usesDefaultchampionUriWhenNull() {
-            assertEquals("guids_hr.txt",
-                RunBenchmarkAssessment.DEFAULT_GUIDS_FILE,
-                "Default guids filename must be guids_hr.txt");
-        }
-
-        @Test
-        @DisplayName("Returns message containing results path when processAll succeeds")
-        void usesDefaultGuidsFilenameWhenNoParams() throws Exception {
-            // Write the default guids file so processAll can find something to process.
-            Path defaultFile = tenantDataDir.resolve(RunBenchmarkAssessment.DEFAULT_GUIDS_FILE);
-            Files.writeString(defaultFile, "# empty\n", StandardCharsets.UTF_8);
-
-            try {
-                String result = service.runAssessment(
-                    null, null,
-                    RunBenchmarkAssessment.DEFAULT_GUIDS_FILE,
-                    null, null, false);
-                assertTrue(result.contains(tenantResultsDir.toString()),
-                    "Return message must reference the tenant results directory");
-            } catch (Exception ignored) {
-                // HTTP call will fail; directory-creation and path-resolution
-                // are the aspects verified above.
-            }
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // tenant configuration
-    // -------------------------------------------------------------------------
-
-    @Test
-    @DisplayName("Returns tenant algorithm and runner from configuration")
-    void returnsTenantAlgorithmAndRunnerFromConfiguration() {
-        assertArrayEquals(
-            new String[]{"https://example.org/algorithm",
-                "https://example.org/runner"},
-            service.getDefaultAlgorithmAndRunner());
-    }
 
     @Test
     @DisplayName("Resolves legacy spreadsheetUri and championUri tenant keys")
@@ -300,9 +126,12 @@ class BenchmarkServiceTest {
         TenantContext tenantContext = new TenantContext();
         tenantContext.setTenantId("legacy-tenant");
 
+        var algorithmUri = URI.create("https://legacy.example.org/spreadsheet");
+        var runnerUri = URI.create("https://legacy.example.org/champion");
+
         TenantConfig legacyConfig = new TenantConfig();
-        legacyConfig.setAlgorithm("https://legacy.example.org/spreadsheet");
-        legacyConfig.setRunner("https://legacy.example.org/champion");
+        legacyConfig.setAlgorithm(algorithmUri);
+        legacyConfig.setRunner(runnerUri);
         legacyConfig.setTitle("Legacy title");
         legacyConfig.setFooter("Legacy footer");
 
@@ -315,11 +144,69 @@ class BenchmarkServiceTest {
             tenantProperties);
 
         assertArrayEquals(
-            new String[]{
-                "https://legacy.example.org/spreadsheet",
-                "https://legacy.example.org/champion"
-            },
+                new URI[]{algorithmUri, runnerUri},
             legacyService.getDefaultAlgorithmAndRunner());
+    }
+
+    // -------------------------------------------------------------------------
+    // tenant configuration
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Throws IllegalStateException when algorithm is not configured")
+    void failsFastForMissingAlgorithmConfiguration() {
+        TenantContext tenantContext = new TenantContext();
+        tenantContext.setTenantId("no-algorithm-tenant");
+
+        TenantConfig cfg = new TenantConfig();
+        cfg.setRunner(RUNNER);
+        cfg.setTitle("T");
+        cfg.setFooter("F");
+
+        TenantProperties tenantProperties = new TenantProperties();
+        tenantProperties.setConfig(java.util.Map.of("no-algorithm-tenant", cfg));
+
+        BenchmarkProperties props = new BenchmarkProperties(
+                rootDataDir,
+                rootResultsDir,
+                null, // Deliberately leave algorithm unset
+                RUNNER
+        );
+
+        BenchmarkService unconfigured = new BenchmarkService(props, tenantContext, tenantProperties);
+
+        assertThrows(IllegalStateException.class,
+            unconfigured::getDefaultAlgorithmAndRunner,
+            "getDefaultAlgorithmAndRunner must throw when no algorithm is configured");
+    }
+
+    @Test
+    @DisplayName("Throws IllegalStateException when runner is not configured")
+    void failsFastForMissingRunnerConfiguration() {
+        TenantContext tenantContext = new TenantContext();
+        tenantContext.setTenantId("no-runner-tenant");
+
+        TenantConfig cfg = new TenantConfig();
+        cfg.setAlgorithm(ALGORITHM);
+        cfg.setTitle("T");
+        cfg.setFooter("F");
+
+        TenantProperties tenantProperties = new TenantProperties();
+        tenantProperties.setConfig(java.util.Map.of("no-runner-tenant", cfg));
+
+        BenchmarkProperties props = new BenchmarkProperties(
+                rootDataDir,
+                rootResultsDir,
+                ALGORITHM,
+                null // Deliberately leave runner unset
+        );
+
+
+        BenchmarkService unconfigured = new BenchmarkService(props, tenantContext, tenantProperties);
+
+        assertThrows(IllegalStateException.class,
+            unconfigured::getDefaultAlgorithmAndRunner,
+            "getDefaultAlgorithmAndRunner must throw when no runner is configured");
     }
 
     @Test
@@ -492,55 +379,209 @@ class BenchmarkServiceTest {
     // Configuration resolution
     // -------------------------------------------------------------------------
 
-    @Test
-    @DisplayName("Throws IllegalStateException when algorithm is not configured")
-    void failsFastForMissingAlgorithmConfiguration() {
-        TenantContext tenantContext = new TenantContext();
-        tenantContext.setTenantId("no-algorithm-tenant");
+    @Nested
+    @DisplayName("fetchIdentifiers")
+    class FetchIdentifiers {
 
-        TenantConfig cfg = new TenantConfig();
-        cfg.setRunner("https://example.org/runner");
-        cfg.setTitle("T");
-        cfg.setFooter("F");
+        @Test
+        @DisplayName("Creates the tenant data directory when it does not exist")
+        void createsTenantDataDirectoryWhenAbsent(@TempDir Path root)
+                throws Exception {
+            // Point the service at a fresh root; the tenant sub-dir must not
+            // yet exist.
+            Path newRootData = root.resolve("data");
+            Files.createDirectories(newRootData);
+            Path expectedTenantDir = newRootData.resolve(TENANT_ID);
+            assertFalse(Files.exists(expectedTenantDir));
 
-        TenantProperties tenantProperties = new TenantProperties();
-        tenantProperties.setConfig(java.util.Map.of("no-algorithm-tenant", cfg));
+            benchmarkProperties = new BenchmarkProperties(
+                    newRootData,
+                    benchmarkProperties.getResultsDir(),
+                    benchmarkProperties.getAlgorithm(),
+                    benchmarkProperties.getRunner()
+            );
 
-        BenchmarkProperties props = new BenchmarkProperties();
-        props.setDataDir(rootDataDir.toString());
-        props.setResultsDir(rootResultsDir.toString());
-        // Deliberately leave algorithm unset
+            // Build a stub TenantContext that always returns our fixed tenant ID.
+            TenantContext tenantContext = new TenantContext();
+            tenantContext.setTenantId(TENANT_ID);
 
-        BenchmarkService unconfigured = new BenchmarkService(props, tenantContext, tenantProperties);
+            TenantConfig tenantConfig = new TenantConfig();
+            tenantConfig.setAlgorithm(ALGORITHM);
+            tenantConfig.setRunner(RUNNER);
+            tenantConfig.setTitle("Test tenant title");
+            tenantConfig.setFooter("Test tenant footer");
 
-        assertThrows(IllegalStateException.class,
-            unconfigured::getDefaultAlgorithmAndRunner,
-            "getDefaultAlgorithmAndRunner must throw when no algorithm is configured");
+            TenantProperties tenantProperties = new TenantProperties();
+            tenantProperties.setConfig(java.util.Map.of(TENANT_ID, tenantConfig));
+
+            service = new BenchmarkService(benchmarkProperties, tenantContext, tenantProperties);
+
+            try {
+                service.fetchIdentifiers(
+                    "http://invalid.example.invalid",
+                    null, null, "de", null);
+            } catch (Exception ignored) {
+                // Expected: the HTTP call will fail.
+            }
+
+            assertTrue(Files.isDirectory(expectedTenantDir),
+                "fetchIdentifiers must create the tenant-scoped data directory");
+        }
+
+        @Test
+        @DisplayName("Tenant data directories are isolated per tenant ID")
+        void tenantDataDirsAreIsolated() throws Exception {
+            // The directory created must be under the tenant ID sub-path,
+            // not at the root data dir level.
+            try {
+                service.fetchIdentifiers(
+                    "http://invalid.example.invalid",
+                    null, null, "de", null);
+            } catch (Exception ignored) { /* expected */ }
+
+            // The tenant sub-dir must exist; the root must not contain any
+            // guids files directly (they belong under the tenant sub-dir).
+            assertTrue(Files.isDirectory(rootDataDir.resolve(TENANT_ID)),
+                "Data files must be written under {dataDir}/{tenantId}/");
+            assertFalse(
+                Files.exists(rootDataDir.resolve("guids_de.txt")),
+                "guids files must not appear directly under the root data dir");
+        }
+
+        @Test
+        @DisplayName("Uses default OAI-PMH base URL when baseUrl is null")
+        void usesDefaultBaseUrlWhenNull() {
+            assertEquals(
+                "https://datacatalogue.cessda.eu/oai-pmh/v0/oai",
+                GetOaiPmhIdentifiers.DEFAULT_OAI_PMH_BASE_URL,
+                "Default OAI-PMH base URL must match the CESSDA endpoint");
+        }
+
+        @Test
+        @DisplayName("Uses default metadata prefix when metadataPrefix is null")
+        void usesDefaultMetadataPrefixWhenNull() {
+            assertEquals("oai_ddi25",
+                GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX,
+                "Default metadata prefix must be oai_ddi25");
+        }
+
+        @Test
+        @DisplayName("Uses default sets when sets parameter is null or blank")
+        void usesDefaultSetsWhenNull() {
+            assertArrayEquals(
+                new String[]{"de","el","en","fi","fr","hr","nl","sl","sl-SI","sv"},
+                GetOaiPmhIdentifiers.DEFAULT_SETS,
+                "Default sets must match the expected set codes");
+        }
     }
 
-    @Test
-    @DisplayName("Throws IllegalStateException when runner is not configured")
-    void failsFastForMissingRunnerConfiguration() {
-        TenantContext tenantContext = new TenantContext();
-        tenantContext.setTenantId("no-runner-tenant");
+    @Nested
+    @DisplayName("runAssessment")
+    class RunAssessment {
 
-        TenantConfig cfg = new TenantConfig();
-        cfg.setAlgorithm("https://example.org/algorithm");
-        cfg.setTitle("T");
-        cfg.setFooter("F");
+        @Test
+        @DisplayName("Creates tenant data and results directories if absent")
+        void createsBothTenantDirectoriesWhenAbsent(@TempDir Path root)
+                throws Exception {
+            Path newRootData    = root.resolve("data");
+            Path newRootResults = root.resolve("results");
+            Files.createDirectories(newRootData);
+            Files.createDirectories(newRootResults);
 
-        TenantProperties tenantProperties = new TenantProperties();
-        tenantProperties.setConfig(java.util.Map.of("no-runner-tenant", cfg));
+            Path expectedData    = newRootData.resolve(TENANT_ID);
+            Path expectedResults = newRootResults.resolve(TENANT_ID);
+            assertFalse(Files.exists(expectedData));
+            assertFalse(Files.exists(expectedResults));
 
-        BenchmarkProperties props = new BenchmarkProperties();
-        props.setDataDir(rootDataDir.toString());
-        props.setResultsDir(rootResultsDir.toString());
-        // Deliberately leave runner unset
+            benchmarkProperties = new BenchmarkProperties(
+                    newRootData,
+                    newRootResults,
+                    benchmarkProperties.getAlgorithm(),
+                    benchmarkProperties.getRunner()
+            );
 
-        BenchmarkService unconfigured = new BenchmarkService(props, tenantContext, tenantProperties);
+            // Build a stub TenantContext that always returns our fixed tenant ID.
+            TenantContext tenantContext = new TenantContext();
+            tenantContext.setTenantId(TENANT_ID);
 
-        assertThrows(IllegalStateException.class,
-            unconfigured::getDefaultAlgorithmAndRunner,
-            "getDefaultAlgorithmAndRunner must throw when no runner is configured");
+            TenantConfig tenantConfig = new TenantConfig();
+            tenantConfig.setAlgorithm(ALGORITHM);
+            tenantConfig.setRunner(RUNNER);
+            tenantConfig.setTitle("Test tenant title");
+            tenantConfig.setFooter("Test tenant footer");
+
+            TenantProperties tenantProperties = new TenantProperties();
+            tenantProperties.setConfig(java.util.Map.of(TENANT_ID, tenantConfig));
+
+            service = new BenchmarkService(benchmarkProperties, tenantContext, tenantProperties);
+
+            try {
+                service.runAssessment(
+                        URI.create("http://invalid.example.invalid"),
+                    null, null, null, null, false);
+            } catch (Exception ignored) {
+                // Expected: the file or HTTP call will fail.
+            }
+
+            assertTrue(Files.isDirectory(expectedData),
+                "runAssessment must create the tenant-scoped data directory");
+            assertTrue(Files.isDirectory(expectedResults),
+                "runAssessment must create the tenant-scoped results directory");
+        }
+
+        @Test
+        @DisplayName("Resolves a bare guid filename against the tenant data directory")
+        void resolvesGuidFilenameAgainstTenantDataDir() throws Exception {
+            // Write a minimal guids file directly into the tenant data dir.
+            Path guidFile = tenantDataDir.resolve("guids_test.txt");
+            Files.writeString(guidFile,
+                "# test\nhttps://example.org/oai?verb=GetRecord"
+                + "&metadataPrefix=oai_ddi25&identifier=abc",
+                StandardCharsets.UTF_8);
+
+            // Supply the bare filename as the guidFile parameter; the service
+            // resolves it against the tenant data dir.  The HTTP POST will fail,
+            // but no FileNotFoundException should be thrown beforehand.
+            try {
+                service.runAssessment(
+                        URI.create("http://invalid.example.invalid"),
+                        URI.create("http://invalid.example.invalid"),
+                    "guids_test.txt", null, null, false);
+            } catch (java.io.FileNotFoundException fnfe) {
+                org.junit.jupiter.api.Assertions.fail(
+                    "FileNotFoundException must not be thrown when the file "
+                    + "exists in the tenant data directory; got: " + fnfe.getMessage());
+            } catch (Exception ignored) {
+                // Any other exception (e.g. HTTP failure) is acceptable here.
+            }
+        }
+
+        @Test
+        @DisplayName("DEFAULT_GUIDS_FILE constant has expected value")
+        void usesDefaultchampionUriWhenNull() {
+            assertEquals("guids_hr.txt",
+                RunBenchmarkAssessment.DEFAULT_GUIDS_FILE,
+                "Default guids filename must be guids_hr.txt");
+        }
+
+        @Test
+        @DisplayName("Returns message containing results path when processAll succeeds")
+        void usesDefaultGuidsFilenameWhenNoParams() throws Exception {
+            // Write the default guids file so processAll can find something to process.
+            Path defaultFile = tenantDataDir.resolve(RunBenchmarkAssessment.DEFAULT_GUIDS_FILE);
+            Files.writeString(defaultFile, "# empty\n", StandardCharsets.UTF_8);
+
+            try {
+                String result = service.runAssessment(
+                    null, null,
+                    RunBenchmarkAssessment.DEFAULT_GUIDS_FILE,
+                    null, null, false);
+                assertTrue(result.contains(tenantResultsDir.toString()),
+                    "Return message must reference the tenant results directory");
+            } catch (Exception ignored) {
+                // HTTP call will fail; directory-creation and path-resolution
+                // are the aspects verified above.
+            }
+        }
     }
 }

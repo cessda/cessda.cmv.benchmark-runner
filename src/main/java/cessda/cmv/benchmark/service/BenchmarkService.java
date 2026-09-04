@@ -1,11 +1,5 @@
 package cessda.cmv.benchmark.service;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import org.springframework.stereotype.Service;
-
 import cessda.cmv.benchmark.GenerateManifest;
 import cessda.cmv.benchmark.GetOaiPmhIdentifiers;
 import cessda.cmv.benchmark.RunBenchmarkAssessment;
@@ -13,6 +7,12 @@ import cessda.cmv.benchmark.config.BenchmarkProperties;
 import cessda.cmv.benchmark.tenant.TenantContext;
 import cessda.cmv.benchmark.tenant.TenantProperties;
 import cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 @Service
 public class BenchmarkService {
@@ -53,8 +53,8 @@ public class BenchmarkService {
      *
      * @return a two-element array: {@code [algorithm, runner]}.
      */
-    public String[] getDefaultAlgorithmAndRunner() {
-        return new String[] { resolveAlgorithm(null), resolveRunner(null) };
+    public URI[] getDefaultAlgorithmAndRunner() {
+        return new URI[]{resolveAlgorithm(null), resolveRunner(null)};
     }
 
     /**
@@ -90,14 +90,14 @@ public class BenchmarkService {
 
     /** /data/{tenantId}/ */
     private Path tenantDataDir() {
-        return benchmarkProperties.getDataDirPath()
+        return benchmarkProperties.getDataDir()
                 .resolve(tenantContext.getTenantId())
                 .normalize();
     }
 
     /** /results/{tenantId}/ */
     private Path tenantResultsDir() {
-        return benchmarkProperties.getResultsDirPath()
+        return benchmarkProperties.getResultsDir()
                 .resolve(tenantContext.getTenantId())
                 .normalize();
     }
@@ -120,16 +120,16 @@ public class BenchmarkService {
      * resolves the current tenant's configured
      * {@code tenants.config.<tenantId>.algorithm} value.</p>
      */
-    private String resolveAlgorithm(String requestedOverride) {
-        if (requestedOverride != null && !requestedOverride.isBlank()) {
+    private URI resolveAlgorithm(URI requestedOverride) {
+        if (requestedOverride != null) {
             return requestedOverride;
         }
-        String tenantValue = currentTenantConfig().effectiveAlgorithm();
-        if (tenantValue != null && !tenantValue.isBlank()) {
+        URI tenantValue = currentTenantConfig().effectiveAlgorithm();
+        if (tenantValue != null) {
             return tenantValue;
         }
-        String sharedValue = benchmarkProperties.getAlgorithm();
-        if (sharedValue != null && !sharedValue.isBlank()) {
+        URI sharedValue = benchmarkProperties.getAlgorithm();
+        if (sharedValue != null) {
             return sharedValue;
         }
         throw new IllegalStateException(
@@ -143,20 +143,19 @@ public class BenchmarkService {
      * resolves the current tenant's configured
      * {@code tenants.config.<tenantId>.runner} value.</p>
      */
-    private String resolveRunner(String requestedOverride) {
-        if (requestedOverride != null && !requestedOverride.isBlank()) {
+    private URI resolveRunner(URI requestedOverride) {
+        if (requestedOverride != null) {
             return requestedOverride;
         }
-        String tenantValue = currentTenantConfig().effectiveRunner();
-        if (tenantValue != null && !tenantValue.isBlank()) {
+        URI tenantValue = currentTenantConfig().effectiveRunner();
+        if (tenantValue != null) {
             return tenantValue;
         }
-        String sharedValue = benchmarkProperties.getRunner();
-        if (sharedValue != null && !sharedValue.isBlank()) {
+        URI sharedValue = benchmarkProperties.getRunner();
+        if (sharedValue != null) {
             return sharedValue;
         }
-        throw new IllegalStateException(
-                "No runner configured for tenant: " + tenantContext.getTenantId());
+        throw new IllegalStateException("No runner configured for tenant: " + tenantContext.getTenantId());
     }
 
     // ── 1. Fetch OAI-PMH Identifiers ─────────────────────────────────────────
@@ -195,8 +194,8 @@ public class BenchmarkService {
     // ── 2. Run Assessment ────────────────────────────────────────────────────
 
     public String runAssessment(
-            String spreadsheetUri,
-            String runnerUri,
+            URI spreadsheetUri,
+            URI runnerUri,
             String guidFile,
             java.util.List<String> guidFiles,
             String guid,
@@ -207,8 +206,8 @@ public class BenchmarkService {
         Files.createDirectories(tDataDir);
         Files.createDirectories(tResultsDir);
 
-        String resolvedAlgorithm = resolveAlgorithm(spreadsheetUri);
-        String resolvedRunner    = resolveRunner(runnerUri);
+        URI resolvedAlgorithm = resolveAlgorithm(spreadsheetUri);
+        URI resolvedRunner = resolveRunner(runnerUri);
 
         // Pass tenant-scoped dirs and tenant-scoped algorithm/runner
         // explicitly — no system property side-effects, and no two
@@ -235,7 +234,7 @@ public class BenchmarkService {
                 if (filename == null || filename.isBlank()) continue;
                 try {
                     Path resolved = resolveGuidFile(filename.trim(), tDataDir);
-                    runner.processSingleFile(resolved.toString());
+                    runner.processSingleFile(resolved);
                     processed++;
                 } catch (java.io.FileNotFoundException fnfe) {
                     skipped.add(filename.trim());
@@ -250,7 +249,7 @@ public class BenchmarkService {
 
         if (guidFile != null && !guidFile.isBlank()) {
             Path resolved = resolveGuidFile(guidFile.trim(), tDataDir);
-            runner.processSingleFile(resolved.toString());
+            runner.processSingleFile(resolved);
             return "Processed file: " + resolved + " -> " + tResultsDir;
         }
 
@@ -261,7 +260,7 @@ public class BenchmarkService {
         }
 
         Path defaultFile = resolveGuidFile(RunBenchmarkAssessment.DEFAULT_GUIDS_FILE, tDataDir);
-        runner.processSingleFile(defaultFile.toString());
+        runner.processSingleFile(defaultFile);
         return "Processed default file: " + defaultFile + " -> " + tResultsDir;
     }
 
