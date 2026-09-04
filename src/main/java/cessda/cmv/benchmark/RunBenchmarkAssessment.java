@@ -612,8 +612,8 @@ public class RunBenchmarkAssessment {
     /**
      * Submits a single GUID to the Champion API and saves the response.
      * This method implements a retry mechanism for transient errors such as
-     * SSL handshake failures and timeouts, with exponential backoff between
-     * attempts.
+     * timeouts, with exponential backoff between attempts.
+     * <p>
      * If all attempts fail, a structured error file is saved with details of the
      * failure.
      *
