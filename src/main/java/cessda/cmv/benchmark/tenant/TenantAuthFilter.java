@@ -48,7 +48,7 @@ public class TenantAuthFilter extends OncePerRequestFilter {
         // "/" — both must be exempted explicitly. Only the /api/**
         // endpoints the dashboard JavaScript calls via fetch() require
         // an API key; the HTML shell and its static assets do not.
-        return !path.startsWith("/api");
+        return !(path.startsWith("/api") || path.startsWith("/results"));
     }
 
     @Override
