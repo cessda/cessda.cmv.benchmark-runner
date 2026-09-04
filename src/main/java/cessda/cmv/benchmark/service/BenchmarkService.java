@@ -216,6 +216,10 @@ public class BenchmarkService {
         RunBenchmarkAssessment runner =
                 new RunBenchmarkAssessment(resolvedAlgorithm, resolvedRunner,
                                            tDataDir, tResultsDir);
+        if (benchmarkProperties.getBackoffBetweenProcessGuidMs() != null) {
+            runner.setBackoffBetweenProcessGuid(
+                    benchmarkProperties.getBackoffBetweenProcessGuidMs().toMillis());
+        }
 
         if (guid != null && !guid.isBlank()) {
             runner.processSingleGuid(guid.trim());

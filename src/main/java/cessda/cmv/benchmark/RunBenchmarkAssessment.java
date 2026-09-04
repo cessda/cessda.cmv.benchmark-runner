@@ -42,6 +42,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -288,6 +289,32 @@ public class RunBenchmarkAssessment {
                 Duration.ofSeconds(120),
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build()
         );
+    }
+
+    /**
+     * Returns the pause, in milliseconds, observed before submitting
+     * each GUID after the first within a batch.
+     *
+     * @return the configured backoff, in milliseconds
+     */
+    public long getBackoffBetweenProcessGuid() {
+        return backoffBetweenProcessGuid;
+    }
+
+    /**
+     * Overrides the default pause between successive GUID submissions.
+     * Called with the configured
+     * {@code benchmark.backoff-between-process-guid-ms} value, when
+     * present, by both {@link #main(String[])} and
+     * {@code BenchmarkService} — the compiled-in
+     * {@link BenchmarkProperties#DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS}
+     * applies otherwise.
+     *
+     * @param backoffBetweenProcessGuidMs the backoff to use, in
+     *                                    milliseconds
+     */
+    public void setBackoffBetweenProcessGuid(long backoffBetweenProcessGuidMs) {
+        this.backoffBetweenProcessGuid = backoffBetweenProcessGuidMs;
     }
 
     // -----------------------------------------------------------------------
@@ -586,6 +613,9 @@ public class RunBenchmarkAssessment {
     /**
      * Submits all GUIDs to the Champion API using a fixed thread pool
      * of five workers and awaits completion for up to ten minutes.
+     * Every submission after the first ({@code index > 0}) is preceded
+     * by a {@link #backoffBetweenProcessGuid}-millisecond pause, to
+     * ease the burst of concurrent requests Champion otherwise sees.
      *
      * @param guids  list of GetRecord URLs to submit
      * @param subDir subdirectory under {@code resultsDir} for
@@ -687,7 +717,7 @@ public class RunBenchmarkAssessment {
                         .replaceAll("[^a-zA-Z0-9._-]", "_");
                 Path jsonOutputPath = outputDir.resolve(sanitisedGuid + ".json");
 
-                if (response.statusCode() == 504 || response.statusCode() == 502) {
+                if (response.statusCode() >= 500 && response.statusCode() <= 599) {
                     lastException = new IOException(
                             "Gateway error: HTTP " + response.statusCode());
                     logger.log(Level.FINE, "Attempt {} failed for GUID {}: HTTP {}",
@@ -807,6 +837,12 @@ public class RunBenchmarkAssessment {
             if (error.getCause() != null) {
                 errorJson.put("cause",
                         error.getCause().getMessage());
+            }
+            if (error instanceof OverwhelmedIndicatorException overwhelmed) {
+                var indicatorsArray = errorJson.putArray("overwhelmedIndicators");
+                for (String indicator : overwhelmed.getIndicators()) {
+                    indicatorsArray.add(indicator);
+                }
             }
 
             mapper.writerWithDefaultPrettyPrinter()
