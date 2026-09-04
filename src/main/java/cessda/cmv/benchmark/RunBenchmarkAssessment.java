@@ -117,12 +117,12 @@ public class RunBenchmarkAssessment {
     private static final String NOGUIDS = "No GUIDs found to process. Exiting.";
     private static final String PROCCOMP = "Processing completed!";
     static final String CHAMPION_URI_ARG = "championUri";
-    private static final String FOUNDGUIDS = "Found {} GUID(s) to process";
+    private static final String FOUNDGUIDS = "Found {0} GUID(s) to process";
     private static final String TASKTOOLONG = "Some tasks did not complete in time!";
     private static final String TASKSUCCESS = "All tasks completed successfully.";
     private static final String REQSEND = "Sending request to ";
     private static final String FILESAVEERR = "Could not save error file: ";
-    private static final String PROCERROR = "Error processing GUID {}: {}";
+    private static final String PROCERROR = "Error processing GUID {0}: {1}";
     private static final String PROCFAIL = "Failed to process GUID ";
 
     // CLI option names
@@ -523,10 +523,10 @@ public class RunBenchmarkAssessment {
                 logger.log(Level.INFO, "No GUIDs found in {0}. Skipping.", filename);
                 return;
             }
-            logger.log(Level.INFO, FOUNDGUIDS + " in {}", new Object[]{guids.size(), filename});
+            logger.log(Level.INFO, FOUNDGUIDS + " in {1}", new Object[]{guids.size(), filename});
             Path subDir = deriveSubdirectory(filename);
             processGuids(guids, subDir);
-            logger.log(Level.INFO, PROCCOMP + " ({})", filename);
+            logger.log(Level.INFO, PROCCOMP + " ({0})", filename);
         } finally {
             guidsFilename = previousFilename;
         }
@@ -543,7 +543,7 @@ public class RunBenchmarkAssessment {
     public void processSingleGuid(String guid)
             throws IOException, InterruptedException {
 
-        logger.log(Level.INFO, "Processing single GUID: {}", guid);
+        logger.log(Level.INFO, "Processing single GUID: {0}", guid);
         processOneGuid(guid, null);
         logger.info(PROCCOMP);
     }
@@ -649,7 +649,7 @@ public class RunBenchmarkAssessment {
         for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
             if (attempt > 0) {
                 long backoffMs = INITIAL_BACKOFF_MS * (1L << (attempt - 1)); // 2s, 4s, 8s...
-                logger.log(Level.INFO, "Retry {}/{} for GUID {} after {}ms backoff",
+                logger.log(Level.INFO, "Retry {0}/{1} for GUID {2} after {3}ms backoff",
                         new Object[]{attempt, MAX_RETRIES - 1, guid, backoffMs}
                 );
                 Thread.sleep(backoffMs);
@@ -684,18 +684,18 @@ public class RunBenchmarkAssessment {
             } catch (HttpTimeoutException e) {
                 // Transient errors worth retrying
                 lastException = e;
-                logger.log(Level.FINE, "Attempt {} failed for GUID {}: {}",
+                logger.log(Level.FINE, "Attempt {0} failed for GUID {1}: {2}",
                         new Object[]{attempt + 1, guid, e.toString()});
             } catch (IOException e) {
                 // Non-transient — fail immediately
-                logger.log(Level.SEVERE, PROCFAIL + "{}: {}", new Object[]{guid, e.getMessage()});
+                logger.log(Level.SEVERE, PROCFAIL + "{0}: {1}", new Object[]{guid, e.getMessage()});
                 saveErrorFile(guid, e, subDir);
                 throw e;
             }
         }
 
         // All retries exhausted
-        logger.log(Level.SEVERE, PROCFAIL + "{}: all {} attempts failed", new Object[]{guid, MAX_RETRIES});
+        logger.log(Level.SEVERE, PROCFAIL + "{0}: all {1} attempts failed", new Object[]{guid, MAX_RETRIES});
         saveErrorFile(guid, lastException, subDir);
         throw new IOException("All retries exhausted for GUID: " + guid, lastException);
     }
@@ -736,10 +736,10 @@ public class RunBenchmarkAssessment {
             }
 
             Files.writeString(path, jsonContent);
-            logger.log(Level.INFO, "Saved JSON response for GUID to {}", path.getFileName());
+            logger.log(Level.INFO, "Saved JSON response for GUID to {0}", path.getFileName());
 
         } catch (IOException e) {
-            logger.log(Level.SEVERE, "Failed to save JSON file for GUID: {}", e.toString());
+            logger.log(Level.SEVERE, "Failed to save JSON file for GUID: {0}", e.toString());
         }
     }
 
@@ -793,10 +793,10 @@ public class RunBenchmarkAssessment {
             mapper.writerWithDefaultPrettyPrinter()
                     .writeValue(errorPath.toFile(), errorJson);
 
-            logger.log(Level.INFO, "Saved error details to {}", errorFilename);
+            logger.log(Level.INFO, "Saved error details to {0}", errorFilename);
 
         } catch (IOException e) {
-            logger.log(Level.SEVERE, FILESAVEERR + " {}", e.getMessage());
+            logger.log(Level.SEVERE, FILESAVEERR + " {0}", e.getMessage());
         }
     }
 
