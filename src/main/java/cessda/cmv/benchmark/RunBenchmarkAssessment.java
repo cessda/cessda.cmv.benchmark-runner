@@ -37,6 +37,7 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
@@ -555,7 +556,27 @@ public class RunBenchmarkAssessment {
      * @throws IOException if the file cannot be found or read
      */
     private List<String> readGuidsFromResource() throws IOException {
-        return Files.readAllLines(guidsFilename, StandardCharsets.UTF_8)
+        List<String> guidsFromFile;
+
+        try {
+            guidsFromFile = Files.readAllLines(guidsFilename, StandardCharsets.UTF_8);
+        } catch (NoSuchFileException noSuchFileException) {
+            if (guidsFilename.isAbsolute()) {
+                // No point attempting to resolve, it would try guidsFilename again
+                throw noSuchFileException;
+            }
+
+            // Fall back to resolving the bare filename under the tenant data directory
+            try {
+                guidsFromFile = Files.readAllLines(dataDir.resolve(guidsFilename), StandardCharsets.UTF_8);
+            } catch (IOException ioException) {
+                // Add suppressed exception
+                ioException.addSuppressed(noSuchFileException);
+                throw ioException;
+            }
+        }
+
+        return guidsFromFile
                 .stream()
                 .map(String::trim)
                 .filter(l -> !l.isBlank() && !l.startsWith("#"))
