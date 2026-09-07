@@ -90,7 +90,8 @@ class BenchmarkServiceTest {
                 rootDataDir,
                 rootResultsDir,
                 ALGORITHM,
-                RUNNER
+                RUNNER,
+                null
         );
 
         service = new BenchmarkService(
@@ -170,7 +171,8 @@ class BenchmarkServiceTest {
                 rootDataDir,
                 rootResultsDir,
                 null, // Deliberately leave algorithm unset
-                RUNNER
+                RUNNER,
+                null
         );
 
         BenchmarkService unconfigured = new BenchmarkService(props, tenantContext, tenantProperties);
@@ -198,7 +200,8 @@ class BenchmarkServiceTest {
                 rootDataDir,
                 rootResultsDir,
                 ALGORITHM,
-                null // Deliberately leave runner unset
+                null, // Deliberately leave runner unset
+                null
         );
 
 
@@ -398,7 +401,8 @@ class BenchmarkServiceTest {
                     newRootData,
                     benchmarkProperties.getResultsDir(),
                     benchmarkProperties.getAlgorithm(),
-                    benchmarkProperties.getRunner()
+                    benchmarkProperties.getRunner(),
+                    null
             );
 
             // Build a stub TenantContext that always returns our fixed tenant ID.
@@ -497,7 +501,8 @@ class BenchmarkServiceTest {
                     newRootData,
                     newRootResults,
                     benchmarkProperties.getAlgorithm(),
-                    benchmarkProperties.getRunner()
+                    benchmarkProperties.getRunner(),
+                    null
             );
 
             // Build a stub TenantContext that always returns our fixed tenant ID.

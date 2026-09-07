@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 
 @Service
 public class BenchmarkService {
@@ -218,7 +219,7 @@ public class BenchmarkService {
                                            tDataDir, tResultsDir);
         if (benchmarkProperties.getBackoffBetweenProcessGuidMs() != null) {
             runner.setBackoffBetweenProcessGuid(
-                    benchmarkProperties.getBackoffBetweenProcessGuidMs().toMillis());
+                    Duration.ofMillis(benchmarkProperties.getBackoffBetweenProcessGuidMs()));
         }
 
         if (guid != null && !guid.isBlank()) {

@@ -38,11 +38,14 @@ public class BenchmarkProperties {
 
     private final URI runner;
 
-    public BenchmarkProperties(Path dataDir, Path resultsDir, URI algorithm, URI runner) {
+    private final Long backoffBetweenProcessGuidMs;
+
+    public BenchmarkProperties(Path dataDir, Path resultsDir, URI algorithm, URI runner, Long backoffBetweenProcessGuidMs) {
         this.dataDir = dataDir;
         this.resultsDir = resultsDir;
         this.algorithm = algorithm;
         this.runner = runner;
+        this.backoffBetweenProcessGuidMs = backoffBetweenProcessGuidMs;
     }
 
     public Path getDataDir() {
@@ -59,5 +62,9 @@ public class BenchmarkProperties {
 
     public URI getRunner() {
         return runner;
+    }
+
+    public Long getBackoffBetweenProcessGuidMs() {
+        return backoffBetweenProcessGuidMs;
     }
 }

@@ -42,7 +42,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -143,7 +142,7 @@ public class RunBenchmarkAssessment {
     // Instance state
     // -----------------------------------------------------------------------
     private static final int MAX_RETRIES = 3;
-    private static final long INITIAL_BACKOFF_MS = 2_000;
+    private static final Duration INITIAL_BACKOFF = Duration.ofMillis(2_000);
     private final Path dataDir;
 
     private final HttpClient httpClient;
@@ -170,6 +169,11 @@ public class RunBenchmarkAssessment {
      * overridden temporarily by {@link #processSingleFile(Path)}.
      */
     private Path guidsFilename;
+
+    /**
+     * Duration to wait between process GUIDs if a failure occurs.
+     */
+    private Duration backoffBetweenProcessGuid = INITIAL_BACKOFF;
 
     private RunBenchmarkAssessment(
             Duration requestTimeout,
@@ -292,12 +296,11 @@ public class RunBenchmarkAssessment {
     }
 
     /**
-     * Returns the pause, in milliseconds, observed before submitting
-     * each GUID after the first within a batch.
+     * Returns the backoff observed if an error occurs when submitting a GUID.
      *
-     * @return the configured backoff, in milliseconds
+     * @return the configured backoff
      */
-    public long getBackoffBetweenProcessGuid() {
+    public Duration getBackoffBetweenProcessGuid() {
         return backoffBetweenProcessGuid;
     }
 
@@ -307,14 +310,13 @@ public class RunBenchmarkAssessment {
      * {@code benchmark.backoff-between-process-guid-ms} value, when
      * present, by both {@link #main(String[])} and
      * {@code BenchmarkService} — the compiled-in
-     * {@link BenchmarkProperties#DEFAULT_BACKOFF_BETWEEN_PROCESS_GUID_MS}
+     * {@link RunBenchmarkAssessment#INITIAL_BACKOFF}
      * applies otherwise.
      *
-     * @param backoffBetweenProcessGuidMs the backoff to use, in
-     *                                    milliseconds
+     * @param backoffBetweenProcessGuid the backoff to use
      */
-    public void setBackoffBetweenProcessGuid(long backoffBetweenProcessGuidMs) {
-        this.backoffBetweenProcessGuid = backoffBetweenProcessGuidMs;
+    public void setBackoffBetweenProcessGuid(Duration backoffBetweenProcessGuid) {
+        this.backoffBetweenProcessGuid = backoffBetweenProcessGuid;
     }
 
     // -----------------------------------------------------------------------
@@ -697,11 +699,11 @@ public class RunBenchmarkAssessment {
         Exception lastException = null;
         for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
             if (attempt > 0) {
-                long backoffMs = INITIAL_BACKOFF_MS * (1L << (attempt - 1)); // 2s, 4s, 8s...
+                Duration backoff = INITIAL_BACKOFF.multipliedBy((1L << (attempt - 1))); // 2s, 4s, 8s...
                 logger.log(Level.INFO, "Retry {0}/{1} for GUID {2} after {3}ms backoff",
-                        new Object[]{attempt, MAX_RETRIES - 1, guid, backoffMs}
+                        new Object[]{attempt, MAX_RETRIES - 1, guid, backoff}
                 );
-                Thread.sleep(backoffMs);
+                Thread.sleep(backoff);
             }
             try {
                 Instant requestStart = Instant.now();
