@@ -132,10 +132,10 @@ curl -X POST \
 
 | Parameter        | Default value                                          |
 |------------------|--------------------------------------------------------|
-| `baseUrl`        | `https://datacatalogue.cessda.eu/oai-pmh/v0/oai`      |
+| `baseUrl`        | `https://datacatalogue.cessda.eu/oai-pmh/v0/oai`       |
 | `verb`           | `ListIdentifiers`                                      |
 | `metadataPrefix` | `oai_ddi25`                                            |
-| `sets`           | `de,el,en,fi,fr,hr,nl,sl,sl-SI,sv`                    |
+| `sets`           | `de,el,en,fi,fr,hr,nl,sl,sl-SI,sv`                     |
 | `fetchSet`       | *(none — fetches all sets when absent)*                |
 
 ## 2. Run Benchmark Assessment

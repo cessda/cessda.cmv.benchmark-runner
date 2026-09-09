@@ -1,24 +1,122 @@
-{
-  "properties": [
-    {
-      "name": "benchmark.data-dir",
-      "type": "java.lang.String",
-      "description": "Root directory for tenant-scoped guids_*.txt input files."
-    },
-    {
-      "name": "benchmark.results-dir",
-      "type": "java.lang.String",
-      "description": "Root directory for tenant-scoped JSON results and generated manifest files."
-    },
-    {
-      "name": "benchmark.algorithm",
-      "type": "java.lang.String",
-      "description": "Default benchmark algorithm URI for standalone CLI execution."
-    },
-    {
-      "name": "benchmark.runner",
-      "type": "java.lang.String",
-      "description": "Default FAIR Champion runner URI for standalone CLI execution."
-    }
-  ]
-}
+{"properties": [
+  {
+    "name": "benchmark.data-dir",
+    "type": "java.lang.String",
+    "description": "Root directory for tenant-scoped guids_*.txt input files."
+  },
+  {
+    "name": "benchmark.results-dir",
+    "type": "java.lang.String",
+    "description": "Root directory for tenant-scoped JSON results and generated manifest files."
+  },
+  {
+    "name": "benchmark.algorithm",
+    "type": "java.lang.String",
+    "description": "Default benchmark algorithm URI for standalone CLI execution."
+  },
+  {
+    "name": "benchmark.runner",
+    "type": "java.lang.String",
+    "description": "Default FAIR Champion runner URI for standalone CLI execution."
+  },
+  {
+    "name": "springdoc.info.title",
+    "type": "java.lang.String",
+    "description": "A description for 'springdoc.info.title'"
+  },
+  {
+    "name": "springdoc.info.version",
+    "type": "java.lang.String",
+    "description": "A description for 'springdoc.info.version'"
+  },
+  {
+    "name": "springdoc.info.description",
+    "type": "java.lang.String",
+    "description": "A description for 'springdoc.info.description'"
+  },
+  {
+    "name": "tenants.enabled",
+    "type": "java.lang.Boolean",
+    "description": "Whether multi-tenancy is enabled."
+  },
+  {
+    "name": "tenants.keys.key-cessda",
+    "type": "java.lang.String",
+    "description": "A description for 'tenants.keys.key-cessda'"
+  },
+  {
+    "name": "tenants.keys.key-oxford",
+    "type": "java.lang.String",
+    "description": "A description for 'tenants.keys.key-oxford'"
+  },
+  {
+    "name": "tenants.config.cessda.algorithm",
+    "type": "java.lang.String",
+    "description": "A description for 'tenants.config.cessda.algorithm'"
+  },
+  {
+    "name": "tenants.config.cessda.runner",
+    "type": "java.lang.String",
+    "description": "A description for 'tenants.config.cessda.runner'"
+  },
+  {
+    "name": "tenants.config.cessda.title",
+    "type": "java.lang.String",
+    "description": "A description for 'tenants.config.cessda.title'"
+  },
+  {
+    "name": "tenants.config.cessda.footer",
+    "type": "java.lang.String",
+    "description": "A description for 'tenants.config.cessda.footer'"
+  },
+  {
+    "name": "tenants.config.cessda.set-names",
+    "type": "java.util.Map<java.lang.String,java.lang.String>",
+    "description": "A description for 'tenants.config.cessda.set-names'"
+  },
+  {
+    "name": "tenants.config.cessda.fair-map",
+    "type": "java.util.Map<java.lang.String,java.lang.String>",
+    "description": "A description for 'tenants.config.cessda.fair-map'"
+  },
+  {
+    "name": "tenants.config.cessda.maturity-levels",
+    "type": "java.util.Map<java.lang.String,java.util.List<java.lang.String>>",
+    "description": "A description for 'tenants.config.cessda.maturity-levels'"
+  },
+  {
+    "name": "tenants.config.oxford.algorithm",
+    "type": "java.lang.String",
+    "description": "A description for 'tenants.config.oxford.algorithm'"
+  },
+  {
+    "name": "tenants.config.oxford.runner",
+    "type": "java.lang.String",
+    "description": "A description for 'tenants.config.oxford.runner'"
+  },
+  {
+    "name": "tenants.config.oxford.title",
+    "type": "java.lang.String",
+    "description": "A description for 'tenants.config.oxford.title'"
+  },
+  {
+    "name": "tenants.config.oxford.footer",
+    "type": "java.lang.String",
+    "description": "A description for 'tenants.config.oxford.footer'"
+  },
+  {
+    "name": "tenants.config.oxford.set-names",
+    "type": "java.util.Map<java.lang.String,java.lang.String>",
+    "description": "A description for 'tenants.config.oxford.set-names'"
+  },
+  {
+    "name": "tenants.config.oxford.fair-map",
+    "type": "java.util.Map<java.lang.String,java.lang.String>",
+    "description": "A description for 'tenants.config.oxford.fair-map'"
+  },
+  {
+    "name": "tenants.config.oxford.maturity-levels",
+    "type": "java.util.Map<java.lang.String,java.util.List<java.lang.String>>",
+    "description": "A description for 'tenants.config.oxford.maturity-levels'"
+  }
+]}

@@ -15,11 +15,17 @@ server:
 # ── Benchmark Algorithm ───────────────────────────────────────────────────────
 # benchmark.algorithm - URI of the Benchmark Assessment Algorithm to use
 # benchmark.runner    - URI of the instance of FAIR Champion to run
+# benchmark.backoff-between-process-guid-ms - pause (ms) observed before
+#                         submitting each GUID after the first within a
+#                         batch, to ease the burst of concurrent requests
+#                         FAIR Champion otherwise sees. Leave unset to use
+#                         RunBenchmarkAssessment's compiled-in default.
 benchmark:
   data-dir: ./guids
   results-dir: ./results
   algorithm: https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw
   runner: https://tools.ostrails.eu/champion/assess/algorithm
+  backoff-between-process-guid-ms: 1500
 
 # ── SpringDoc / Swagger UI ────────────────────────────────────────────────────
 springdoc:

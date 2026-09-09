@@ -142,7 +142,7 @@ public class RunBenchmarkAssessment {
     // Instance state
     // -----------------------------------------------------------------------
     private static final int MAX_RETRIES = 3;
-    private static final long INITIAL_BACKOFF_MS = 2_000;
+    private static final Duration INITIAL_BACKOFF = Duration.ofMillis(2_000);
     private final Path dataDir;
 
     private final HttpClient httpClient;
@@ -169,6 +169,11 @@ public class RunBenchmarkAssessment {
      * overridden temporarily by {@link #processSingleFile(Path)}.
      */
     private Path guidsFilename;
+
+    /**
+     * Duration to wait between process GUIDs if a failure occurs.
+     */
+    private Duration backoffBetweenProcessGuid = INITIAL_BACKOFF;
 
     private RunBenchmarkAssessment(
             Duration requestTimeout,
@@ -288,6 +293,30 @@ public class RunBenchmarkAssessment {
                 Duration.ofSeconds(120),
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build()
         );
+    }
+
+    /**
+     * Returns the backoff observed if an error occurs when submitting a GUID.
+     *
+     * @return the configured backoff
+     */
+    public Duration getBackoffBetweenProcessGuid() {
+        return backoffBetweenProcessGuid;
+    }
+
+    /**
+     * Overrides the default pause between successive GUID submissions.
+     * Called with the configured
+     * {@code benchmark.backoff-between-process-guid-ms} value, when
+     * present, by both {@link #main(String[])} and
+     * {@code BenchmarkService} — the compiled-in
+     * {@link RunBenchmarkAssessment#INITIAL_BACKOFF}
+     * applies otherwise.
+     *
+     * @param backoffBetweenProcessGuid the backoff to use
+     */
+    public void setBackoffBetweenProcessGuid(Duration backoffBetweenProcessGuid) {
+        this.backoffBetweenProcessGuid = backoffBetweenProcessGuid;
     }
 
     // -----------------------------------------------------------------------
@@ -593,6 +622,9 @@ public class RunBenchmarkAssessment {
     /**
      * Submits all GUIDs to the Champion API using a fixed thread pool
      * of five workers and awaits completion for up to ten minutes.
+     * Every submission after the first ({@code index > 0}) is preceded
+     * by a {@link #backoffBetweenProcessGuid}-millisecond pause, to
+     * ease the burst of concurrent requests Champion otherwise sees.
      *
      * @param guids  list of GetRecord URLs to submit
      * @param subDir subdirectory under {@code resultsDir} for
@@ -674,11 +706,11 @@ public class RunBenchmarkAssessment {
         Exception lastException = null;
         for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
             if (attempt > 0) {
-                long backoffMs = INITIAL_BACKOFF_MS * (1L << (attempt - 1)); // 2s, 4s, 8s...
+                Duration backoff = INITIAL_BACKOFF.multipliedBy((1L << (attempt - 1))); // 2s, 4s, 8s...
                 logger.log(Level.INFO, "Retry {0}/{1} for GUID {2} after {3}ms backoff",
-                        new Object[]{attempt, MAX_RETRIES - 1, guid, backoffMs}
+                        new Object[]{attempt, MAX_RETRIES - 1, guid, backoff}
                 );
-                Thread.sleep(backoffMs);
+                Thread.sleep(backoff);
             }
             try {
                 Instant requestStart = Instant.now();
@@ -694,7 +726,7 @@ public class RunBenchmarkAssessment {
                         .replaceAll("[^a-zA-Z0-9._-]", "_");
                 Path jsonOutputPath = outputDir.resolve(sanitisedGuid + ".json");
 
-                if (response.statusCode() == 504 || response.statusCode() == 502) {
+                if (response.statusCode() >= 500 && response.statusCode() <= 599) {
                     lastException = new IOException(
                             "Gateway error: HTTP " + response.statusCode());
                     logger.log(Level.FINE, "Attempt {} failed for GUID {}: HTTP {}",
@@ -814,6 +846,12 @@ public class RunBenchmarkAssessment {
             if (error.getCause() != null) {
                 errorJson.put("cause",
                         error.getCause().getMessage());
+            }
+            if (error instanceof OverwhelmedIndicatorException overwhelmed) {
+                var indicatorsArray = errorJson.putArray("overwhelmedIndicators");
+                for (String indicator : overwhelmed.getIndicators()) {
+                    indicatorsArray.add(indicator);
+                }
             }
 
             mapper.writerWithDefaultPrettyPrinter()
