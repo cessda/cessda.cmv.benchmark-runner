@@ -19,6 +19,7 @@ package cessda.cmv.benchmark;
 import cessda.cmv.benchmark.config.BenchmarkProperties;
 import cessda.cmv.benchmark.tenant.TenantProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.commons.cli.*;
@@ -43,6 +44,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -163,6 +165,19 @@ public class RunBenchmarkAssessment {
     // -----------------------------------------------------------------------
     private static final int MAX_RETRIES = 3;
     private static final Duration INITIAL_BACKOFF = Duration.ofMillis(2_000);
+
+    /**
+     * Substring Champion writes into an indicator's {@code "result"}
+     * field — with {@code "log": null} — when it was too overloaded to
+     * actually evaluate that indicator, rather than genuinely finding
+     * it indeterminate. A normal indeterminate result instead carries
+     * a populated {@code "log"} such as
+     * {@code "Test result is indeterminate."}. Unlike a 5xx response,
+     * this shows up on an otherwise-successful HTTP response, so it
+     * has to be detected by inspecting the response body rather than
+     * the status code.
+     */
+    private static final String OVERWHELMED_RESULT_MARKER = "result data not found";
 
     /**
      * Tenant-scoped data directory. Not {@code final}: standalone CLI
@@ -793,7 +808,11 @@ public class RunBenchmarkAssessment {
     /**
      * Submits a single GUID to the Champion API and saves the response.
      * This method implements a retry mechanism for transient errors such as
-     * timeouts, with exponential backoff between attempts.
+     * timeouts and 5xx responses — and, since Champion can also return
+     * HTTP 200 while silently failing to evaluate one or more indicators
+     * under load, a response body containing an
+     * {@link #OVERWHELMED_RESULT_MARKER overwhelmed indicator} — with
+     * exponential backoff between attempts.
      * <p>
      * If all attempts fail, a structured error file is saved with details of the
      * failure.
@@ -857,6 +876,24 @@ public class RunBenchmarkAssessment {
                     continue; // trigger next retry iteration
                 }
 
+                List<String> overwhelmedIndicators =
+                        findOverwhelmedIndicatorNames(response.body());
+                if (!overwhelmedIndicators.isEmpty()) {
+                    // A dedicated exception type — rather than folding the
+                    // names into a generic IOException's message — lets
+                    // saveErrorFile write them as a structured
+                    // "overwhelmedIndicators" array (and errorType itself
+                    // becomes an unambiguous category), instead of
+                    // downstream analysis having to regex a free-text
+                    // message whose wording can (and has) changed.
+                    lastException = new OverwhelmedIndicatorException(guid, overwhelmedIndicators);
+                    logger.log(Level.SEVERE,
+                            "Attempt {0} failed for GUID {1}: HTTP {2} response body contained {3} overwhelmed indicator(s): {4}",
+                            new Object[]{attempt + 1, guid, response.statusCode(),
+                                    overwhelmedIndicators.size(), String.join(", ", overwhelmedIndicators)});
+                    continue; // trigger next retry iteration
+                }
+
                 writeResponseBodyAsJson(jsonOutputPath, response.body(), guid, response.statusCode());
 
                 logger.info(RESPSAVED + guid + " (Status: " + response.statusCode() + ", Time: " + elapsedMs + "ms)");
@@ -879,6 +916,78 @@ public class RunBenchmarkAssessment {
         logger.log(Level.SEVERE, PROCFAIL + "{0}: all {1} attempts failed", new Object[]{guid, MAX_RETRIES});
         saveErrorFile(guid, lastException, subDir);
         throw new IOException("All retries exhausted for GUID: " + guid, lastException);
+    }
+
+    /**
+     * Finds the name(s) of every indicator in a Champion response body
+     * whose {@code "result"} field carries
+     * {@link #OVERWHELMED_RESULT_MARKER}, i.e. Champion was overloaded
+     * and could not actually evaluate that indicator. Non-JSON or
+     * unparseable bodies yield an empty list, since
+     * {@link #writeResponseBodyAsJson} already handles those by
+     * wrapping the raw body rather than expecting indicator objects.
+     *
+     * @param responseBody raw HTTP response body
+     * @return the overwhelmed indicators' names (e.g. {@code "F1_GUID"}),
+     *         in encounter order; empty if none (or the body isn't
+     *         parseable JSON)
+     */
+    private List<String> findOverwhelmedIndicatorNames(String responseBody) {
+        try {
+            List<String> found = new ArrayList<>();
+            collectOverwhelmedIndicatorNames(mapper.readTree(responseBody), null, found);
+            return found;
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    /**
+     * Recursively walks a parsed Champion response collecting the
+     * name of every indicator object whose {@code "result"} field
+     * contains {@link #OVERWHELMED_RESULT_MARKER}. Recursion (rather
+     * than assuming indicators sit at the top level) keeps this
+     * working across the differently-shaped responses different
+     * tenants' algorithms may return.
+     *
+     * <p>
+     * {@code nameHint} carries the most recently descended-through
+     * object key — the same approach a downstream Python analysis
+     * script independently uses to attribute a match to its test name
+     * — so the indicator's own key (e.g. {@code "F1_GUID"}) is what
+     * ends up in {@code found}, not one of its ancestors'.
+     * </p>
+     *
+     * @param node     current node being inspected
+     * @param nameHint the most recent object key descended through, or
+     *                 {@code null} at the root
+     * @param found    accumulator for overwhelmed indicator names
+     */
+    private static void collectOverwhelmedIndicatorNames(
+            JsonNode node, String nameHint, List<String> found) {
+
+        if (node == null || !(node.isObject() || node.isArray())) {
+            return;
+        }
+        if (node.isObject()) {
+            JsonNode resultNode = node.get("result");
+            if (resultNode != null && resultNode.isTextual()
+                    && resultNode.asText().contains(OVERWHELMED_RESULT_MARKER)) {
+                found.add(nameHint != null ? nameHint : "(unknown)");
+            }
+            @SuppressWarnings("deprecation")
+            var fields = node.fields();
+            while (fields.hasNext()) {
+                var field = fields.next();
+                collectOverwhelmedIndicatorNames(field.getValue(), field.getKey(), found);
+            }
+        } else {
+            // Arrays carry no key of their own — propagate the hint
+            // from whichever object key held this array.
+            for (JsonNode child : node) {
+                collectOverwhelmedIndicatorNames(child, nameHint, found);
+            }
+        }
     }
 
     /**
