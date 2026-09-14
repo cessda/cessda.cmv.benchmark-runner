@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -226,6 +227,7 @@ public class BenchmarkController {
         }
 
         @ExceptionHandler
+        @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
         private Map<String, String> handleException(Exception e) {
                 return response("error", e.getMessage());
         }

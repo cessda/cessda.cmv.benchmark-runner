@@ -14,6 +14,8 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
 
 @Service
 public class BenchmarkService {
@@ -190,7 +192,7 @@ public class BenchmarkService {
         URI resolvedRunner = resolveRunner(runnerUri);
 
         // Pass tenant-scoped dirs and tenant-scoped algorithm/runner
-        // explicitly — no system property side-effects, and no two
+        // explicitly — no system property side effects, and no two
         // tenants ever share the same Champion configuration unless
         // their application.yml entries say so deliberately.
         RunBenchmarkAssessment runner =
@@ -297,12 +299,12 @@ public class BenchmarkService {
                     + " -> " + tDataDir + "/guids_" + fetchSet.trim() + ".txt";
         }
 
-        String[] resolvedSets = (sets != null && !sets.isBlank())
-                ? sets.split(",")
+        List<String> resolvedSets = (sets != null && !sets.isBlank())
+                ? Arrays.asList(sets.split(","))
                 : GetOaiPmhIdentifiers.DEFAULT_SETS;
 
         client.fetchAllSetIdentifiers(resolvedSets);
-        return "Fetched identifiers for " + resolvedSets.length + " set(s) -> " + tDataDir;
+        return "Fetched identifiers for " + resolvedSets.size() + " set(s) -> " + tDataDir;
     }
 
     private TenantConfig currentTenantConfig() {

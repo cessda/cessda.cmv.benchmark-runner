@@ -7,6 +7,7 @@
 package eu.cessda.cmv.benchmark;
 
 import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.ParseException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,9 +15,9 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -66,12 +67,12 @@ class GetOaiPmhIdentifiersTest {
 
     @Test
     void defaultSetsContainsTenSets() {
-        assertEquals(10, GetOaiPmhIdentifiers.DEFAULT_SETS.length);
+        assertEquals(10, GetOaiPmhIdentifiers.DEFAULT_SETS.size());
     }
 
     @Test
     void defaultSetsContainsExpectedSetCodes() {
-        List<String> sets = List.of(GetOaiPmhIdentifiers.DEFAULT_SETS);
+        List<String> sets = GetOaiPmhIdentifiers.DEFAULT_SETS;
         assertAll(
                 () -> assertTrue(sets.contains("de")),
                 () -> assertTrue(sets.contains("en")),
@@ -140,7 +141,7 @@ class GetOaiPmhIdentifiersTest {
     // ── parseArgs ────────────────────────────────────────────────────────────
 
     @Test
-    void parseArgsWithNoArgumentsReturnsDefaults() throws IOException {
+    void parseArgsWithNoArgumentsReturnsDefaults() throws ParseException {
         CommandLine cmd = GetOaiPmhIdentifiers.parseArgs(new String[]{});
         assertFalse(cmd.hasOption("fetch-set"),
                 "fetch-set must not be set when no args are given");
@@ -149,14 +150,14 @@ class GetOaiPmhIdentifiersTest {
     }
 
     @Test
-    void parseArgsRecognisesFetchSetShortOption() throws IOException {
+    void parseArgsRecognisesFetchSetShortOption() throws ParseException {
         CommandLine cmd = GetOaiPmhIdentifiers.parseArgs(new String[]{"-s", "de"});
         assertTrue(cmd.hasOption("fetch-set"));
         assertEquals("de", cmd.getOptionValue("fetch-set"));
     }
 
     @Test
-    void parseArgsRecognisesFetchSetLongOption() throws IOException {
+    void parseArgsRecognisesFetchSetLongOption() throws ParseException {
         CommandLine cmd = GetOaiPmhIdentifiers.parseArgs(
                 new String[]{"--fetch-set", "en"});
         assertTrue(cmd.hasOption("fetch-set"));
@@ -164,13 +165,13 @@ class GetOaiPmhIdentifiersTest {
     }
 
     @Test
-    void parseArgsRecognisesFetchAllSetsShortOption() throws IOException {
+    void parseArgsRecognisesFetchAllSetsShortOption() throws ParseException {
         CommandLine cmd = GetOaiPmhIdentifiers.parseArgs(new String[]{"-F"});
         assertTrue(cmd.hasOption("fetch-all-sets"));
     }
 
     @Test
-    void parseArgsRecognisesBaseUrlLongOption() throws IOException {
+    void parseArgsRecognisesBaseUrlLongOption() throws ParseException {
         CommandLine cmd = GetOaiPmhIdentifiers.parseArgs(
                 new String[]{"--oai-pmh-base-url", "https://example.org/oai"});
         assertEquals("https://example.org/oai",
@@ -178,14 +179,14 @@ class GetOaiPmhIdentifiersTest {
     }
 
     @Test
-    void parseArgsRecognisesMetadataPrefixShortOption() throws IOException {
+    void parseArgsRecognisesMetadataPrefixShortOption() throws ParseException {
         CommandLine cmd = GetOaiPmhIdentifiers.parseArgs(
                 new String[]{"-m", "oai_dc"});
         assertEquals("oai_dc", cmd.getOptionValue("metadata-prefix"));
     }
 
     @Test
-    void parseArgsRecognisesCustomSetsOption() throws IOException {
+    void parseArgsRecognisesCustomSetsOption() throws ParseException {
         CommandLine cmd = GetOaiPmhIdentifiers.parseArgs(
                 new String[]{"-S", "de,en,fr"});
         assertEquals("de,en,fr", cmd.getOptionValue("sets"));
@@ -193,35 +194,9 @@ class GetOaiPmhIdentifiersTest {
 
     @Test
     void parseArgsThrowsOnUnrecognisedOption() {
-        assertThrows(IOException.class,
+        assertThrows(ParseException.class,
                 () -> GetOaiPmhIdentifiers.parseArgs(
                         new String[]{"--unknown-option"}));
-    }
-
-    // ── Logging helpers ──────────────────────────────────────────────────────
-
-    @Test
-    void logInfoDoesNotThrowForPlainMessage() {
-        assertDoesNotThrow(
-                () -> GetOaiPmhIdentifiers.logInfo("plain message"));
-    }
-
-    @Test
-    void logInfoDoesNotThrowForFormattedMessage() {
-        assertDoesNotThrow(
-                () -> GetOaiPmhIdentifiers.logInfo("value: %d", 42));
-    }
-
-    @Test
-    void logSevereDoesNotThrowForPlainMessage() {
-        assertDoesNotThrow(
-                () -> GetOaiPmhIdentifiers.logSevere("severe plain"));
-    }
-
-    @Test
-    void logSevereDoesNotThrowForFormattedMessage() {
-        assertDoesNotThrow(
-                () -> GetOaiPmhIdentifiers.logSevere("error: %s", "oops"));
     }
 
     // ── Constructor / wiring ──────────────────────────────────────────────────
@@ -246,7 +221,7 @@ class GetOaiPmhIdentifiersTest {
         GetOaiPmhIdentifiers noOpClient = new GetOaiPmhIdentifiers(
                 URI.create("https://127.0.0.1:1"), "ListIdentifiers", "oai_ddi25", null);
         assertDoesNotThrow(
-                () -> noOpClient.fetchAllSetIdentifiers(new String[]{}));
+                () -> noOpClient.fetchAllSetIdentifiers(Collections.emptyList()));
     }
 
     // ── Parameterised: URL encoding covers all default sets ──────────────────

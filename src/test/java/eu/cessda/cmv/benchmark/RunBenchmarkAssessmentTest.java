@@ -212,7 +212,7 @@ class RunBenchmarkAssessmentTest {
                         "sl", "sl-SI", "sv" })
         void defaultSetsMatchGetOaiPmhIdentifiersDefaults(String set) {
                 List<String> runSets = List.of(RunBenchmarkAssessment.DEFAULT_SETS);
-                List<String> fetchSets = List.of(GetOaiPmhIdentifiers.DEFAULT_SETS);
+                List<String> fetchSets = GetOaiPmhIdentifiers.DEFAULT_SETS;
                 assertTrue(runSets.contains(set),
                                 "RunBenchmarkAssessment.DEFAULT_SETS must contain " + set);
                 assertTrue(fetchSets.contains(set),

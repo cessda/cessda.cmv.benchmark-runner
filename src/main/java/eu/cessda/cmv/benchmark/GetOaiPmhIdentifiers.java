@@ -42,6 +42,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -83,8 +84,8 @@ public class GetOaiPmhIdentifiers {
     /** Metadata prefix used when constructing the output GetRecord URLs. */
     public static final String DEFAULT_METADATA_PREFIX = "oai_ddi25";
 
-    public static final String[] DEFAULT_SETS =
-            {"de", "el", "en", "fi", "fr", "hr", "nl", "sl", "sl-SI", "sv"};
+    public static final List<String> DEFAULT_SETS =
+            List.of("de", "el", "en", "fi", "fr", "hr", "nl", "sl", "sl-SI", "sv");
 
     // -----------------------------------------------------------------------
     // CLI option names
@@ -135,9 +136,8 @@ public class GetOaiPmhIdentifiers {
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(30))
                 .build();
-        logInfo("Initialised GetOaiPmhIdentifiers with base URL: %s, verb: %s, " +
-                "metadata prefix: %s, output directory: %s",
-                oaiPmhBaseUrl, verb, metadataPrefix, outputDir != null ? outputDir.toAbsolutePath() : "null");
+        logger.log(Level.INFO, "Initialised GetOaiPmhIdentifiers with base URL: {0}, verb: {1}, " +
+                "metadata prefix: {2}, output directory: {3}", new Object[]{oaiPmhBaseUrl, verb, metadataPrefix, outputDir});
     }
 
     // -----------------------------------------------------------------------
@@ -155,8 +155,10 @@ public class GetOaiPmhIdentifiers {
         CommandLine cmd;
         try {
             cmd = parseArgs(args);
-        } catch (IOException e) {
-            logSevere("Failed to parse arguments: %s", e.getMessage());
+        } catch (ParseException e) {
+            System.err.println("Error parsing arguments: " + e.getMessage());
+            System.err.println("Use -h or --help for usage information.");
+            System.exit(-1);
             return;
         }
 
@@ -177,20 +179,20 @@ public class GetOaiPmhIdentifiers {
             if (cmd.hasOption(FETCH_SET_ARG)) {
                 String set = cmd.getOptionValue(FETCH_SET_ARG);
                 if (set == null || set.isBlank()) {
-                    logSevere("A set must be specified with -s / --fetch-set");
+                    logger.log(Level.SEVERE, "A set must be specified with -s / --fetch-set", new Object[]{});
                     return;
                 }
                 client.fetchIdentifiersForSet(set);
             } else {
                 // Default: fetch all sets (also triggered by -F / --fetch-all-sets)
-                String[] sets = DEFAULT_SETS;
+                List<String> sets = DEFAULT_SETS;
                 if (cmd.hasOption(SETS_ARG)) {
-                    sets = cmd.getOptionValue(SETS_ARG).split(",");
+                    sets = Arrays.asList(cmd.getOptionValue(SETS_ARG).split(","));
                 }
                 client.fetchAllSetIdentifiers(sets);
             }
         } catch (IOException e) {
-            logSevere("Error: %s", e.getMessage());
+            logger.log(Level.SEVERE, "Error: {0}", new Object[]{e.getMessage()});
         }
     }
 
@@ -199,29 +201,13 @@ public class GetOaiPmhIdentifiers {
     // -----------------------------------------------------------------------
 
     /**
-     * Fetches identifier lists for every set in the supplied array.
-     *
-     * @param sets array of OAI-PMH set names (set codes)
-     * @throws IOException          if an I/O error occurs
-     * @throws InterruptedException if interrupted while waiting for HTTP responses
-     */
-    public void fetchAllSetIdentifiers(String[] sets)
-            throws IOException, InterruptedException {
-        logInfo("Starting OAI-PMH identifier fetch for all sets...");
-        for (String set : sets) {
-            fetchIdentifiersForSet(set);
-        }
-        logInfo("Finished fetching identifiers for all sets.");
-    }
-
-    /**
      * Builds and parses the command-line options.
      *
      * @param args raw command-line arguments
      * @return parsed {@link CommandLine}
-     * @throws IOException if argument parsing fails
+     * @throws ParseException if argument parsing fails
      */
-    static CommandLine parseArgs(String[] args) throws IOException {
+    static CommandLine parseArgs(String[] args) throws ParseException {
         Options options = new Options();
         options.addOption("b", BASE_URL_ARG, true,
                 "OAI-PMH base URL (default: " + DEFAULT_OAI_PMH_BASE_URL + ")");
@@ -238,19 +224,30 @@ public class GetOaiPmhIdentifiers {
         options.addOption("h", "help", false, "Show help");
 
         DefaultParser parser = new DefaultParser(false);
-        try {
-            CommandLine cmd = parser.parse(options, args);
-            if (cmd.hasOption("h")) {
-                new HelpFormatter().printHelp(
-                        "java -cp <jar> cessda.cmv.benchmark.GetOaiPmhIdentifiers", options, true);
-                System.exit(0);
-            }
-            return cmd;
-        } catch (ParseException e) {
-            logSevere("Error parsing arguments: %s", e.getMessage());
-            logSevere("Use -h or --help for usage information.");
-            throw new IOException("Failed to parse command-line arguments", e);
+
+        CommandLine cmd = parser.parse(options, args);
+        if (cmd.hasOption("h")) {
+            new HelpFormatter().printHelp(
+                    "java -cp <jar> cessda.cmv.benchmark.GetOaiPmhIdentifiers", options, true);
+            System.exit(0);
         }
+        return cmd;
+    }
+
+    /**
+     * Fetches identifier lists for every set in the supplied array.
+     *
+     * @param sets array of OAI-PMH set names (set codes)
+     * @throws IOException          if an I/O error occurs
+     * @throws InterruptedException if interrupted while waiting for HTTP responses
+     */
+    public void fetchAllSetIdentifiers(List<String> sets)
+            throws IOException, InterruptedException {
+        logger.log(Level.INFO, "Starting OAI-PMH identifier fetch for all sets...", new Object[]{});
+        for (String set : sets) {
+            fetchIdentifiersForSet(set);
+        }
+        logger.log(Level.INFO, "Finished fetching identifiers for all sets.", new Object[]{});
     }
 
     // -----------------------------------------------------------------------
@@ -268,7 +265,7 @@ public class GetOaiPmhIdentifiers {
      */
     public void fetchIdentifiersForSet(String set)
             throws IOException, InterruptedException {
-        logInfo("Fetching identifiers for set: %s", set);
+        logger.log(Level.INFO, "Fetching identifiers for set: {0}", new Object[]{set});
         List<String> identifiers = new ArrayList<>();
 
         // ListIdentifiers with the specified set and metadata prefix.
@@ -279,7 +276,7 @@ public class GetOaiPmhIdentifiers {
 
         int page = 1;
         while (true) {
-            logInfo("  Fetching page %d (set=%s): %s", page, set, url);
+            logger.log(Level.INFO, "Fetching page {0} (set={1}): {2}", new Object[]{page, set, url});
             Document xml;
             try (InputStream xmlStream = fetchUrl(url, HttpResponse.BodyHandlers.ofInputStream())) {
                 InputSource inputSource = new InputSource();
@@ -291,8 +288,7 @@ public class GetOaiPmhIdentifiers {
             }
             List<String> pageIdentifiers = parseIdentifiers(xml);
             identifiers.addAll(pageIdentifiers);
-            logInfo("  Page %d: retrieved %d identifier(s) (total so far: %d)",
-                    page, pageIdentifiers.size(), identifiers.size());
+            logger.log(Level.INFO, "Page {0}: retrieved {1} identifier(s) (total so far: {2})", new Object[]{page, pageIdentifiers.size(), identifiers.size()});
 
             String resumptionToken = parseResumptionToken(xml);
             if (resumptionToken != null && !resumptionToken.isBlank()) {
@@ -306,7 +302,7 @@ public class GetOaiPmhIdentifiers {
             }
         }
 
-        logInfo("Fetched %d identifier(s) for set: %s", identifiers.size(), set);
+        logger.log(Level.INFO, "Fetched {0} identifier(s) for set: {1}", new Object[]{identifiers.size(), set});
         writeGuidsFile(set, identifiers);
     }
 
@@ -342,7 +338,7 @@ public class GetOaiPmhIdentifiers {
     /**
      * Parses {@code <identifier>} values from OAI-PMH ListIdentifiers XML.
      *
-     * @param xml the XML response body
+     * @param doc the XML document
      * @return list of identifier strings
      */
     private List<String> parseIdentifiers(Document doc) {
@@ -363,7 +359,7 @@ public class GetOaiPmhIdentifiers {
     /**
      * Extracts the resumption token from OAI-PMH XML, or {@code null} if absent.
      *
-     * @param xml the XML response body
+     * @param doc the XML document
      * @return resumption token string, or {@code null}
      */
     private String parseResumptionToken(Document doc) {
@@ -418,8 +414,7 @@ public class GetOaiPmhIdentifiers {
             }
         }
 
-        logInfo("✓ Written %d GetRecord URL(s) to %s",
-                identifiers.size(), outputPath.toAbsolutePath());
+        logger.log(Level.INFO, "Written {0} GetRecord URL(s) to {1}", new Object[]{identifiers.size(), outputPath.toAbsolutePath()});
     }
 
     // -----------------------------------------------------------------------
@@ -438,21 +433,5 @@ public class GetOaiPmhIdentifiers {
                 + "&metadataPrefix=" + URLEncoder.encode(metadataPrefix, StandardCharsets.UTF_8)
                 + "&identifier=" + URLEncoder.encode(identifier, StandardCharsets.UTF_8);
         return URI.create(uriString);
-    }
-
-    // -----------------------------------------------------------------------
-    // Logging helpers
-    // -----------------------------------------------------------------------
-
-    static void logInfo(String message, Object... args) {
-        if (logger.isLoggable(Level.INFO)) {
-            logger.info(args.length == 0 ? message : String.format(message, args));
-        }
-    }
-
-    static void logSevere(String message, Object... args) {
-        if (logger.isLoggable(Level.SEVERE)) {
-            logger.severe(args.length == 0 ? message : String.format(message, args));
-        }
     }
 }
