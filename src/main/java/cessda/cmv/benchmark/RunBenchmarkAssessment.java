@@ -932,7 +932,7 @@ public class RunBenchmarkAssessment {
      *         in encounter order; empty if none (or the body isn't
      *         parseable JSON)
      */
-    private List<String> findOverwhelmedIndicatorNames(String responseBody) {
+    static List<String> findOverwhelmedIndicatorNames(String responseBody) {
         try {
             List<String> found = new ArrayList<>();
             collectOverwhelmedIndicatorNames(mapper.readTree(responseBody), null, found);
@@ -963,7 +963,7 @@ public class RunBenchmarkAssessment {
      *                 {@code null} at the root
      * @param found    accumulator for overwhelmed indicator names
      */
-    private static void collectOverwhelmedIndicatorNames(
+    static void collectOverwhelmedIndicatorNames(
             JsonNode node, String nameHint, List<String> found) {
 
         if (node == null || !(node.isObject() || node.isArray())) {

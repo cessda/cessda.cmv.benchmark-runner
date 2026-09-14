@@ -310,6 +310,91 @@ class RunBenchmarkAssessmentTest {
                                 () -> assertEquals(expectedResultsDir, resolution.resultsDir()));
         }
 
+        // ── findOverwhelmedIndicatorNames ────────────────────────────────────────
+        // Champion can return HTTP 200 while one or more indicators inside the
+        // body read "result data not found" (with a null log) instead of a real
+        // result, meaning it was too overloaded to actually evaluate them.
+
+        @Test
+        void findOverwhelmedIndicatorNamesReturnsEmptyForNonJsonBody() {
+                List<String> found = RunBenchmarkAssessment.findOverwhelmedIndicatorNames("<html>not json</html>");
+                assertTrue(found.isEmpty());
+        }
+
+        @Test
+        void findOverwhelmedIndicatorNamesReturnsEmptyWhenNoIndicatorIsOverwhelmed() {
+                String body = """
+                                {
+                                  "test_results": {
+                                    "F1_GUID": { "result": "pass", "log": "Test passed." },
+                                    "A1_GUID": { "result": "indeterminate", "log": "Test result is indeterminate." }
+                                  }
+                                }
+                                """;
+                assertTrue(RunBenchmarkAssessment.findOverwhelmedIndicatorNames(body).isEmpty());
+        }
+
+        @Test
+        void findOverwhelmedIndicatorNamesDetectsSingleOverwhelmedIndicator() {
+                String body = """
+                                {
+                                  "test_results": {
+                                    "F1_GUID": { "result": "result data not found", "log": null },
+                                    "A1_GUID": { "result": "pass", "log": "Test passed." }
+                                  }
+                                }
+                                """;
+                assertEquals(List.of("F1_GUID"), RunBenchmarkAssessment.findOverwhelmedIndicatorNames(body));
+        }
+
+        @Test
+        void findOverwhelmedIndicatorNamesDetectsMultipleOverwhelmedIndicatorsInEncounterOrder() {
+                String body = """
+                                {
+                                  "test_results": {
+                                    "F1_GUID": { "result": "result data not found", "log": null },
+                                    "A1_GUID": { "result": "pass", "log": "Test passed." },
+                                    "I1_GUID": { "result": "result data not found", "log": null }
+                                  }
+                                }
+                                """;
+                assertEquals(List.of("F1_GUID", "I1_GUID"),
+                                RunBenchmarkAssessment.findOverwhelmedIndicatorNames(body));
+        }
+
+        @Test
+        void findOverwhelmedIndicatorNamesFollowsHintThroughArrayNesting() {
+                String body = """
+                                {
+                                  "test_results": [
+                                    { "result": "result data not found", "log": null }
+                                  ]
+                                }
+                                """;
+                assertEquals(List.of("test_results"), RunBenchmarkAssessment.findOverwhelmedIndicatorNames(body));
+        }
+
+        @Test
+        void findOverwhelmedIndicatorNamesUsesUnknownWhenNoNameHintAtRoot() {
+                String body = """
+                                { "result": "result data not found", "log": null }
+                                """;
+                assertEquals(List.of("(unknown)"), RunBenchmarkAssessment.findOverwhelmedIndicatorNames(body));
+        }
+
+        // ── OverwhelmedIndicatorException ────────────────────────────────────────
+
+        @Test
+        void overwhelmedIndicatorExceptionMessageListsIndicators() {
+                var exception = new OverwhelmedIndicatorException(
+                                "https://example.org/oai?identifier=abc", List.of("F1_GUID", "A1_GUID"));
+
+                assertAll(
+                                () -> assertTrue(exception.getMessage().contains("F1_GUID")),
+                                () -> assertTrue(exception.getMessage().contains("A1_GUID")),
+                                () -> assertEquals(List.of("F1_GUID", "A1_GUID"), exception.getIndicators()));
+        }
+
         // ── Constructor ──────────────────────────────────────────────────────────
 
         @Test
