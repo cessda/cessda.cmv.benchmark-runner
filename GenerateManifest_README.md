@@ -60,13 +60,13 @@ Run with Maven (from the project root):
 
 ```bash
 mvn exec:java \
-  -Dexec.mainClass="cessda.cmv.benchmark.GenerateManifest"
+  -Dexec.mainClass="eu.cessda.cmv.benchmark.GenerateManifest"
 ```
 
 Run from a JAR, passing an optional path to the results directory:
 
 ```bash
-java -cp <jar> cessda.cmv.benchmark.GenerateManifest [resultsDir]
+java -cp <jar> eu.cessda.cmv.benchmark.GenerateManifest [resultsDir]
 ```
 
 If `resultsDir` is omitted it defaults to `./results`.

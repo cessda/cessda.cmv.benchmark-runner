@@ -8,6 +8,7 @@ pipeline {
     environment {
         productName = "cmv"
         moduleName = "benchmark-runner"
+        imageTag = "${DOCKER_ARTIFACT_REGISTRY}/${product_name}-${module_name}:${env.BRANCH_NAME.replaceAll('[^a-z0-9\\.\\_\\-]', '-')}-${env.BUILD_NUMBER}"
     }
 
     agent {
@@ -48,13 +49,26 @@ pipeline {
                                 sh "./mvnw sonar:sonar"
                             }
                         }
-                        timeout(time: 1, unit: 'HOURS') {
-                            waitForQualityGate abortPipeline: true
-                        }
                     }
                     when { branch 'main' }
                 }
             }
+        }
+        stage("Get Sonar Quality Gate") {
+            steps {
+                timeout(time: 1, unit: 'HOURS') {
+                    waitForQualityGate abortPipeline: false
+                }
+            }
+            when { branch 'main' }
+        }
+        stage('Build Docker Image') {
+            steps {
+                withMaven {
+                    sh "./mvnw spring-boot:build-image-no-fork -Dspring-boot.build-image.imageName=${imageTag}"
+                }
+            }
+            when { branch 'main' }
         }
     }
 }

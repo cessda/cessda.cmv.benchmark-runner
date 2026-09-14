@@ -54,14 +54,14 @@ Run with Maven (from the project root):
 
 ```bash
 mvn exec:java \
-  -Dexec.mainClass="cessda.cmv.benchmark.GetOaiPmhIdentifiers" \
+  -Dexec.mainClass="eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers" \
   -Dexec.args="--fetch-set en"
 ```
 
 Run from a JAR:
 
 ```bash
-java -cp <jar> cessda.cmv.benchmark.GetOaiPmhIdentifiers \
+java -cp <jar> eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers \
   --oai-pmh-base-url https://example.org/oai \
   --metadata-prefix oai_ddi25 \
   --fetch-set de
@@ -70,33 +70,33 @@ java -cp <jar> cessda.cmv.benchmark.GetOaiPmhIdentifiers \
 ### Fetch all sets (default)
 
 ```bash
-java -cp <jar> cessda.cmv.benchmark.GetOaiPmhIdentifiers
+java -cp <jar> eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers
 ```
 
 Or
 
 ```bash
-mvn exec:java -Dexec.mainClass="cessda.cmv.benchmark.GetOaiPmhIdentifiers -Dexec.args="-F"
+mvn exec:java -Dexec.mainClass="eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers -Dexec.args="-F"
 ```
 
 ### Fetch a custom list of sets
 
 ```bash
-java -cp <jar> cessda.cmv.benchmark.GetOaiPmhIdentifiers \
+java -cp <jar> eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers \
   --sets de,en,fr
 ```
 
 ### Fetch a single set
 
 ```bash
-java -cp <jar> cessda.cmv.benchmark.GetOaiPmhIdentifiers \
+java -cp <jar> eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers \
   --fetch-set hr
 ```
 
 Or
 
 ```bash
-mvn exec:java -Dexec.mainClass="cessda.cmv.benchmark.GetOaiPmhIdentifiers" \
+mvn exec:java -Dexec.mainClass="eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers" \
 -Dexec.args="-s <set_name>"
 ```
 

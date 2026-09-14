@@ -225,16 +225,16 @@ project root:
 ```bash
 # 1. Fetch identifiers for all default sets
 mvn exec:java \
-  -Dexec.mainClass="cessda.cmv.benchmark.GetOaiPmhIdentifiers"
+  -Dexec.mainClass="eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers"
 
 # 2. Submit all identifiers to the benchmark API
 mvn exec:java \
-  -Dexec.mainClass="cessda.cmv.benchmark.RunBenchmarkAssessment" \
+  -Dexec.mainClass="eu.cessda.cmv.benchmark.RunBenchmarkAssessment" \
   -Dexec.args="--process-all"
 
 # 3. Pre-process results for the dashboard
 mvn exec:java \
-  -Dexec.mainClass="cessda.cmv.benchmark.GenerateManifest"
+  -Dexec.mainClass="eu.cessda.cmv.benchmark.GenerateManifest"
 ```
 
 Run this way, the classes use their default, non-tenant-scoped
