@@ -1,8 +1,7 @@
 package cessda.cmv.benchmark.web;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-
+import cessda.cmv.benchmark.config.BenchmarkProperties;
+import cessda.cmv.benchmark.tenant.TenantContext;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
@@ -12,8 +11,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import cessda.cmv.benchmark.config.BenchmarkProperties;
-import cessda.cmv.benchmark.tenant.TenantContext;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 /**
  * Serves pre-generated manifest artefacts (summary.json, page-NNN.json)
@@ -84,7 +83,7 @@ public class DashboardController {
     // ── Private helpers ──────────────────────────────────────────────────────
 
     private Path tenantResultsDir() {
-        return benchmarkProperties.getResultsDirPath()
+        return benchmarkProperties.getResultsDir()
                 .resolve(tenantContext.getTenantId())
                 .normalize();
     }

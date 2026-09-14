@@ -6,36 +6,31 @@
 
 package cessda.cmv.benchmark.controller;
 
-import static org.hamcrest.Matchers.is;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
-import java.io.IOException;
-
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.web.servlet.MockMvc;
-
 import cessda.cmv.benchmark.config.BenchmarkProperties;
 import cessda.cmv.benchmark.config.SecurityConfig;
 import cessda.cmv.benchmark.service.BenchmarkService;
 import cessda.cmv.benchmark.tenant.TenantContext;
 import cessda.cmv.benchmark.tenant.TenantProperties;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.io.IOException;
+import java.net.URI;
+
+import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
  * Unit tests for {@link BenchmarkController}.
@@ -287,18 +282,18 @@ class BenchmarkControllerTest {
         @Test
         @DisplayName("Passes custom spreadsheetUri to service")
         void spreadsheetUriParameterIsForwarded() throws Exception {
-            String customUri = "https://example.org/spreadsheet";
+            URI customUri = URI.create("https://example.org/spreadsheet");
             when(service.runAssessment(
         eq(customUri), isNull(),isNull(), isNull(), isNull(), eq(false)))
                 .thenReturn("Processed default file: guids_hr.txt"
                     + " -> results written to /results");
 
             mvc.perform(post("/api/run-assessment")
-                    .param("spreadsheetUri", customUri))
+                            .param("spreadsheetUri", customUri.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status", is("ok")));
-            
-            verify(service).runAssessment("https://example.org/spreadsheet", null, null, null, null, false);
+
+            verify(service).runAssessment(customUri, null, null, null, null, false);
         }
 
         @Test

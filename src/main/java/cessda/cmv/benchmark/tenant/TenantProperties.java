@@ -1,16 +1,15 @@
 package cessda.cmv.benchmark.tenant;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
+
+import java.net.URI;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
-import org.springframework.validation.annotation.Validated;
-
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 
 /**
  * Maps API keys to tenant IDs, and tenant IDs to their per-tenant
@@ -43,9 +42,8 @@ import jakarta.validation.constraints.NotBlank;
  * maps a tenant ID to that tenant's settings — so a tenant's secret
  * key is never used as a lookup key for its own configuration.</p>
  */
-@Component
-@Validated
 @ConfigurationProperties(prefix = "tenants")
+@Validated
 public class TenantProperties {
 
     /** API key -> tenantId */
@@ -88,9 +86,9 @@ public class TenantProperties {
      */
     public static class TenantConfig {
 
-        private String algorithm;
+        private URI algorithm;
 
-        private String runner;
+        private URI runner;
 
         /**
          * This tenant's OAI-PMH base URL, used by the "Fetch identifiers"
@@ -106,13 +104,13 @@ public class TenantProperties {
          * Legacy alias for {@link #algorithm}. Kept for compatibility with
          * older tenant configuration keys.
          */
-        private String spreadsheetUri;
+        private URI spreadsheetUri;
 
         /**
          * Legacy alias for {@link #runner}. Kept for compatibility with older
          * tenant configuration keys.
          */
-        private String championUri;
+        private URI championUri;
 
         private Map<String, String> setNames = new LinkedHashMap<>();
         private Map<String, String> fairMap  = new LinkedHashMap<>();
@@ -124,20 +122,40 @@ public class TenantProperties {
         @NotBlank
         private String footer;
 
-        public String getAlgorithm() { return algorithm; }
-        public void setAlgorithm(String algorithm) { this.algorithm = algorithm; }
+        public URI getAlgorithm() {
+            return algorithm;
+        }
 
-        public String getRunner() { return runner; }
-        public void setRunner(String runner) { this.runner = runner; }
+        public void setAlgorithm(URI algorithm) {
+            this.algorithm = algorithm;
+        }
 
         public String getOaiPmhBaseUrl() { return oaiPmhBaseUrl; }
         public void setOaiPmhBaseUrl(String oaiPmhBaseUrl) { this.oaiPmhBaseUrl = oaiPmhBaseUrl; }
 
-        public String getSpreadsheetUri() { return spreadsheetUri; }
-        public void setSpreadsheetUri(String spreadsheetUri) { this.spreadsheetUri = spreadsheetUri; }
+        public URI getRunner() {
+            return runner;
+        }
 
-        public String getChampionUri() { return championUri; }
-        public void setChampionUri(String championUri) { this.championUri = championUri; }
+        public void setRunner(URI runner) {
+            this.runner = runner;
+        }
+
+        public URI getSpreadsheetUri() {
+            return spreadsheetUri;
+        }
+
+        public void setSpreadsheetUri(URI spreadsheetUri) {
+            this.spreadsheetUri = spreadsheetUri;
+        }
+
+        public URI getChampionUri() {
+            return championUri;
+        }
+
+        public void setChampionUri(URI championUri) {
+            this.championUri = championUri;
+        }
 
         public String getTitle() { return title; }
         public void setTitle(String title) { this.title = title; }
@@ -160,15 +178,15 @@ public class TenantProperties {
                 : new MaturityLevels();
         }
 
-        public String effectiveAlgorithm() {
-            if (algorithm != null && !algorithm.isBlank()) {
+        public URI effectiveAlgorithm() {
+            if (algorithm != null) {
                 return algorithm;
             }
             return spreadsheetUri;
         }
 
-        public String effectiveRunner() {
-            if (runner != null && !runner.isBlank()) {
+        public URI effectiveRunner() {
+            if (runner != null) {
                 return runner;
             }
             return championUri;
