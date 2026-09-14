@@ -25,7 +25,7 @@ benchmark:
   results-dir: ./results
   algorithm: https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw
   runner: https://tools.ostrails.eu/champion/assess/algorithm
-  backoff-between-process-guid-ms: 1000
+  backoff-between-process-guid-ms: 1500
 
 # ── SpringDoc / Swagger UI ────────────────────────────────────────────────────
 springdoc:
