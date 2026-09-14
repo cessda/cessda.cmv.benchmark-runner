@@ -8,7 +8,7 @@ pipeline {
     environment {
         productName = "cmv"
         moduleName = "benchmark-runner"
-        imageTag = "${DOCKER_ARTIFACT_REGISTRY}/${product_name}-${module_name}:${env.BRANCH_NAME.replaceAll('[^a-z0-9\\.\\_\\-]', '-')}-${env.BUILD_NUMBER}"
+        imageTag = "${DOCKER_ARTIFACT_REGISTRY}/${productName}-${moduleName}:${env.GIT_COMMIT}"
     }
 
     agent {
