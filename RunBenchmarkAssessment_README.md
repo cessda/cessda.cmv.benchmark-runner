@@ -79,14 +79,14 @@ Run with Maven (from the project root):
 
 ```bash
 mvn exec:java \
-  -Dexec.mainClass="cessda.cmv.benchmark.RunBenchmarkAssessment" \
+  -Dexec.mainClass="eu.cessda.cmv.benchmark.RunBenchmarkAssessment" \
   -Dexec.args="--process-all"
 ```
 
 Run from a JAR:
 
 ```bash
-java -jar target/benchmark-1.0-SNAPSHOT.jar cessda.cmv.benchmark.RunBenchmarkAssessment \
+java -jar target/benchmark-1.0-SNAPSHOT.jar eu.cessda.cmv.benchmark.RunBenchmarkAssessment \
   --process-all
 ```
 
@@ -94,12 +94,12 @@ java -jar target/benchmark-1.0-SNAPSHOT.jar cessda.cmv.benchmark.RunBenchmarkAss
 
 ```bash
 mvn exec:java \
-  -Dexec.mainClass="cessda.cmv.benchmark.RunBenchmarkAssessment" \
+  -Dexec.mainClass="eu.cessda.cmv.benchmark.RunBenchmarkAssessment" \
   -Dexec.args="--process-file guids_de.txt"
 ```
 
 ```bash
-java -jar target/benchmark-1.0-SNAPSHOT.jar cessda.cmv.benchmark.RunBenchmarkAssessment \
+java -jar target/benchmark-1.0-SNAPSHOT.jar eu.cessda.cmv.benchmark.RunBenchmarkAssessment \
   --process-file guids_de.txt
 ```
 
@@ -107,13 +107,13 @@ java -jar target/benchmark-1.0-SNAPSHOT.jar cessda.cmv.benchmark.RunBenchmarkAss
 
 ```bash
 mvn exec:java \
-  -Dexec.mainClass="cessda.cmv.benchmark.RunBenchmarkAssessment" \
+  -Dexec.mainClass="eu.cessda.cmv.benchmark.RunBenchmarkAssessment" \
   -Dexec.args="--guid "https://datacatalogue.cessda.eu/oai-pmh/v0/oai\
 ?verb=GetRecord&metadataPrefix=oai_ddi25&identifier=abc123"
 ```
 
 ```bash
-java -jar target/benchmark-1.0-SNAPSHOT.jar cessda.cmv.benchmark.RunBenchmarkAssessment \
+java -jar target/benchmark-1.0-SNAPSHOT.jar eu.cessda.cmv.benchmark.RunBenchmarkAssessment \
   --guid "https://datacatalogue.cessda.eu/oai-pmh/v0/oai\
 ?verb=GetRecord&metadataPrefix=oai_ddi25&identifier=abc123"
 ```
@@ -122,13 +122,13 @@ java -jar target/benchmark-1.0-SNAPSHOT.jar cessda.cmv.benchmark.RunBenchmarkAss
 
 ```bash
 mvn exec:java \
-  -Dexec.mainClass="cessda.cmv.benchmark.RunBenchmarkAssessment" \
+  -Dexec.mainClass="eu.cessda.cmv.benchmark.RunBenchmarkAssessment" \
   -Dexec.args="--spreadsheet https://custom.example.org/champion/assess/... \
   --process-all"
 ```
 
 ```bash
-java -jar target/benchmark-1.0-SNAPSHOT.jar cessda.cmv.benchmark.RunBenchmarkAssessment \
+java -jar target/benchmark-1.0-SNAPSHOT.jar eu.cessda.cmv.benchmark.RunBenchmarkAssessment \
   --spreadsheet https://custom.example.org/champion/assess/... \
   --process-all
 ```

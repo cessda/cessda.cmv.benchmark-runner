@@ -12,8 +12,8 @@
     <relativePath/>
   </parent>
 
-  <groupId>cessda.cmv.benchmark</groupId>
-  <artifactId>benchmark</artifactId>
+    <groupId>eu.cessda.cmv</groupId>
+    <artifactId>benchmark-runner</artifactId>
   <version>1.0-SNAPSHOT</version>
 
   <properties>
@@ -75,7 +75,7 @@
               <groupId>org.springframework.boot</groupId>
               <artifactId>spring-boot-maven-plugin</artifactId>
               <configuration>
-                  <mainClass>cessda.cmv.benchmark.BenchmarkApplication</mainClass>
+                  <mainClass>eu.cessda.cmv.benchmark.BenchmarkApplication</mainClass>
               </configuration>
               <executions>
                   <execution>
