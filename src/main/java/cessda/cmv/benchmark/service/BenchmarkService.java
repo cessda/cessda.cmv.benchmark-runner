@@ -264,7 +264,7 @@ public class BenchmarkService {
         // same way a single failing GUID doesn't abort a whole
         // RunBenchmarkAssessment batch.
         java.util.List<String> succeeded = new java.util.ArrayList<>();
-        java.util.Map<String, String> failed = new java.util.LinkedHashMap<>();
+        java.util.Map<String, Exception> failed = new java.util.LinkedHashMap<>();
         for (String rawSet : resolvedSets) {
             String set = rawSet == null ? "" : rawSet.trim();
             if (set.isEmpty()) continue;
