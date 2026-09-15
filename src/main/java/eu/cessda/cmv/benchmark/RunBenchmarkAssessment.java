@@ -16,9 +16,6 @@
 
 package eu.cessda.cmv.benchmark;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import eu.cessda.cmv.benchmark.config.BenchmarkProperties;
 import org.apache.commons.cli.*;
 import org.springframework.boot.WebApplicationType;
@@ -28,6 +25,10 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.net.URI;
@@ -734,7 +735,11 @@ public class RunBenchmarkAssessment {
                     continue; // trigger next retry iteration
                 }
 
-                writeResponseBodyAsJson(jsonOutputPath, response.body(), guid, response.statusCode());
+                try {
+                    writeResponseBodyAsJson(jsonOutputPath, response.body(), guid, response.statusCode());
+                } catch (JacksonException e) {
+                    logger.log(Level.SEVERE, "Failed to save JSON file for GUID: {0}", e.toString());
+                }
 
                 logger.info(RESPSAVED + guid + " (Status: " + response.statusCode() + ", Time: " + elapsedMs + "ms)");
                 return; // success — exit retry loop
@@ -774,31 +779,22 @@ public class RunBenchmarkAssessment {
             String responseBody,
             String guid,
             int statusCode) {
+        JsonNode jsonContent;
 
         try {
-            String jsonContent;
-
-            try {
-                mapper.readTree(responseBody);
-                jsonContent = responseBody;
-            } catch (JsonProcessingException e) {
-                ObjectNode wrapper = mapper.createObjectNode();
-                wrapper.put("guid", guid);
-                wrapper.put("statusCode", statusCode);
-                wrapper.put("responseType", "html");
-                wrapper.put("content", responseBody);
-                wrapper.put("timestamp", Instant.now().toString());
-                jsonContent = mapper
-                        .writerWithDefaultPrettyPrinter()
-                        .writeValueAsString(wrapper);
-            }
-
-            Files.writeString(path, jsonContent);
-            logger.log(Level.INFO, "Saved JSON response for GUID to {0}", path.getFileName());
-
-        } catch (IOException e) {
-            logger.log(Level.SEVERE, "Failed to save JSON file for GUID: {0}", e.toString());
+            jsonContent = mapper.readTree(responseBody);
+        } catch (JacksonException e) {
+            ObjectNode wrapper = mapper.createObjectNode();
+            wrapper.put("guid", guid);
+            wrapper.put("statusCode", statusCode);
+            wrapper.put("responseType", "html");
+            wrapper.put("content", responseBody);
+            wrapper.put("timestamp", Instant.now().toString());
+            jsonContent = wrapper;
         }
+
+        mapper.writerWithDefaultPrettyPrinter().writeValue(path, jsonContent);
+        logger.log(Level.INFO, "Saved JSON response for GUID to {0}", path.getFileName());
     }
 
     // -----------------------------------------------------------------------
@@ -859,7 +855,7 @@ public class RunBenchmarkAssessment {
 
             logger.log(Level.INFO, "Saved error details to {0}", errorFilename);
 
-        } catch (IOException e) {
+        } catch (IOException | JacksonException e) {
             logger.log(Level.SEVERE, FILESAVEERR + " {0}", e.getMessage());
         }
     }
