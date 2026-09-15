@@ -687,13 +687,13 @@ public class RunBenchmarkAssessment {
             String guid,
             Path subDir) throws IOException, InterruptedException {
 
-        logger.log(Level.INFO, "Processing GUID {}", guid);
+        logger.log(Level.INFO, "Processing GUID {0}", guid);
 
         ObjectNode payload = mapper.createObjectNode();
         payload.put("calculation_uri", spreadsheetUri.toString());
         payload.put("guid", guid);
         String jsonPayload = mapper.writeValueAsString(payload);
-        logger.log(Level.INFO, "{}{} — {}", new Object[]{REQSEND, championUri, jsonPayload});
+        logger.log(Level.INFO, REQSEND + "{0} — {1}", new Object[]{championUri, jsonPayload});
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(championUri)
@@ -729,7 +729,7 @@ public class RunBenchmarkAssessment {
                 if (response.statusCode() >= 500 && response.statusCode() <= 599) {
                     lastException = new IOException(
                             "Gateway error: HTTP " + response.statusCode());
-                    logger.log(Level.FINE, "Attempt {} failed for GUID {}: HTTP {}",
+                    logger.log(Level.FINE, "Attempt {0} failed for GUID {1}: HTTP {2}",
                             new Object[]{attempt + 1, guid, response.statusCode()});
                     continue; // trigger next retry iteration
                 }

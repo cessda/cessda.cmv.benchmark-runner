@@ -142,7 +142,7 @@ class GetOaiPmhIdentifiersTest {
 
     @Test
     void parseArgsWithNoArgumentsReturnsDefaults() throws ParseException {
-        CommandLine cmd = GetOaiPmhIdentifiers.parseArgs(new String[]{});
+        CommandLine cmd = GetOaiPmhIdentifiers.parseArgs();
         assertFalse(cmd.hasOption("fetch-set"),
                 "fetch-set must not be set when no args are given");
         assertFalse(cmd.hasOption("fetch-all-sets"),
@@ -151,29 +151,28 @@ class GetOaiPmhIdentifiersTest {
 
     @Test
     void parseArgsRecognisesFetchSetShortOption() throws ParseException {
-        CommandLine cmd = GetOaiPmhIdentifiers.parseArgs(new String[]{"-s", "de"});
+        CommandLine cmd = GetOaiPmhIdentifiers.parseArgs("-s", "de");
         assertTrue(cmd.hasOption("fetch-set"));
         assertEquals("de", cmd.getOptionValue("fetch-set"));
     }
 
     @Test
     void parseArgsRecognisesFetchSetLongOption() throws ParseException {
-        CommandLine cmd = GetOaiPmhIdentifiers.parseArgs(
-                new String[]{"--fetch-set", "en"});
+        CommandLine cmd = GetOaiPmhIdentifiers.parseArgs("--fetch-set", "en");
         assertTrue(cmd.hasOption("fetch-set"));
         assertEquals("en", cmd.getOptionValue("fetch-set"));
     }
 
     @Test
     void parseArgsRecognisesFetchAllSetsShortOption() throws ParseException {
-        CommandLine cmd = GetOaiPmhIdentifiers.parseArgs(new String[]{"-F"});
+        CommandLine cmd = GetOaiPmhIdentifiers.parseArgs("-F");
         assertTrue(cmd.hasOption("fetch-all-sets"));
     }
 
     @Test
     void parseArgsRecognisesBaseUrlLongOption() throws ParseException {
         CommandLine cmd = GetOaiPmhIdentifiers.parseArgs(
-                new String[]{"--oai-pmh-base-url", "https://example.org/oai"});
+                "--oai-pmh-base-url", "https://example.org/oai");
         assertEquals("https://example.org/oai",
                 cmd.getOptionValue("oai-pmh-base-url"));
     }
@@ -181,14 +180,14 @@ class GetOaiPmhIdentifiersTest {
     @Test
     void parseArgsRecognisesMetadataPrefixShortOption() throws ParseException {
         CommandLine cmd = GetOaiPmhIdentifiers.parseArgs(
-                new String[]{"-m", "oai_dc"});
+                "-m", "oai_dc");
         assertEquals("oai_dc", cmd.getOptionValue("metadata-prefix"));
     }
 
     @Test
     void parseArgsRecognisesCustomSetsOption() throws ParseException {
         CommandLine cmd = GetOaiPmhIdentifiers.parseArgs(
-                new String[]{"-S", "de,en,fr"});
+                "-S", "de,en,fr");
         assertEquals("de,en,fr", cmd.getOptionValue("sets"));
     }
 
@@ -196,7 +195,7 @@ class GetOaiPmhIdentifiersTest {
     void parseArgsThrowsOnUnrecognisedOption() {
         assertThrows(ParseException.class,
                 () -> GetOaiPmhIdentifiers.parseArgs(
-                        new String[]{"--unknown-option"}));
+                        "--unknown-option"));
     }
 
     // ── Constructor / wiring ──────────────────────────────────────────────────

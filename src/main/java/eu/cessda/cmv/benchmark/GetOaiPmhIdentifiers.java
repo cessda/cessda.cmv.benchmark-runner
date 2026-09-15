@@ -179,7 +179,7 @@ public class GetOaiPmhIdentifiers {
             if (cmd.hasOption(FETCH_SET_ARG)) {
                 String set = cmd.getOptionValue(FETCH_SET_ARG);
                 if (set == null || set.isBlank()) {
-                    logger.log(Level.SEVERE, "A set must be specified with -s / --fetch-set", new Object[]{});
+                    logger.log(Level.SEVERE, "A set must be specified with -s / --fetch-set");
                     return;
                 }
                 client.fetchIdentifiersForSet(set);
@@ -207,7 +207,7 @@ public class GetOaiPmhIdentifiers {
      * @return parsed {@link CommandLine}
      * @throws ParseException if argument parsing fails
      */
-    static CommandLine parseArgs(String[] args) throws ParseException {
+    static CommandLine parseArgs(String... args) throws ParseException {
         Options options = new Options();
         options.addOption("b", BASE_URL_ARG, true,
                 "OAI-PMH base URL (default: " + DEFAULT_OAI_PMH_BASE_URL + ")");
@@ -243,11 +243,11 @@ public class GetOaiPmhIdentifiers {
      */
     public void fetchAllSetIdentifiers(List<String> sets)
             throws IOException, InterruptedException {
-        logger.log(Level.INFO, "Starting OAI-PMH identifier fetch for all sets...", new Object[]{});
+        logger.log(Level.INFO, "Starting OAI-PMH identifier fetch for all sets...");
         for (String set : sets) {
             fetchIdentifiersForSet(set);
         }
-        logger.log(Level.INFO, "Finished fetching identifiers for all sets.", new Object[]{});
+        logger.log(Level.INFO, "Finished fetching identifiers for all sets.");
     }
 
     // -----------------------------------------------------------------------
