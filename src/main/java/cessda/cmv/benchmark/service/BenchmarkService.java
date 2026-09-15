@@ -275,7 +275,7 @@ public class BenchmarkService {
                 Thread.currentThread().interrupt();
                 return null;
             } catch (IOException ioe) {
-                failed.put(set, ioe.getMessage());
+                failed.put(set, ioe);
             }
         }
 
