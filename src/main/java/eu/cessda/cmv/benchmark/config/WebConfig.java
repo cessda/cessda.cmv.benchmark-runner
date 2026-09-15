@@ -7,9 +7,11 @@
 package eu.cessda.cmv.benchmark.config;
 
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.PathResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import java.io.File;
 
 /**
  * Configures static resource handling for the HTML dashboard.
@@ -46,6 +48,6 @@ public class WebConfig implements WebMvcConfigurer {
         //   -> ./results/summary.json (IDE / local run)
         registry
             .addResourceHandler("/results/**")
-                .addResourceLocations(new PathResource(benchmarkProperties.getResultsDir()));
+                .addResourceLocations(new FileSystemResource(benchmarkProperties.getResultsDir() + File.separator));
     }
 }

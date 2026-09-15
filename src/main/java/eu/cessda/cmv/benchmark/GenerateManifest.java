@@ -17,9 +17,10 @@
 
 package eu.cessda.cmv.benchmark;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
@@ -198,8 +199,8 @@ public class GenerateManifest {
         for (Path file : files) {
             JsonNode root;
             try {
-                root = mapper.readTree(file.toFile());
-            } catch (IOException e) {
+                root = mapper.readTree(file);
+            } catch (JacksonException e) {
                 LOG.warning("  Skipping unreadable file: " + file.getFileName() + " — " + e.getMessage());
                 continue;
             }
@@ -209,20 +210,17 @@ public class GenerateManifest {
             double netScore = 0.0;
             java.util.Set<String> passedNorm = new java.util.HashSet<>();
             if (testResults.isObject()) {
-                @SuppressWarnings("deprecation")
-                var fields = testResults.fields();
-                while (fields.hasNext()) {
-                    var entry = fields.next();
+                for (Map.Entry<String, JsonNode> entry : testResults.properties()) {
                     String testId = entry.getKey().trim();
-                    JsonNode val  = entry.getValue();
-                    String result = val.path("result").asText("indeterminate");
+                    JsonNode val = entry.getValue();
+                    String result = val.path("result").asString("indeterminate");
                     netScore += val.path("weight").asDouble(0.0);
                     stats.addTestResult(testId, result);
                     if ("pass".equals(result)) {
                         passedNorm.add(normTestId(testId));
                     }
                 }
-            };
+            }
             stats.records++;
 
             // Per-record maturity level
@@ -231,7 +229,7 @@ public class GenerateManifest {
 
             // Build slim page record
             ObjectNode slim = mapper.createObjectNode();
-            String testedGuid  = root.path("testedguid").asText("");
+            String testedGuid = root.path("testedguid").asString("");
             String identifier  = extractIdentifier(testedGuid);
             slim.put("identifier",  identifier);
             slim.put("testedguid",  testedGuid);
@@ -242,10 +240,7 @@ public class GenerateManifest {
             // still be categorised client-side via /api/config fair-map.
             if (testResults.isObject()) {
                 ObjectNode normResults = mapper.createObjectNode();
-                @SuppressWarnings("deprecation")
-                var slimFields = testResults.fields();
-                while (slimFields.hasNext()) {
-                    var e = slimFields.next();
+                for (Map.Entry<String, JsonNode> e : testResults.properties()) {
                     String normId = normTestId(e.getKey());
                     normResults.set(normId, e.getValue());
                 }
@@ -278,10 +273,9 @@ public class GenerateManifest {
      * @throws IOException
      */
     // ── Output writers ───────────────────────────────────────────────────────
-
-    private void writePage(Path pagesDir, int pageNumber, List<ObjectNode> records) throws IOException {
+    private void writePage(Path pagesDir, int pageNumber, List<ObjectNode> records) {
         Path out = pagesDir.resolve(String.format("page-%03d.json", pageNumber));
-        mapper.writerWithDefaultPrettyPrinter().writeValue(out.toFile(), records);
+        mapper.writerWithDefaultPrettyPrinter().writeValue(out, records);
     }
 
     /**
