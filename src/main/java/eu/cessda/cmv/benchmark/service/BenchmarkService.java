@@ -14,6 +14,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -305,8 +306,8 @@ public class BenchmarkService {
     public String runAssessment(
             URI spreadsheetUri,
             URI runnerUri,
-            String guidFile,
-            java.util.List<String> guidFiles,
+            Path guidFile,
+            List<Path> guidFiles,
             String guid,
             boolean processAll) throws IOException, InterruptedException {
 
@@ -338,15 +339,14 @@ public class BenchmarkService {
 
         if (guidFiles != null && !guidFiles.isEmpty()) {
             int processed = 0;
-            java.util.List<String> skipped = new java.util.ArrayList<>();
-            for (String filename : guidFiles) {
-                if (filename == null || filename.isBlank()) continue;
+            List<String> skipped = new ArrayList<>();
+            for (Path filename : guidFiles) {
                 try {
-                    Path resolved = resolveGuidFile(filename.trim(), tDataDir);
+                    Path resolved = resolveGuidFile(filename, tDataDir);
                     runner.processSingleFile(resolved);
                     processed++;
                 } catch (java.io.FileNotFoundException fnfe) {
-                    skipped.add(filename.trim());
+                    skipped.add(filename.toString());
                 }
             }
             String message = "Processed " + processed + " selected set file(s) -> " + tResultsDir;
@@ -356,8 +356,8 @@ public class BenchmarkService {
             return message;
         }
 
-        if (guidFile != null && !guidFile.isBlank()) {
-            Path resolved = resolveGuidFile(guidFile.trim(), tDataDir);
+        if (guidFile != null) {
+            Path resolved = resolveGuidFile(guidFile, tDataDir);
             runner.processSingleFile(resolved);
             return "Processed file: " + resolved + " -> " + tResultsDir;
         }
@@ -368,7 +368,7 @@ public class BenchmarkService {
                     + " -> " + tResultsDir;
         }
 
-        Path defaultFile = resolveGuidFile(RunBenchmarkAssessment.DEFAULT_GUIDS_FILE, tDataDir);
+        Path defaultFile = resolveGuidFile(Path.of(RunBenchmarkAssessment.DEFAULT_GUIDS_FILE), tDataDir);
         runner.processSingleFile(defaultFile);
         return "Processed default file: " + defaultFile + " -> " + tResultsDir;
     }
@@ -397,8 +397,7 @@ public class BenchmarkService {
 
     // ── Private helpers ──────────────────────────────────────────────────────
 
-    private Path resolveGuidFile(String filename, Path tDataDir) {
-        Path asGiven = Path.of(filename);
+    private Path resolveGuidFile(Path asGiven, Path tDataDir) {
         if (Files.exists(asGiven)) return asGiven;
         return tDataDir.resolve(asGiven.getFileName());
     }

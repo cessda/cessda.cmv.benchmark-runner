@@ -515,7 +515,7 @@ class BenchmarkServiceTest {
                 service.runAssessment(
                         URI.create("http://invalid.example.invalid"),
                         URI.create("http://invalid.example.invalid"),
-                    "guids_test.txt", null, null, false);
+                        Path.of("guids_test.txt"), null, null, false);
             } catch (java.io.FileNotFoundException fnfe) {
                 org.junit.jupiter.api.Assertions.fail(
                     "FileNotFoundException must not be thrown when the file "
@@ -542,7 +542,7 @@ class BenchmarkServiceTest {
 
             String result = service.runAssessment(
                     null, null,
-                    RunBenchmarkAssessment.DEFAULT_GUIDS_FILE,
+                    Path.of(RunBenchmarkAssessment.DEFAULT_GUIDS_FILE),
                     null, null, false);
 
             assertTrue(result.contains(tenantResultsDir.toString()),

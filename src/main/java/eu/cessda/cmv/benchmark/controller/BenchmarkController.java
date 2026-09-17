@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -209,12 +210,12 @@ public class BenchmarkController {
 
                         @Parameter(description = "Name of a specific guids_*.txt file to process " +
                                         "(e.g. guids_de.txt). Ignored when 'guidFiles', 'guid', or " +
-                                        "'processAll' is set.") @RequestParam(required = false) String guidFile,
+                                "'processAll' is set.") @RequestParam(required = false) Path guidFile,
 
                         @Parameter(description = "One or more specific guids_*.txt filenames to " +
                                         "process, as selected by the operator (e.g. " +
                                         "guids_de.txt, guids_en.txt). Takes priority over " +
-                                "'guidFile' and 'processAll', but not over 'guid'.") @RequestParam(required = false) List<String> guidFiles,
+                                "'guidFile' and 'processAll', but not over 'guid'.") @RequestParam(required = false) List<Path> guidFiles,
 
                         @Parameter(description = "A single full OAI-PMH GetRecord URL to assess directly. " +
                                         "Takes priority over 'guidFiles', 'guidFile', and 'processAll'.") @RequestParam(required = false) String guid,

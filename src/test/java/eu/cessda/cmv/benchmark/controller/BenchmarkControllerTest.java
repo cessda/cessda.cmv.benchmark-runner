@@ -25,6 +25,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Path;
+import java.util.List;
 
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.*;
@@ -243,8 +245,9 @@ class BenchmarkControllerTest {
         @Test
         @DisplayName("Passes guidFile parameter to service")
         void guidFileParameterIsForwarded() throws Exception {
+            Path guidFile = Path.of("guids_de.txt");
             when(service.runAssessment(
-                    isNull(), isNull(), eq("guids_de.txt"), isNull(), isNull(), eq(false)))
+                    isNull(), isNull(), eq(guidFile), isNull(), isNull(), eq(false)))
                 .thenReturn(
                     "Processed file: /data/guids_de.txt"
                     + " -> results written to /results");
@@ -255,7 +258,27 @@ class BenchmarkControllerTest {
                 .andExpect(jsonPath("$.status", is("ok")));
 
             verify(service).runAssessment(
-                null, null,  "guids_de.txt", null, null, false);
+                    null, null, guidFile, null, null, false);
+        }
+
+        @Test
+        @DisplayName("Passes guidFiles parameter to service")
+        void guidFilesParametersAreForwarded() throws Exception {
+            Path guidFile = Path.of("guids_de.txt");
+            List<Path> guidFileList = List.of(guidFile);
+            when(service.runAssessment(
+                    isNull(), isNull(), isNull(), eq(guidFileList), isNull(), eq(false)))
+                    .thenReturn(
+                            "Processed file: /data/guids_de.txt"
+                                    + " -> results written to /results");
+
+            mvc.perform(post("/api/run-assessment")
+                            .param("guidFiles", guidFile.toString()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status", is("ok")));
+
+            verify(service).runAssessment(
+                    null, null, null, guidFileList, null, false);
         }
 
         @Test
@@ -338,7 +361,7 @@ class BenchmarkControllerTest {
         @Test
         @DisplayName("Passes resultsDir override parameter to service")
         void resultsDirOverrideIsForwarded() throws Exception {
-            when(service.generateManifest(eq("/custom/results")))
+            when(service.generateManifest("/custom/results"))
                 .thenReturn("Manifest generated in: /custom/results");
 
             mvc.perform(post("/api/generate-manifest")

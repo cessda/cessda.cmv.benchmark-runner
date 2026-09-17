@@ -45,6 +45,7 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -935,11 +936,10 @@ public class RunBenchmarkAssessment {
      */
     static List<String> findOverwhelmedIndicatorNames(String responseBody) {
         try {
-            List<String> found = new ArrayList<>();
-            collectOverwhelmedIndicatorNames(mapper.readTree(responseBody), null, found);
-            return found;
-        } catch (Exception e) {
-            return List.of();
+            JsonNode jsonNode = mapper.readTree(responseBody);
+            return collectOverwhelmedIndicatorNames(jsonNode, null);
+        } catch (JacksonException e) {
+            return Collections.emptyList();
         }
     }
 
@@ -962,13 +962,12 @@ public class RunBenchmarkAssessment {
      * @param node     current node being inspected
      * @param nameHint the most recent object key descended through, or
      *                 {@code null} at the root
-     * @param found    accumulator for overwhelmed indicator names
+     * @return
      */
-    static void collectOverwhelmedIndicatorNames(
-            JsonNode node, String nameHint, List<String> found) {
-
+    static List<String> collectOverwhelmedIndicatorNames(JsonNode node, String nameHint) {
+        List<String> found = new ArrayList<>();
         if (node == null || !(node.isObject() || node.isArray())) {
-            return;
+            return found;
         }
         if (node.isObject()) {
             JsonNode resultNode = node.get("result");
@@ -977,15 +976,16 @@ public class RunBenchmarkAssessment {
                 found.add(nameHint != null ? nameHint : "(unknown)");
             }
             for (Map.Entry<String, JsonNode> field : node.properties()) {
-                collectOverwhelmedIndicatorNames(field.getValue(), field.getKey(), found);
+                found.addAll(collectOverwhelmedIndicatorNames(field.getValue(), field.getKey()));
             }
         } else {
             // Arrays carry no key of their own — propagate the hint
             // from whichever object key held this array.
             for (JsonNode child : node) {
-                collectOverwhelmedIndicatorNames(child, nameHint, found);
+                found.addAll(collectOverwhelmedIndicatorNames(child, nameHint));
             }
         }
+        return found;
     }
 
     /**
