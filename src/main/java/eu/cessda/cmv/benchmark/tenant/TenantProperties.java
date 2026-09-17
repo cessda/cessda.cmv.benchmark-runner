@@ -95,10 +95,10 @@ public class TenantProperties {
          * dashboard page and the {@code /api/fetch-identifiers} endpoint
          * when no explicit {@code baseUrl} override is supplied for a
          * given run. Falls back to
-         * {@link cessda.cmv.benchmark.GetOaiPmhIdentifiers#DEFAULT_OAI_PMH_BASE_URL}
+         * {@link eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers#DEFAULT_OAI_PMH_BASE_URL}
          * if unset.
          */
-        private String oaiPmhBaseUrl;
+        private URI oaiPmhBaseUrl;
 
         /**
          * Legacy alias for {@link #algorithm}. Kept for compatibility with
@@ -130,8 +130,13 @@ public class TenantProperties {
             this.algorithm = algorithm;
         }
 
-        public String getOaiPmhBaseUrl() { return oaiPmhBaseUrl; }
-        public void setOaiPmhBaseUrl(String oaiPmhBaseUrl) { this.oaiPmhBaseUrl = oaiPmhBaseUrl; }
+        public URI getOaiPmhBaseUrl() {
+            return oaiPmhBaseUrl;
+        }
+
+        public void setOaiPmhBaseUrl(URI oaiPmhBaseUrl) {
+            this.oaiPmhBaseUrl = oaiPmhBaseUrl;
+        }
 
         public URI getRunner() {
             return runner;

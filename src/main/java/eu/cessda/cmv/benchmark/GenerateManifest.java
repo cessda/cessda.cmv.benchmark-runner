@@ -28,7 +28,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.TreeSet;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -131,22 +131,18 @@ public class GenerateManifest {
 
     private static final Logger LOG = Logger.getLogger(GenerateManifest.class.getName());
 
-    /**
-     * @param args
-     * @throws IOException
-     */
     // ── Entry point ──────────────────────────────────────────────────────────
-
+    @SuppressWarnings("java:S106")
     public static void main(String[] args) throws IOException {
         String resultsDirArg = args.length > 0 ? args[0] : "results";
         Path resultsDir = Paths.get(resultsDirArg).toAbsolutePath().normalize();
 
         if (!Files.isDirectory(resultsDir)) {
-            LOG.severe("Results directory not found: " + resultsDir);
+            System.err.println("Results directory not found: " + resultsDir);
             System.exit(1);
         }
 
-        LOG.info("Scanning " + resultsDir + " ...");
+        LOG.log(Level.INFO, "Scanning {0} ...", resultsDir);
         new GenerateManifest(resultsDir, Map.of(), List.of(), List.of(), List.of()).run();
     }
 
@@ -188,18 +184,15 @@ public class GenerateManifest {
                 this.maturityLevel2Tests, this.maturityLevel3Tests);
     }
 
-    /**
-     * @throws IOException
-     */
     // ── Main processing ──────────────────────────────────────────────────────
 
     public void run() throws IOException {
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(resultsDir)) {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(resultsDir,
+                entry -> entry.getFileName().startsWith("guids_") || Files.isDirectory(entry))
+        ) {
             for (Path entry : stream) {
-                if (!Files.isDirectory(entry)) continue;
-                String dirName = entry.getFileName().toString();
-                if (!dirName.startsWith("guids_")) continue;
-                String set = dirName.substring(6);
+                // Exclude "guids_" from the set name
+                String set = entry.getFileName().toString().substring(6);
                 processSet(set, entry);
             }
         }
@@ -328,12 +321,10 @@ public class GenerateManifest {
         Set<String> passedNorm = new HashSet<>();
         ObjectNode normResults = mapper.createObjectNode();
         if (testResults.isObject()) {
-            @SuppressWarnings("deprecation")
-            var fields = testResults.fields();
             for (Map.Entry<String, JsonNode> entry : testResults.properties()) {
                 String testId = entry.getKey().trim();
                 JsonNode val = entry.getValue();
-                String result = val.path("result").asText("indeterminate");
+                String result = val.path("result").asString("indeterminate");
                 netScore += val.path("weight").asDouble(0.0);
                 if ("pass".equals(result)) {
                     passedNorm.add(normTestId(testId));
@@ -344,7 +335,7 @@ public class GenerateManifest {
         int recMaturity = computeMaturity(passedNorm);
 
         ObjectNode slim = mapper.createObjectNode();
-        String testedGuid = root.path("testedguid").asText("");
+        String testedGuid = root.path("testedguid").asString("");
         String identifier = extractIdentifier(testedGuid);
         slim.put("identifier", identifier);
         slim.put("testedguid", testedGuid);
@@ -377,12 +368,9 @@ public class GenerateManifest {
 
         JsonNode testResults = slim.path("test_results");
         if (testResults.isObject()) {
-            @SuppressWarnings("deprecation")
-            var fields = testResults.fields();
-            while (fields.hasNext()) {
-                var entry = fields.next();
+            for (Map.Entry<String, JsonNode> entry : testResults.properties()) {
                 String testId = entry.getKey(); // already normalised
-                String result = entry.getValue().path("result").asText("indeterminate");
+                String result = entry.getValue().path("result").asString("indeterminate");
                 stats.addTestResult(testId, result);
             }
         }
@@ -404,7 +392,7 @@ public class GenerateManifest {
         }
         try {
             JsonNode root = mapper.readTree(cacheFile.toFile());
-            String storedFingerprint = root.path("configFingerprint").asText("");
+            String storedFingerprint = root.path("configFingerprint").asString("");
             if (!storedFingerprint.equals(configFingerprint)) {
                 LOG.info("  FAIR map / maturity configuration has changed since "
                         + "the cache was built — reprocessing all files this run.");
@@ -412,10 +400,7 @@ public class GenerateManifest {
             }
             JsonNode filesNode = root.path("files");
             if (filesNode.isObject()) {
-                @SuppressWarnings("deprecation")
-                var fields = filesNode.fields();
-                while (fields.hasNext()) {
-                    var entry = fields.next();
+                for (Map.Entry<String, JsonNode> entry : filesNode.properties()) {
                     JsonNode v = entry.getValue();
                     JsonNode slimNode = v.get("slim");
                     if (!(slimNode instanceof ObjectNode slim)) continue;
@@ -425,7 +410,7 @@ public class GenerateManifest {
                             slim));
                 }
             }
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             LOG.warning("  Could not read manifest cache (" + cacheFile.getFileName()
                     + ") — reprocessing all files this run: " + e.getMessage());
             result.clear();
@@ -453,7 +438,7 @@ public class GenerateManifest {
             // Compact, not pretty-printed: this is an internal cache, never
             // read by the dashboard or a human.
             mapper.writeValue(cacheFile.toFile(), root);
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             LOG.warning("  Could not write manifest cache (" + cacheFile.getFileName()
                     + "): " + e.getMessage());
         }
@@ -484,7 +469,6 @@ public class GenerateManifest {
      * @param pagesDir
      * @param pageNumber
      * @param records
-     * @throws IOException
      */
     // ── Output writers ───────────────────────────────────────────────────────
     private void writePage(Path pagesDir, int pageNumber, List<ObjectNode> records) {
@@ -511,7 +495,7 @@ public class GenerateManifest {
      * }
      * </pre>
      */
-    private void writeSummary() throws IOException {
+    private void writeSummary() {
         ObjectNode root = mapper.createObjectNode();
         root.put("generated", java.time.Instant.now().toString());
 
@@ -657,7 +641,7 @@ public class GenerateManifest {
 
     // ── Inner class ──────────────────────────────────────────────────────────
 
-    private class SetStats {
+    private static class SetStats {
         private final Map<String, String> fairMap;
         int records   = 0;
         int pass      = 0;

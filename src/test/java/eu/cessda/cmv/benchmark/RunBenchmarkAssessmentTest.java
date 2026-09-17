@@ -6,8 +6,8 @@
 
 package eu.cessda.cmv.benchmark;
 
-import cessda.cmv.benchmark.config.BenchmarkProperties;
-import cessda.cmv.benchmark.tenant.TenantProperties;
+import eu.cessda.cmv.benchmark.config.BenchmarkProperties;
+import eu.cessda.cmv.benchmark.tenant.TenantProperties;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.UnrecognizedOptionException;
@@ -233,7 +233,7 @@ class RunBenchmarkAssessmentTest {
         }
 
         private static TenantProperties tenantPropertiesWith(String tenantId,
-                        TenantProperties.TenantConfig config) {
+                                                             TenantProperties.TenantConfig config) {
                 TenantProperties props = new TenantProperties();
                 props.setConfig(Map.of(tenantId, config));
                 return props;
@@ -264,6 +264,7 @@ class RunBenchmarkAssessmentTest {
                 RunBenchmarkAssessment.TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
                                 tenantProperties, benchmarkProperties, "example");
 
+                assertNotNull(resolution);
                 assertAll(
                                 () -> assertEquals(URI.create("https://example.org/algorithm"), resolution.algorithm()),
                                 () -> assertEquals(URI.create("https://example.org/runner"), resolution.runner()));
@@ -283,6 +284,7 @@ class RunBenchmarkAssessmentTest {
                 RunBenchmarkAssessment.TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
                                 tenantProperties, benchmarkProperties, "legacy");
 
+                assertNotNull(resolution);
                 assertAll(
                                 () -> assertEquals(URI.create("https://example.org/legacy-algorithm"), resolution.algorithm()),
                                 () -> assertEquals(URI.create("https://example.org/legacy-runner"), resolution.runner()));
@@ -305,6 +307,7 @@ class RunBenchmarkAssessmentTest {
                 Path expectedDataDir = benchmarkProperties.getDataDir().resolve("cessda").normalize();
                 Path expectedResultsDir = benchmarkProperties.getResultsDir().resolve("cessda").normalize();
 
+                assertNotNull(resolution);
                 assertAll(
                                 () -> assertEquals(expectedDataDir, resolution.dataDir()),
                                 () -> assertEquals(expectedResultsDir, resolution.resultsDir()));

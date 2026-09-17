@@ -17,6 +17,7 @@
 package eu.cessda.cmv.benchmark;
 
 import eu.cessda.cmv.benchmark.config.BenchmarkProperties;
+import eu.cessda.cmv.benchmark.tenant.TenantProperties;
 import org.apache.commons.cli.*;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -45,6 +46,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -970,14 +972,11 @@ public class RunBenchmarkAssessment {
         }
         if (node.isObject()) {
             JsonNode resultNode = node.get("result");
-            if (resultNode != null && resultNode.isTextual()
-                    && resultNode.asText().contains(OVERWHELMED_RESULT_MARKER)) {
+            if (resultNode != null && resultNode.isString()
+                    && resultNode.asString().contains(OVERWHELMED_RESULT_MARKER)) {
                 found.add(nameHint != null ? nameHint : "(unknown)");
             }
-            @SuppressWarnings("deprecation")
-            var fields = node.fields();
-            while (fields.hasNext()) {
-                var field = fields.next();
+            for (Map.Entry<String, JsonNode> field : node.properties()) {
                 collectOverwhelmedIndicatorNames(field.getValue(), field.getKey(), found);
             }
         } else {

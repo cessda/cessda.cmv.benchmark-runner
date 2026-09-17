@@ -161,6 +161,17 @@ public class BenchmarkService {
         throw new IllegalStateException("No runner configured for tenant: " + tenantContext.getTenantId());
     }
 
+    private static String describeFailures(java.util.Map<String, Exception> failed) {
+        StringBuilder sb = new StringBuilder();
+        for (var entry : failed.entrySet()) {
+            if (!sb.isEmpty()) sb.append("; ");
+            sb.append(entry.getKey()).append(": ").append(entry.getValue());
+        }
+        return sb.toString();
+    }
+
+    // ── 1. Fetch OAI-PMH Identifiers ─────────────────────────────────────────
+
     /**
      * Resolves the OAI-PMH base URL for the current tenant.
      *
@@ -173,19 +184,17 @@ public class BenchmarkService {
      * throws for an unconfigured tenant -- there is always a sensible
      * compiled-in default (CESSDA's own catalogue).</p>
      */
-    private String resolveOaiPmhBaseUrl(String requestedOverride) {
-        if (requestedOverride != null && !requestedOverride.isBlank()) {
+    private URI resolveOaiPmhBaseUrl(URI requestedOverride) {
+        if (requestedOverride != null) {
             return requestedOverride;
         }
         TenantConfig cfg = currentTenantConfig();
-        String tenantValue = cfg.getOaiPmhBaseUrl();
-        if (tenantValue != null && !tenantValue.isBlank()) {
+        URI tenantValue = cfg.getOaiPmhBaseUrl();
+        if (tenantValue != null) {
             return tenantValue;
         }
         return GetOaiPmhIdentifiers.DEFAULT_OAI_PMH_BASE_URL;
     }
-
-    // ── 1. Fetch OAI-PMH Identifiers ─────────────────────────────────────────
 
     /**
      * Returns the OAI-PMH base URL that would be used for the current
@@ -196,7 +205,7 @@ public class BenchmarkService {
      * field, so the operator can see and optionally override the
      * default before triggering a fetch or a set listing.</p>
      */
-    public String getDefaultOaiPmhBaseUrl() {
+    public URI getDefaultOaiPmhBaseUrl() {
         return resolveOaiPmhBaseUrl(null);
     }
 
@@ -224,8 +233,8 @@ public class BenchmarkService {
      *                               the HTTP response
      */
     public java.util.List<GetOaiPmhIdentifiers.SetInfo> listAvailableSets(
-            String baseUrl, String verb) throws IOException, InterruptedException {
-        String resolvedBase = resolveOaiPmhBaseUrl(baseUrl);
+            URI baseUrl, String verb) throws IOException, InterruptedException {
+        URI resolvedBase = resolveOaiPmhBaseUrl(baseUrl);
         String resolvedVerb = nvl(verb, GetOaiPmhIdentifiers.DEFAULT_VERB);
         GetOaiPmhIdentifiers client = new GetOaiPmhIdentifiers(
                 resolvedBase, resolvedVerb, GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX, null);
@@ -233,7 +242,7 @@ public class BenchmarkService {
     }
 
     public String fetchIdentifiers(
-            String baseUrl,
+            URI baseUrl,
             String verb,
             String metadataPrefix,
             String sets,
@@ -242,7 +251,7 @@ public class BenchmarkService {
         Path tDataDir = tenantDataDir();
         Files.createDirectories(tDataDir);
 
-        String resolvedBase   = resolveOaiPmhBaseUrl(baseUrl);
+        URI resolvedBase = resolveOaiPmhBaseUrl(baseUrl);
         String resolvedVerb   = nvl(verb,           GetOaiPmhIdentifiers.DEFAULT_VERB);
         String resolvedPrefix = nvl(metadataPrefix, GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX);
 
@@ -255,8 +264,8 @@ public class BenchmarkService {
                     + " -> " + tDataDir + "/guids_" + fetchSet.trim() + ".txt";
         }
 
-        String[] resolvedSets = (sets != null && !sets.isBlank())
-                ? sets.split(",")
+        List<String> resolvedSets = (sets != null && !sets.isBlank())
+                ? Arrays.asList(sets.split(","))
                 : GetOaiPmhIdentifiers.DEFAULT_SETS;
 
         // Isolate per-set failures rather than aborting the whole batch
@@ -273,9 +282,6 @@ public class BenchmarkService {
             try {
                 client.fetchIdentifiersForSet(set);
                 succeeded.add(set);
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                return null;
             } catch (IOException ioe) {
                 failed.put(set, ioe);
             }
@@ -287,20 +293,11 @@ public class BenchmarkService {
         }
 
         String message = "Fetched identifiers for " + succeeded.size() + " of "
-                + resolvedSets.length + " set(s) -> " + tDataDir;
+                + resolvedSets.size() + " set(s) -> " + tDataDir;
         if (!failed.isEmpty()) {
             message += " (failed: " + describeFailures(failed) + ")";
         }
         return message;
-    }
-
-    private static String describeFailures(java.util.Map<String, String> failed) {
-        StringBuilder sb = new StringBuilder();
-        for (var entry : failed.entrySet()) {
-            if (sb.length() > 0) sb.append("; ");
-            sb.append(entry.getKey()).append(": ").append(entry.getValue());
-        }
-        return sb.toString();
     }
 
     // ── 2. Run Assessment ────────────────────────────────────────────────────
@@ -414,37 +411,6 @@ public class BenchmarkService {
         } else {
             return fallback;
         }
-    }
-
-    public String fetchIdentifiers(
-            URI baseUrl,
-            String verb,
-            String metadataPrefix,
-            String sets,
-            String fetchSet) throws IOException, InterruptedException {
-
-        Path tDataDir = tenantDataDir();
-        Files.createDirectories(tDataDir);
-
-        URI resolvedBase = nvl(baseUrl, GetOaiPmhIdentifiers.DEFAULT_OAI_PMH_BASE_URL);
-        String resolvedVerb   = nvl(verb,           GetOaiPmhIdentifiers.DEFAULT_VERB);
-        String resolvedPrefix = nvl(metadataPrefix, GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX);
-
-        GetOaiPmhIdentifiers client =
-                new GetOaiPmhIdentifiers(resolvedBase, resolvedVerb, resolvedPrefix, tDataDir);
-
-        if (fetchSet != null && !fetchSet.isBlank()) {
-            client.fetchIdentifiersForSet(fetchSet.trim());
-            return "Fetched identifiers for set: " + fetchSet.trim()
-                    + " -> " + tDataDir + "/guids_" + fetchSet.trim() + ".txt";
-        }
-
-        List<String> resolvedSets = (sets != null && !sets.isBlank())
-                ? Arrays.asList(sets.split(","))
-                : GetOaiPmhIdentifiers.DEFAULT_SETS;
-
-        client.fetchAllSetIdentifiers(resolvedSets);
-        return "Fetched identifiers for " + resolvedSets.size() + " set(s) -> " + tDataDir;
     }
 
     private TenantConfig currentTenantConfig() {

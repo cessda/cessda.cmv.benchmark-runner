@@ -175,6 +175,7 @@ public class GetOaiPmhIdentifiers {
      *
      * @param args command-line arguments
      */
+    @SuppressWarnings("java:S106")
     public static void main(String[] args) throws URISyntaxException, InterruptedException {
         logger.setLevel(Level.INFO);
 
@@ -235,40 +236,6 @@ public class GetOaiPmhIdentifiers {
     // -----------------------------------------------------------------------
 
     /**
-     * Builds and parses the command-line options.
-     *
-     * @param args raw command-line arguments
-     * @return parsed {@link CommandLine}
-     * @throws ParseException if argument parsing fails
-     */
-    static CommandLine parseArgs(String... args) throws ParseException {
-        Options options = new Options();
-        options.addOption("b", BASE_URL_ARG, true,
-                "OAI-PMH base URL (default: " + DEFAULT_OAI_PMH_BASE_URL + ")");
-        options.addOption("v", VERB_ARG, true,
-                "OAI-PMH verb for listing identifiers (default: " + DEFAULT_VERB + ")");
-        options.addOption("m", META_PREFIX_ARG, true,
-                "Metadata prefix for output GetRecord URLs (default: " + DEFAULT_METADATA_PREFIX + ")");
-        options.addOption("S", SETS_ARG, true,
-                "Comma-separated list of sets to fetch (default: de,el,en,fi,fr,hr,nl,sl,sl-SI,sv)");
-        options.addOption("F", FETCH_ALL_ARG, false,
-                "Fetch identifiers for all sets (default behaviour when no mode flag is given)");
-        options.addOption("s", FETCH_SET_ARG, true,
-                "Fetch identifiers for a single set only");
-        options.addOption("h", "help", false, "Show help");
-
-        DefaultParser parser = new DefaultParser(false);
-
-        CommandLine cmd = parser.parse(options, args);
-        if (cmd.hasOption("h")) {
-            new HelpFormatter().printHelp(
-                    "java -cp <jar> cessda.cmv.benchmark.GetOaiPmhIdentifiers", options, true);
-            System.exit(0);
-        }
-        return cmd;
-    }
-
-    /**
      * Fetches identifier lists for every set in the supplied array.
      *
      * @param sets array of OAI-PMH set names (set codes)
@@ -302,13 +269,6 @@ public class GetOaiPmhIdentifiers {
         logger.log(Level.INFO, "Fetching identifiers for set: {0}", new Object[]{set});
         List<String> identifiers = new ArrayList<>();
 
-        /** ListIdentifiers with the specified set and metadata prefix.
-         *
-         * @param set the set name, e.g. "de"
-         * @param verb the OAI-PMH verb to use (e.g. "ListIdentifiers")
-         * @param oaiPmhBaseUrl the base URL of the OAI-PMH endpoint
-         *
-         * */
         String setSpec = qualifySetSpec(set);
 
         // The output filename must stay filesystem-safe (":" is
@@ -359,22 +319,6 @@ public class GetOaiPmhIdentifiers {
     }
 
     /**
-     * Derives a filesystem-safe filename fragment from a (possibly
-     * fully qualified) OAI-PMH setSpec.
-     *
-     * <p>Takes the substring after the last {@code ':'} when the
-     * setSpec is qualified (e.g. {@code "language:hr"} -&gt;
-     * {@code "hr"}; a nested spec like {@code "a:b:c"} -&gt;
-     * {@code "c"}), or the whole value when it isn't. Any character
-     * that isn't alphanumeric, a dot, an underscore, or a hyphen is
-     * then replaced with an underscore, matching the sanitisation
-     * {@code RunBenchmarkAssessment} applies to GUIDs when naming its
-     * own output files.</p>
-     *
-     * @param setSpec the setSpec to derive a filename fragment from
-     * @return a filesystem-safe fragment, never containing {@code ':'}
-     */
-    /**
      * Qualifies a set value into a full OAI-PMH setSpec.
      *
      * <p>{@code set} may be a short code (e.g. {@code "de"}) -- this
@@ -397,6 +341,22 @@ public class GetOaiPmhIdentifiers {
         return set.contains(":") ? set : SET_SPEC_PREFIX + set;
     }
 
+    /**
+     * Derives a filesystem-safe filename fragment from a (possibly
+     * fully qualified) OAI-PMH setSpec.
+     *
+     * <p>Takes the substring after the last {@code ':'} when the
+     * setSpec is qualified (e.g. {@code "language:hr"} -&gt;
+     * {@code "hr"}; a nested spec like {@code "a:b:c"} -&gt;
+     * {@code "c"}), or the whole value when it isn't. Any character
+     * that isn't alphanumeric, a dot, an underscore, or a hyphen is
+     * then replaced with an underscore, matching the sanitisation
+     * {@code RunBenchmarkAssessment} applies to GUIDs when naming its
+     * own output files.</p>
+     *
+     * @param setSpec the setSpec to derive a filename fragment from
+     * @return a filesystem-safe fragment, never containing {@code ':'}
+     */
     static String sanitizeSetSpecForFilename(String setSpec) {
         String tail = setSpec.contains(":")
                 ? setSpec.substring(setSpec.lastIndexOf(':') + 1)
@@ -416,83 +376,38 @@ public class GetOaiPmhIdentifiers {
     public record SetInfo(String setSpec, String setName) {}
 
     /**
-     * Calls {@code verb=ListSets} on the configured OAI-PMH endpoint
-     * and returns every set it reports.
+     * Builds and parses the command-line options.
      *
-     * <p>This is the authoritative source of which sets an endpoint
-     * actually offers -- there is no compiled-in or configured
-     * fallback list, since a hand-maintained copy inevitably drifts
-     * out of sync with the live repository (CESSDA's own catalogue no
-     * longer offers every set once listed in this project's static
-     * defaults). Every OAI-PMH repository is required to support
-     * {@code ListSets} if it supports selective harvesting at all, so
-     * this works for any tenant's endpoint, whatever its own setSpec
-     * naming scheme happens to be.</p>
-     *
-     * @return sets in the order the repository returned them; empty if
-     *         the repository has no sets configured (a valid
-     *         {@code noSetHierarchy} response, not an error)
-     * @throws IOException          if the request fails, the response
-     *                               cannot be parsed, or the response
-     *                               contains an OAI-PMH {@code <error>}
-     *                               other than {@code noSetHierarchy}
-     * @throws InterruptedException if interrupted while waiting for the
-     *                               HTTP response
+     * @param args raw command-line arguments
+     * @return parsed {@link CommandLine}
+     * @throws ParseException if argument parsing fails
      */
-    public List<SetInfo> listSets() throws IOException, InterruptedException {
-        List<SetInfo> sets = new ArrayList<>();
-        String url = oaiPmhBaseUrl + "?verb=ListSets";
-        int page = 1;
-        while (url != null) {
-            logInfo("  Fetching ListSets page %d: %s", page, url);
-            String xml = fetchUrl(url);
-            try {
-                Document doc = parseXml(xml);
-                NodeList errorNodes = doc.getElementsByTagNameNS("*", "error");
-                if (errorNodes.getLength() == 0) {
-                    errorNodes = doc.getElementsByTagName("error");
-                }
-                if (errorNodes.getLength() > 0) {
-                    String code = ((Element) errorNodes.item(0)).getAttribute("code");
-                    // noSetHierarchy just means the repository doesn't
-                    // partition its records into sets at all -- a
-                    // legitimate "there are no sets" answer, not a
-                    // failure.
-                    if ("noSetHierarchy".equals(code)) {
-                        return List.of();
-                    }
-                    checkForOaiPmhError(xml, "ListSets, page " + page);
-                }
+    static CommandLine parseArgs(String... args) throws ParseException {
+        Options options = new Options();
+        options.addOption("b", BASE_URL_ARG, true,
+                "OAI-PMH base URL (default: " + DEFAULT_OAI_PMH_BASE_URL + ")");
+        options.addOption("v", VERB_ARG, true,
+                "OAI-PMH verb for listing identifiers (default: " + DEFAULT_VERB + ")");
+        options.addOption("m", META_PREFIX_ARG, true,
+                "Metadata prefix for output GetRecord URLs (default: " + DEFAULT_METADATA_PREFIX + ")");
+        options.addOption("S", SETS_ARG, true,
+                "Comma-separated list of sets to fetch (default: de,el,en,fi,fr,hr,nl,sl,sl-SI,sv)");
+        options.addOption("F", FETCH_ALL_ARG, false,
+                "Fetch identifiers for all sets (default behaviour when no mode flag is given)");
+        options.addOption("s", FETCH_SET_ARG, true,
+                "Fetch identifiers for a single set only");
+        options.addOption("t", TENANT_ARG, true,
+                "Tenant name; output is written to guids/<tenant>/ (default: " + DEFAULT_TENANT + ")");
+        options.addOption("h", "help", false, "Show help");
 
-                NodeList setNodes = doc.getElementsByTagNameNS("*", "set");
-                if (setNodes.getLength() == 0) {
-                    setNodes = doc.getElementsByTagName("set");
-                }
-                for (int i = 0; i < setNodes.getLength(); i++) {
-                    Element setEl = (Element) setNodes.item(i);
-                    String setSpec = childText(setEl, "setSpec");
-                    String setName = childText(setEl, "setName");
-                    if (setSpec != null && !setSpec.isBlank()) {
-                        sets.add(new SetInfo(setSpec, setName != null ? setName : setSpec));
-                    }
-                }
-
-                String resumptionToken = parseResumptionToken(xml);
-                if (resumptionToken != null && !resumptionToken.isBlank()) {
-                    url = oaiPmhBaseUrl
-                            + "?verb=ListSets&resumptionToken="
-                            + URLEncoder.encode(resumptionToken, StandardCharsets.UTF_8);
-                    page++;
-                } else {
-                    url = null;
-                }
-            } catch (ParserConfigurationException | SAXException e) {
-                throw new IOException("Failed to parse ListSets response (page "
-                        + page + "): " + e.getMessage(), e);
-            }
+        CommandLineParser parser = new DefaultParser();
+        CommandLine cmd = parser.parse(options, args);
+        if (cmd.hasOption("h")) {
+            new HelpFormatter().printHelp(
+                    "java -cp <jar> cessda.cmv.benchmark.GetOaiPmhIdentifiers", options, true);
+            System.exit(0);
         }
-        logInfo("ListSets returned %d set(s)", sets.size());
-        return sets;
+        return cmd;
     }
 
     /**
@@ -581,41 +496,85 @@ public class GetOaiPmhIdentifiers {
     }
 
     /**
-     * Checks a raw OAI-PMH XML response for a top-level {@code <error>}
-     * element and throws if one is present.
+     * Calls {@code verb=ListSets} on the configured OAI-PMH endpoint
+     * and returns every set it reports.
      *
-     * <p>OAI-PMH repositories report protocol-level failures (e.g.
-     * {@code badVerb}, {@code badArgument}, {@code noRecordsMatch}) as a
-     * normal HTTP 200 response whose body is an {@code <error>} element,
-     * not as a non-2xx status. Left unchecked, a failed request is
-     * indistinguishable from one that legitimately matched zero
-     * records: both parse to an empty identifier list with no
-     * resumption token, so the failure was previously silently written
-     * out as an empty {@code guids_<set>.txt} file instead of being
-     * reported.</p>
+     * <p>This is the authoritative source of which sets an endpoint
+     * actually offers -- there is no compiled-in or configured
+     * fallback list, since a hand-maintained copy inevitably drifts
+     * out of sync with the live repository (CESSDA's own catalogue no
+     * longer offers every set once listed in this project's static
+     * defaults). Every OAI-PMH repository is required to support
+     * {@code ListSets} if it supports selective harvesting at all, so
+     * this works for any tenant's endpoint, whatever its own setSpec
+     * naming scheme happens to be.</p>
      *
-     * @param xml     the raw XML response body
-     * @param context short description of the request (e.g. the set
-     *                name and page number) included in the exception
-     *                message if an error is found
-     * @throws IOException if the response contains an {@code <error>}
-     *                      element, or if the XML cannot be parsed
+     * @return sets in the order the repository returned them; empty if
+     *         the repository has no sets configured (a valid
+     *         {@code noSetHierarchy} response, not an error)
+     * @throws IOException          if the request fails, the response
+     *                               cannot be parsed, or the response
+     *                               contains an OAI-PMH {@code <error>}
+     *                               other than {@code noSetHierarchy}
+     * @throws InterruptedException if interrupted while waiting for the
+     *                               HTTP response
      */
-    private void checkForOaiPmhError(Document xml, String context) throws IOException {
-        Document doc = parseXml(xml);
-        NodeList nodes = doc.getElementsByTagNameNS("*", "error");
-        if (nodes.getLength() == 0) {
-            nodes = doc.getElementsByTagName("error");
+    public List<SetInfo> listSets() throws IOException, InterruptedException {
+        List<SetInfo> sets = new ArrayList<>();
+        URI url = URI.create(oaiPmhBaseUrl + "?verb=ListSets");
+        int page = 1;
+        while (url != null) {
+            logger.log(Level.INFO, "  Fetching ListSets page {0}: {1}", new Object[]{page, url});
+            try (InputStream xml = fetchUrl(url, HttpResponse.BodyHandlers.ofInputStream())) {
+                InputSource inputSource = new InputSource();
+                inputSource.setByteStream(xml);
+                inputSource.setSystemId(url.toString());
+                Document doc = parseXml(inputSource);
+                NodeList errorNodes = doc.getElementsByTagNameNS("*", "error");
+                if (errorNodes.getLength() == 0) {
+                    errorNodes = doc.getElementsByTagName("error");
+                }
+                if (errorNodes.getLength() > 0) {
+                    String code = ((Element) errorNodes.item(0)).getAttribute("code");
+                    // noSetHierarchy just means the repository doesn't
+                    // partition its records into sets at all -- a
+                    // legitimate "there are no sets" answer, not a
+                    // failure.
+                    if ("noSetHierarchy".equals(code)) {
+                        return List.of();
+                    }
+                    checkForOaiPmhError(doc, "ListSets, page " + page);
+                }
+
+                NodeList setNodes = doc.getElementsByTagNameNS("*", "set");
+                if (setNodes.getLength() == 0) {
+                    setNodes = doc.getElementsByTagName("set");
+                }
+                for (int i = 0; i < setNodes.getLength(); i++) {
+                    Element setEl = (Element) setNodes.item(i);
+                    String setSpec = childText(setEl, "setSpec");
+                    String setName = childText(setEl, "setName");
+                    if (setSpec != null && !setSpec.isBlank()) {
+                        sets.add(new SetInfo(setSpec, setName != null ? setName : setSpec));
+                    }
+                }
+
+                String resumptionToken = parseResumptionToken(doc);
+                if (resumptionToken != null && !resumptionToken.isBlank()) {
+                    url = URI.create(oaiPmhBaseUrl
+                            + "?verb=ListSets&resumptionToken="
+                            + URLEncoder.encode(resumptionToken, StandardCharsets.UTF_8));
+                    page++;
+                } else {
+                    url = null;
+                }
+            } catch (ParserConfigurationException | SAXException e) {
+                throw new IOException("Failed to parse ListSets response (page "
+                        + page + "): " + e.getMessage(), e);
+            }
         }
-        if (nodes.getLength() > 0) {
-            Element errorEl = (Element) nodes.item(0);
-            String code = errorEl.getAttribute("code");
-            String message = errorEl.getTextContent().trim();
-            throw new IOException("OAI-PMH error"
-                    + (code.isBlank() ? "" : " (" + code + ")")
-                    + " while fetching " + context + ": "
-                    + (message.isBlank() ? "<no message>" : message));
-        }
+        logger.log(Level.INFO, "ListSets returned {0} set(s)", sets.size());
+        return sets;
     }
 
     /**
@@ -682,43 +641,39 @@ public class GetOaiPmhIdentifiers {
     // -----------------------------------------------------------------------
 
     /**
-     * Builds and parses the command-line options.
+     * Checks a raw OAI-PMH XML response for a top-level {@code <error>}
+     * element and throws if one is present.
      *
-     * @param args raw command-line arguments
-     * @return parsed {@link CommandLine}
-     * @throws IOException if argument parsing fails
+     * <p>OAI-PMH repositories report protocol-level failures (e.g.
+     * {@code badVerb}, {@code badArgument}, {@code noRecordsMatch}) as a
+     * normal HTTP 200 response whose body is an {@code <error>} element,
+     * not as a non-2xx status. Left unchecked, a failed request is
+     * indistinguishable from one that legitimately matched zero
+     * records: both parse to an empty identifier list with no
+     * resumption token, so the failure was previously silently written
+     * out as an empty {@code guids_<set>.txt} file instead of being
+     * reported.</p>
+     *
+     * @param doc     the raw XML response body
+     * @param context short description of the request (e.g. the set
+     *                name and page number) included in the exception
+     *                message if an error is found
+     * @throws IOException if the response contains an {@code <error>}
+     *                      element, or if the XML cannot be parsed
      */
-    static CommandLine parseArgs(String[] args) throws IOException {
-        Options options = new Options();
-        options.addOption("b", BASE_URL_ARG, true,
-                "OAI-PMH base URL (default: " + DEFAULT_OAI_PMH_BASE_URL + ")");
-        options.addOption("v", VERB_ARG, true,
-                "OAI-PMH verb for listing identifiers (default: " + DEFAULT_VERB + ")");
-        options.addOption("m", META_PREFIX_ARG, true,
-                "Metadata prefix for output GetRecord URLs (default: " + DEFAULT_METADATA_PREFIX + ")");
-        options.addOption("S", SETS_ARG, true,
-                "Comma-separated list of sets to fetch (default: de,el,en,fi,fr,hr,nl,sl,sl-SI,sv)");
-        options.addOption("F", FETCH_ALL_ARG, false,
-                "Fetch identifiers for all sets (default behaviour when no mode flag is given)");
-        options.addOption("s", FETCH_SET_ARG, true,
-                "Fetch identifiers for a single set only");
-        options.addOption("t", TENANT_ARG, true,
-                "Tenant name; output is written to guids/<tenant>/ (default: " + DEFAULT_TENANT + ")");
-        options.addOption("h", "help", false, "Show help");
-
-        CommandLineParser parser = new DefaultParser();
-        try {
-            CommandLine cmd = parser.parse(options, args);
-            if (cmd.hasOption("h")) {
-                new HelpFormatter().printHelp(
-                        "java -cp <jar> cessda.cmv.benchmark.GetOaiPmhIdentifiers", options, true);
-                System.exit(0);
-            }
-            return cmd;
-        } catch (ParseException e) {
-            logSevere("Error parsing arguments: %s", e.getMessage());
-            logSevere("Use -h or --help for usage information.");
-            throw new IOException("Failed to parse command-line arguments", e);
+    private void checkForOaiPmhError(Document doc, String context) throws IOException {
+        NodeList nodes = doc.getElementsByTagNameNS("*", "error");
+        if (nodes.getLength() == 0) {
+            nodes = doc.getElementsByTagName("error");
+        }
+        if (nodes.getLength() > 0) {
+            Element errorEl = (Element) nodes.item(0);
+            String code = errorEl.getAttribute("code");
+            String message = errorEl.getTextContent().trim();
+            throw new IOException("OAI-PMH error"
+                    + (code.isBlank() ? "" : " (" + code + ")")
+                    + " while fetching " + context + ": "
+                    + (message.isBlank() ? "<no message>" : message));
         }
     }
 }

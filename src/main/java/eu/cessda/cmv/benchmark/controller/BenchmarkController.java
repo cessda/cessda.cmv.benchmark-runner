@@ -6,6 +6,7 @@
 
 package eu.cessda.cmv.benchmark.controller;
 
+import eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers;
 import eu.cessda.cmv.benchmark.service.BenchmarkService;
 import eu.cessda.cmv.benchmark.service.BenchmarkService.Branding;
 import eu.cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig;
@@ -20,7 +21,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.net.URI;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -109,6 +109,17 @@ public class BenchmarkController {
         // 1a. GET /api/fetch-identifiers/defaults
         // -------------------------------------------------------------------------
 
+        private static Map<String, String> response(String status, String message) {
+                return Map.of(
+                        "status", status,
+                        "message", message
+                );
+        }
+
+        // -------------------------------------------------------------------------
+        // 1b. GET /api/fetch-identifiers/sets
+        // -------------------------------------------------------------------------
+
         @Operation(summary = "Get default OAI-PMH base URL", description = "Returns the OAI-PMH base URL that would be used for the "
                         +
                         "current tenant if fetch-identifiers were called with no explicit " +
@@ -119,19 +130,12 @@ public class BenchmarkController {
                                         @ApiResponse(responseCode = "500", description = "Failed to resolve default")
                         })
         @GetMapping("/fetch-identifiers/defaults")
-        public ResponseEntity<Map<String, String>> getFetchIdentifiersDefaults() {
-                try {
-                        Map<String, String> body = new LinkedHashMap<>();
-                        body.put("baseUrl", service.getDefaultOaiPmhBaseUrl());
-                        return ResponseEntity.ok(body);
-                } catch (Exception e) {
-                        return ResponseEntity.internalServerError()
-                                        .body(response("error", e.getMessage()));
-                }
+        public Map<String, URI> getFetchIdentifiersDefaults() {
+                return Map.of("baseUrl", service.getDefaultOaiPmhBaseUrl());
         }
 
         // -------------------------------------------------------------------------
-        // 1b. GET /api/fetch-identifiers/sets
+        // 2. GET /api/run-assessment/defaults
         // -------------------------------------------------------------------------
 
         @Operation(summary = "List sets available from an OAI-PMH endpoint", description = "Calls verb=ListSets against the given (or, if omitted, "
@@ -147,30 +151,21 @@ public class BenchmarkController {
                                         @ApiResponse(responseCode = "500", description = "Failed to list sets")
                         })
         @GetMapping("/fetch-identifiers/sets")
-        public ResponseEntity<Map<String, Object>> getFetchIdentifiersSets(
+        public Map<String, List<GetOaiPmhIdentifiers.SetInfo>> getFetchIdentifiersSets(
 
                         @Parameter(description = "OAI-PMH base URL, for this request only. " +
-                                        "Default: the current tenant's configured oai-pmh-base-url.") @RequestParam(required = false) String baseUrl,
+                                "Default: the current tenant's configured oai-pmh-base-url.") @RequestParam(required = false) URI baseUrl,
 
                         @Parameter(description = "OAI-PMH verb. Default: ListIdentifiers " +
                                         "(unused by ListSets itself, accepted for consistency with " +
                                         "the other fetch-identifiers endpoints).") @RequestParam(required = false) String verb
 
-        ) {
-                try {
-                        Map<String, Object> body = new LinkedHashMap<>();
-                        body.put("sets", service.listAvailableSets(baseUrl, verb));
-                        return ResponseEntity.ok(body);
-                } catch (Exception e) {
-                        Map<String, Object> body = new LinkedHashMap<>();
-                        body.put("status", "error");
-                        body.put("message", e.getMessage());
-                        return ResponseEntity.internalServerError().body(body);
-                }
+        ) throws IOException, InterruptedException {
+                return Map.of("sets", service.listAvailableSets(baseUrl, verb));
         }
 
         // -------------------------------------------------------------------------
-        // 2. GET /api/run-assessment/defaults
+        // 3. GET /api/run-assessment/guid-files
         // -------------------------------------------------------------------------
 
         @Operation(summary = "Get default algorithm and runner URIs", description = "Returns the algorithm and runner URIs that would be used "
@@ -185,30 +180,10 @@ public class BenchmarkController {
         @GetMapping("/run-assessment/defaults")
         public Map<String, URI> getRunAssessmentDefaults() {
                 URI[] defaults = service.getDefaultAlgorithmAndRunner();
-                Map<String, URI> body = new LinkedHashMap<>();
-                body.put("algorithm", defaults[0]);
-                body.put("runner", defaults[1]);
-                return body;
-        }
-
-        // -------------------------------------------------------------------------
-        // 3. GET /api/run-assessment/guid-files
-        // -------------------------------------------------------------------------
-
-        @Operation(summary = "List available guids_*.txt files", description = "Lists the guids_*.txt files present in the current "
-                        +
-                        "tenant's data directory, for selecting which sets to " +
-                        "assess. Used by the dashboard to populate the " +
-                        "checkable list shown in the run-assessment " +
-                        "confirmation dialog.", responses = {
-                                        @ApiResponse(responseCode = "200", description = "Files listed successfully", content = @Content(schema = @Schema(example = "{\"files\":[\"guids_de.txt\",\"guids_en.txt\"]}"))),
-                                        @ApiResponse(responseCode = "500", description = "Failed to list files")
-                        })
-        @GetMapping("/run-assessment/guid-files")
-        public Map<String, List<String>> listGuidFiles() throws IOException {
-                Map<String, List<String>> body = new LinkedHashMap<>();
-                body.put("files", service.listGuidFiles());
-                return body;
+                return Map.of(
+                        "algorithm", defaults[0],
+                        "runner", defaults[1]
+                );
         }
 
         // -------------------------------------------------------------------------
@@ -283,11 +258,18 @@ public class BenchmarkController {
         // Helper
         // -------------------------------------------------------------------------
 
-        private static Map<String, String> response(String status, String message) {
-                Map<String, String> body = new LinkedHashMap<>();
-                body.put("status", status);
-                body.put("message", message);
-                return body;
+        @Operation(summary = "List available guids_*.txt files", description = "Lists the guids_*.txt files present in the current "
+                        +
+                        "tenant's data directory, for selecting which sets to " +
+                        "assess. Used by the dashboard to populate the " +
+                        "checkable list shown in the run-assessment " +
+                        "confirmation dialog.", responses = {
+                                        @ApiResponse(responseCode = "200", description = "Files listed successfully", content = @Content(schema = @Schema(example = "{\"files\":[\"guids_de.txt\",\"guids_en.txt\"]}"))),
+                                        @ApiResponse(responseCode = "500", description = "Failed to list files")
+                        })
+        @GetMapping("/run-assessment/guid-files")
+        public Map<String, List<String>> listGuidFiles() throws IOException {
+                return Map.of("files", service.listGuidFiles());
         }
 
         @ExceptionHandler
