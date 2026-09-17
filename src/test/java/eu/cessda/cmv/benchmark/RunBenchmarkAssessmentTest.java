@@ -6,6 +6,8 @@
 
 package eu.cessda.cmv.benchmark;
 
+import eu.cessda.cmv.benchmark.config.BenchmarkProperties;
+import eu.cessda.cmv.benchmark.tenant.TenantProperties;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.UnrecognizedOptionException;
@@ -22,6 +24,7 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -189,10 +192,210 @@ class RunBenchmarkAssessmentTest {
         }
 
         @Test
+        void parseArgsRecognisesTenantShortOption() throws ParseException {
+                CommandLine cmd = RunBenchmarkAssessment.parseArgs(
+                                new String[] { "-t", "cessda" });
+                assertTrue(cmd.hasOption("tenant"));
+                assertEquals("cessda", cmd.getOptionValue("tenant"));
+        }
+
+        @Test
+        void parseArgsRecognisesTenantLongOption() throws ParseException {
+                CommandLine cmd = RunBenchmarkAssessment.parseArgs(
+                                new String[] { "--tenant", "oxford" });
+                assertTrue(cmd.hasOption("tenant"));
+                assertEquals("oxford", cmd.getOptionValue("tenant"));
+        }
+
+        @Test
+        void parseArgsWithNoTenantOptionLeavesTenantAbsent() throws ParseException {
+                CommandLine cmd = RunBenchmarkAssessment.parseArgs(
+                                new String[] { "-s", "https://custom.example.org/spreadsheet" });
+                assertFalse(cmd.hasOption("tenant"));
+        }
+
+        @Test
         void parseArgsThrowsOnUnrecognisedOption() {
                 assertThrows(UnrecognizedOptionException.class,
                                 () -> RunBenchmarkAssessment.parseArgs(
                                                 new String[] { "--no-such-option" }));
+        }
+
+        // ── resolveTenant ────────────────────────────────────────────────────────
+        // Exercises the same tenant-scoped resolution formula main() uses for
+        // -t/--tenant, without booting a Spring context: algorithm/runner from
+        // tenants.config.<tenantId> (with legacy alias fallback), and
+        // data/results directories scoped under {data,results}-dir/<tenantId>/,
+        // mirroring BenchmarkService's resolution for the REST API.
+
+        private static BenchmarkProperties benchmarkPropertiesWithDirs(String dataDir, String resultsDir) {
+                return new BenchmarkProperties(Path.of(dataDir), Path.of(resultsDir), null, null, null);
+        }
+
+        private static TenantProperties tenantPropertiesWith(String tenantId,
+                                                             TenantProperties.TenantConfig config) {
+                TenantProperties props = new TenantProperties();
+                props.setConfig(Map.of(tenantId, config));
+                return props;
+        }
+
+        @Test
+        void resolveTenantReturnsNullForUnconfiguredTenant() {
+                TenantProperties tenantProperties = new TenantProperties();
+                BenchmarkProperties benchmarkProperties = benchmarkPropertiesWithDirs("./guids", "./results");
+
+                RunBenchmarkAssessment.TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
+                                tenantProperties, benchmarkProperties, "no-such-tenant");
+
+                assertNull(resolution);
+        }
+
+        @Test
+        void resolveTenantUsesTenantAlgorithmAndRunner() {
+                TenantProperties.TenantConfig config = new TenantProperties.TenantConfig();
+                config.setAlgorithm(URI.create("https://example.org/algorithm"));
+                config.setRunner(URI.create("https://example.org/runner"));
+                config.setTitle("Example · Assessment Results");
+                config.setFooter("Example FAIR Benchmark Dashboard");
+
+                TenantProperties tenantProperties = tenantPropertiesWith("example", config);
+                BenchmarkProperties benchmarkProperties = benchmarkPropertiesWithDirs("./guids", "./results");
+
+                RunBenchmarkAssessment.TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
+                                tenantProperties, benchmarkProperties, "example");
+
+                assertNotNull(resolution);
+                assertAll(
+                                () -> assertEquals(URI.create("https://example.org/algorithm"), resolution.algorithm()),
+                                () -> assertEquals(URI.create("https://example.org/runner"), resolution.runner()));
+        }
+
+        @Test
+        void resolveTenantFallsBackToLegacyAliasFields() {
+                TenantProperties.TenantConfig config = new TenantProperties.TenantConfig();
+                config.setSpreadsheetUri(URI.create("https://example.org/legacy-algorithm"));
+                config.setChampionUri(URI.create("https://example.org/legacy-runner"));
+                config.setTitle("Legacy · Assessment Results");
+                config.setFooter("Legacy FAIR Benchmark Dashboard");
+
+                TenantProperties tenantProperties = tenantPropertiesWith("legacy", config);
+                BenchmarkProperties benchmarkProperties = benchmarkPropertiesWithDirs("./guids", "./results");
+
+                RunBenchmarkAssessment.TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
+                                tenantProperties, benchmarkProperties, "legacy");
+
+                assertNotNull(resolution);
+                assertAll(
+                                () -> assertEquals(URI.create("https://example.org/legacy-algorithm"), resolution.algorithm()),
+                                () -> assertEquals(URI.create("https://example.org/legacy-runner"), resolution.runner()));
+        }
+
+        @Test
+        void resolveTenantScopesDataAndResultsDirsUnderTenantId() {
+                TenantProperties.TenantConfig config = new TenantProperties.TenantConfig();
+                config.setAlgorithm(URI.create("https://example.org/algorithm"));
+                config.setRunner(URI.create("https://example.org/runner"));
+                config.setTitle("CESSDA · Assessment Results");
+                config.setFooter("CESSDA FAIR Benchmark Dashboard");
+
+                TenantProperties tenantProperties = tenantPropertiesWith("cessda", config);
+                BenchmarkProperties benchmarkProperties = benchmarkPropertiesWithDirs("./guids", "./results");
+
+                RunBenchmarkAssessment.TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
+                                tenantProperties, benchmarkProperties, "cessda");
+
+                Path expectedDataDir = benchmarkProperties.getDataDir().resolve("cessda").normalize();
+                Path expectedResultsDir = benchmarkProperties.getResultsDir().resolve("cessda").normalize();
+
+                assertNotNull(resolution);
+                assertAll(
+                                () -> assertEquals(expectedDataDir, resolution.dataDir()),
+                                () -> assertEquals(expectedResultsDir, resolution.resultsDir()));
+        }
+
+        // ── findOverwhelmedIndicatorNames ────────────────────────────────────────
+        // Champion can return HTTP 200 while one or more indicators inside the
+        // body read "result data not found" (with a null log) instead of a real
+        // result, meaning it was too overloaded to actually evaluate them.
+
+        @Test
+        void findOverwhelmedIndicatorNamesReturnsEmptyForNonJsonBody() {
+                List<String> found = RunBenchmarkAssessment.findOverwhelmedIndicatorNames("<html>not json</html>");
+                assertTrue(found.isEmpty());
+        }
+
+        @Test
+        void findOverwhelmedIndicatorNamesReturnsEmptyWhenNoIndicatorIsOverwhelmed() {
+                String body = """
+                                {
+                                  "test_results": {
+                                    "F1_GUID": { "result": "pass", "log": "Test passed." },
+                                    "A1_GUID": { "result": "indeterminate", "log": "Test result is indeterminate." }
+                                  }
+                                }
+                                """;
+                assertTrue(RunBenchmarkAssessment.findOverwhelmedIndicatorNames(body).isEmpty());
+        }
+
+        @Test
+        void findOverwhelmedIndicatorNamesDetectsSingleOverwhelmedIndicator() {
+                String body = """
+                                {
+                                  "test_results": {
+                                    "F1_GUID": { "result": "result data not found", "log": null },
+                                    "A1_GUID": { "result": "pass", "log": "Test passed." }
+                                  }
+                                }
+                                """;
+                assertEquals(List.of("F1_GUID"), RunBenchmarkAssessment.findOverwhelmedIndicatorNames(body));
+        }
+
+        @Test
+        void findOverwhelmedIndicatorNamesDetectsMultipleOverwhelmedIndicatorsInEncounterOrder() {
+                String body = """
+                                {
+                                  "test_results": {
+                                    "F1_GUID": { "result": "result data not found", "log": null },
+                                    "A1_GUID": { "result": "pass", "log": "Test passed." },
+                                    "I1_GUID": { "result": "result data not found", "log": null }
+                                  }
+                                }
+                                """;
+                assertEquals(List.of("F1_GUID", "I1_GUID"),
+                                RunBenchmarkAssessment.findOverwhelmedIndicatorNames(body));
+        }
+
+        @Test
+        void findOverwhelmedIndicatorNamesFollowsHintThroughArrayNesting() {
+                String body = """
+                                {
+                                  "test_results": [
+                                    { "result": "result data not found", "log": null }
+                                  ]
+                                }
+                                """;
+                assertEquals(List.of("test_results"), RunBenchmarkAssessment.findOverwhelmedIndicatorNames(body));
+        }
+
+        @Test
+        void findOverwhelmedIndicatorNamesUsesUnknownWhenNoNameHintAtRoot() {
+                String body = """
+                                { "result": "result data not found", "log": null }
+                                """;
+                assertEquals(List.of("(unknown)"), RunBenchmarkAssessment.findOverwhelmedIndicatorNames(body));
+        }
+
+        // ── OverwhelmedIndicatorException ────────────────────────────────────────
+
+        @Test
+        void overwhelmedIndicatorExceptionMessageListsIndicators() {
+                var exception = new OverwhelmedIndicatorException(
+                                "https://example.org/oai?identifier=abc", List.of("F1_GUID", "A1_GUID"));
+
+                assertAll(
+                                () -> assertTrue(exception.getMessage().contains("F1_GUID")),
+                                () -> assertTrue(exception.getMessage().contains("A1_GUID")),
+                                () -> assertEquals(List.of("F1_GUID", "A1_GUID"), exception.getIndicators()));
         }
 
         // ── Constructor ──────────────────────────────────────────────────────────

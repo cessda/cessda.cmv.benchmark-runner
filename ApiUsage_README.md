@@ -12,6 +12,8 @@ Interactive documentation is also available via Swagger UI at
 
 - [Authentication](#authentication)
 - [1. Fetch OAI-PMH Identifiers](#1-fetch-oai-pmh-identifiers)
+  - [Discover available sets](#discover-available-sets)
+  - [Get the default OAI-PMH base URL](#get-the-default-oai-pmh-base-url)
 - [2. Run Benchmark Assessment](#2-run-benchmark-assessment)
 - [3. Generate Dashboard Manifest](#3-generate-dashboard-manifest)
 - [4. Tenant and dashboard endpoints](#4-tenant-and-dashboard-endpoints)
@@ -58,6 +60,19 @@ HTTP 500.
 Fetches record identifiers from an OAI-PMH endpoint and writes one
 `guids_<set>.txt` file per set to the `benchmark-data`
 volume. All parameters are optional.
+
+The dashboard's "Fetch identifiers" page (linked from the button of
+the same name in the dashboard header) is a UI over exactly this
+workflow: it calls [`GET /api/fetch-identifiers/sets`](#discover-available-sets)
+to show the current tenant's live set list as a checkable list, then
+calls this endpoint with whichever sets are selected.
+
+When several sets are requested, a failure fetching one set does not
+abort the rest — each selected set succeeds or fails independently,
+and the response message reports both counts, e.g. `"Fetched
+identifiers for 8 of 10 set(s) -> /data (failed: sl-SI: <reason>;
+xx: <reason>)"`. The call only fails outright (HTTP 500) if every
+selected set failed.
 
 ### Fetch all default sets
 
@@ -132,11 +147,70 @@ curl -X POST \
 
 | Parameter        | Default value                                          |
 |------------------|--------------------------------------------------------|
-| `baseUrl`        | `https://datacatalogue.cessda.eu/oai-pmh/v0/oai`       |
+| `baseUrl`        | The current tenant's configured `oai-pmh-base-url`, falling back to `https://datacatalogue.cessda.eu/oai-pmh/v0/oai` if unset |
 | `verb`           | `ListIdentifiers`                                      |
 | `metadataPrefix` | `oai_ddi25`                                            |
 | `sets`           | `de,el,en,fi,fr,hr,nl,sl,sl-SI,sv`                     |
 | `fetchSet`       | *(none — fetches all sets when absent)*                |
+
+### Discover available sets
+
+`GET /api/fetch-identifiers/sets`
+
+Calls `verb=ListSets` against the given (or, if omitted, the current
+tenant's default) OAI-PMH endpoint and returns every set it reports,
+live — there is no static or cached list, so this always reflects
+exactly what that endpoint currently offers, including right after
+`baseUrl` is pointed at a different catalogue for this call only.
+
+```bash
+curl "http://localhost:8080/api/fetch-identifiers/sets" \
+  -H "X-API-Key: key-cessda"
+```
+
+Expected response:
+
+```json
+{
+  "sets": [
+    { "setSpec": "language:hr", "setName": "Language hr" },
+    { "setSpec": "language:en", "setName": "Language en" }
+  ]
+}
+```
+
+`setSpec` is the exact value to send back in the `sets` parameter of
+`POST /api/fetch-identifiers` above; `setName` is the endpoint's own
+human-readable label, safe to display as-is. An endpoint with no set
+hierarchy at all (OAI-PMH's `noSetHierarchy` error) is a valid answer
+and returns `{"sets": []}`, not an error.
+
+| Parameter | Default value                                                             |
+|-----------|---------------------------------------------------------------------------|
+| `baseUrl` | The current tenant's configured `oai-pmh-base-url`                        |
+| `verb`    | `ListIdentifiers` *(accepted for consistency; unused by ListSets itself)* |
+
+### Get the default OAI-PMH base URL
+
+`GET /api/fetch-identifiers/defaults`
+
+Returns the OAI-PMH base URL that would be used for the current
+tenant if `/api/fetch-identifiers` or `/api/fetch-identifiers/sets`
+were called with no `baseUrl` override — used by the dashboard to
+pre-fill the "Fetch identifiers" page's URL field.
+
+```bash
+curl "http://localhost:8080/api/fetch-identifiers/defaults" \
+  -H "X-API-Key: key-cessda"
+```
+
+Expected response:
+
+```json
+{
+  "baseUrl": "https://datacatalogue.cessda.eu/oai-pmh/v0/oai"
+}
+```
 
 ## 2. Run Benchmark Assessment
 

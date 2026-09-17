@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.jspecify.annotations.NullMarked;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -38,20 +39,36 @@ public class TenantAuthFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
 
-        // Exempt health checks, the static dashboard HTML/assets, and
-        // the SpringDoc/Swagger UI paths so the API documentation is
-        // accessible without an API key.
+        // Exempt health checks, the static dashboard HTML/assets, the
+        // per-page About_*.md user guides, and the SpringDoc/Swagger UI
+        // paths so the API documentation is accessible without an API
+        // key.
         //
         // Spring Boot's WelcomePageHandlerMapping internally forwards
         // "GET /" to "/index.html" before this filter evaluates the
         // request, so the servlet path seen here is "/index.html", not
         // "/" — both must be exempted explicitly. Only the /api/**
         // endpoints the dashboard JavaScript calls via fetch() require
-        // an API key; the HTML shell and its static assets do not.
-        return !(path.startsWith("/api") || path.startsWith("/results"));
+        // an API key; the HTML shell, its static assets, and the
+        // About_*.md guides (generic help text, not tenant data) do
+        // not. /results is not listed here, so it falls through to
+        // "requires auth" like /api — this allowlist form protects it
+        // implicitly rather than needing an explicit prefix check.
+        return path.startsWith("/actuator")
+            || path.startsWith("/static")
+            || path.equals("/")
+            || path.equals("/index.html")
+            || path.equals("/detail.html")
+            || path.equals("/fetch-identifiers.html")
+            || (path.startsWith("/About_") && path.endsWith(".md"))
+            || path.startsWith("/css/")
+            || path.startsWith("/js/")
+            || path.equals("/favicon.ico")
+            || path.startsWith("/api-docs");
     }
 
     @Override
+    @NullMarked
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain chain)

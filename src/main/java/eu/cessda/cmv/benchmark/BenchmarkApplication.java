@@ -11,9 +11,10 @@ import eu.cessda.cmv.benchmark.tenant.TenantProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
 
 @EnableConfigurationProperties({BenchmarkProperties.class, TenantProperties.class})
-@SpringBootApplication
+@SpringBootApplication(exclude = UserDetailsServiceAutoConfiguration.class)
 public class BenchmarkApplication {
 
     public static void main(String[] args) {

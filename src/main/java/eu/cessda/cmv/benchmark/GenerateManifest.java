@@ -28,6 +28,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -49,6 +50,34 @@ import java.util.logging.Logger;
  * {@code test_results}, {@code narratives}, {@code guidances}, and a
  * pre-computed {@code netScore}.</p>
  *
+ * <h2>Incremental caching</h2>
+ *
+ * <p>Every result file that has already been seen — unchanged in mtime and
+ * size since the last run — is served from a small per-set cache
+ * ({@code results/guids_<set>/.manifest-cache.json}) instead of being
+ * re-read and re-parsed. Only new or re-run (overwritten) files are parsed
+ * from scratch. This matters because sets grow into the tens of thousands
+ * of records, and without caching every run re-parses every result file
+ * ever produced, no matter how old.</p>
+ *
+ * <p>The cache stores each file's already-computed slim record, which
+ * already carries the normalised test IDs, computed {@code netScore}, and
+ * computed maturity level, so re-deriving that file's contribution to the
+ * aggregate stats on a cache hit costs nothing more than iterating a small
+ * in-memory object — no disk I/O beyond the one bulk read of the cache file
+ * itself.</p>
+ *
+ * <p>The cache is keyed to the tenant's FAIR-category map and maturity-level
+ * thresholds: if either has changed since the cache was written (an
+ * operator edited {@code tenants.config}), the whole cache is discarded and
+ * every file is reprocessed once, after which caching resumes as normal.
+ * This is what stops a config change from being silently ignored for
+ * records that happen not to have been re-run.</p>
+ *
+ * <p>A missing, corrupt, or unreadable cache is never a hard failure — it
+ * just means this run reprocesses everything, exactly as before caching
+ * existed.</p>
+ *
  * <h2>Usage</h2>
  * <pre>
  *   java -cp &lt;classpath&gt; cessda.cmv.benchmark.GenerateManifest [resultsDir]
@@ -67,6 +96,7 @@ import java.util.logging.Logger;
  *   results/
  *     summary.json
  *     guids_de/pages/page-001.json  page-002.json ...
+ *     guids_de/.manifest-cache.json  (internal — not read by the dashboard)
  *     guids_en/pages/page-001.json  ...
  * </pre>
  */
@@ -77,6 +107,15 @@ public class GenerateManifest {
     private static final int PAGE_SIZE = 200;
 
     private static final List<String> FAIR_CATEGORIES = List.of("F", "A", "I", "R");
+
+    /**
+     * Name of the per-set incremental cache file. Matched by the existing
+     * {@code results/**&#47;*.json} .gitignore pattern, so it never needs
+     * separate exclusion, and by the {@code *.json} glob used to list
+     * result files below, so it must always be filtered out explicitly
+     * there.
+     */
+    private static final String CACHE_FILENAME = ".manifest-cache.json";
 
     /**
      * Normalise a test ID to the canonical form used in tenant FAIR and
@@ -92,22 +131,18 @@ public class GenerateManifest {
 
     private static final Logger LOG = Logger.getLogger(GenerateManifest.class.getName());
 
-    /** 
-     * @param args
-     * @throws IOException
-     */
     // ── Entry point ──────────────────────────────────────────────────────────
-
+    @SuppressWarnings("java:S106")
     public static void main(String[] args) throws IOException {
         String resultsDirArg = args.length > 0 ? args[0] : "results";
         Path resultsDir = Paths.get(resultsDirArg).toAbsolutePath().normalize();
 
         if (!Files.isDirectory(resultsDir)) {
-            LOG.severe("Results directory not found: " + resultsDir);
+            System.err.println("Results directory not found: " + resultsDir);
             System.exit(1);
         }
 
-        LOG.info("Scanning " + resultsDir + " ...");
+        LOG.log(Level.INFO, "Scanning {0} ...", resultsDir);
         new GenerateManifest(resultsDir, Map.of(), List.of(), List.of(), List.of()).run();
     }
 
@@ -120,6 +155,16 @@ public class GenerateManifest {
     private final Set<String> maturityLevel1Tests;
     private final Set<String> maturityLevel2Tests;
     private final Set<String> maturityLevel3Tests;
+
+    /**
+     * Fingerprint of {@link #fairMap} and the three maturity level sets,
+     * used to invalidate the per-set cache whenever the tenant's FAIR /
+     * maturity configuration changes between runs.
+     */
+    private final String configFingerprint;
+
+    private int totalReused = 0;
+    private int totalReparsed = 0;
 
     // ── Constructor ──────────────────────────────────────────────────────────
 
@@ -134,29 +179,31 @@ public class GenerateManifest {
         this.maturityLevel1Tests = normaliseTestIdSet(maturityLevel1);
         this.maturityLevel2Tests = normaliseTestIdSet(maturityLevel2);
         this.maturityLevel3Tests = normaliseTestIdSet(maturityLevel3);
+        this.configFingerprint = computeConfigFingerprint(
+                this.fairMap, this.maturityLevel1Tests,
+                this.maturityLevel2Tests, this.maturityLevel3Tests);
     }
 
-    /** 
-     * @throws IOException
-     */
     // ── Main processing ──────────────────────────────────────────────────────
 
     public void run() throws IOException {
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(resultsDir)) {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(resultsDir,
+                entry -> entry.getFileName().startsWith("guids_") || Files.isDirectory(entry))
+        ) {
             for (Path entry : stream) {
-                if (!Files.isDirectory(entry)) continue;
-                String dirName = entry.getFileName().toString();
-                if (!dirName.startsWith("guids_")) continue;
-                String set = dirName.substring(6);
+                // Exclude "guids_" from the set name
+                String set = entry.getFileName().toString().substring(6);
                 processSet(set, entry);
             }
         }
         writeSummary();
         int totalRecords = setStats.values().stream().mapToInt(s -> s.records).sum();
-        LOG.info(String.format("Done. %d set(s), %d total records.", setStats.size(), totalRecords));
+        LOG.info(String.format(
+                "Done. %d set(s), %d total records (%d reused from cache, %d re-parsed).",
+                setStats.size(), totalRecords, totalReused, totalReparsed));
     }
 
-    /** 
+    /**
      * @param set
      * @param setDir
      * @throws IOException
@@ -170,7 +217,7 @@ public class GenerateManifest {
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(setDir, "*.json")) {
             for (Path f : stream) {
                 String name = f.getFileName().toString();
-                if (!name.startsWith("error_")) {
+                if (!name.startsWith("error_") && !name.equals(CACHE_FILENAME)) {
                     files.add(f);
                 }
             }
@@ -186,6 +233,10 @@ public class GenerateManifest {
         SetStats stats = new SetStats(fairMap);
         setStats.put(set, stats);
 
+        Path cacheFile = setDir.resolve(CACHE_FILENAME);
+        Map<String, CachedRecord> cache = loadCache(cacheFile);
+        Map<String, CachedRecord> newCache = new LinkedHashMap<>();
+
         // Create (or clear) the pages directory
         Path pagesDir = setDir.resolve("pages");
         Files.createDirectories(pagesDir);
@@ -195,61 +246,36 @@ public class GenerateManifest {
 
         List<ObjectNode> currentPage = new ArrayList<>(PAGE_SIZE);
         int pageNumber = 1;
+        int reused = 0;
+        int reparsed = 0;
 
         for (Path file : files) {
-            JsonNode root;
+            String name = file.getFileName().toString();
+
+            long mtime;
+            long size;
             try {
-                root = mapper.readTree(file);
-            } catch (JacksonException e) {
-                LOG.warning("  Skipping unreadable file: " + file.getFileName() + " — " + e.getMessage());
+                mtime = Files.getLastModifiedTime(file).toMillis();
+                size = Files.size(file);
+            } catch (IOException e) {
+                LOG.warning("  Skipping unreadable file: " + name + " — " + e.getMessage());
                 continue;
             }
 
-            // Aggregate stats
-            JsonNode testResults = root.path("test_results");
-            double netScore = 0.0;
-            java.util.Set<String> passedNorm = new java.util.HashSet<>();
-            if (testResults.isObject()) {
-                for (Map.Entry<String, JsonNode> entry : testResults.properties()) {
-                    String testId = entry.getKey().trim();
-                    JsonNode val = entry.getValue();
-                    String result = val.path("result").asString("indeterminate");
-                    netScore += val.path("weight").asDouble(0.0);
-                    stats.addTestResult(testId, result);
-                    if ("pass".equals(result)) {
-                        passedNorm.add(normTestId(testId));
-                    }
-                }
-            }
-            stats.records++;
+            CachedRecord cached = cache.get(name);
+            ObjectNode slim;
 
-            // Per-record maturity level
-            int recMaturity = computeMaturity(passedNorm);
-            stats.maturityCounts[recMaturity]++;
-
-            // Build slim page record
-            ObjectNode slim = mapper.createObjectNode();
-            String testedGuid = root.path("testedguid").asString("");
-            String identifier  = extractIdentifier(testedGuid);
-            slim.put("identifier",  identifier);
-            slim.put("testedguid",  testedGuid);
-            slim.put("netScore",    netScore);
-            slim.put("maturity",    recMaturity);
-            // Rewrite test_results with normalised test IDs.
-            // Keep all tests so tenant-specific mappings (e.g. Oxford) can
-            // still be categorised client-side via /api/config fair-map.
-            if (testResults.isObject()) {
-                ObjectNode normResults = mapper.createObjectNode();
-                for (Map.Entry<String, JsonNode> e : testResults.properties()) {
-                    String normId = normTestId(e.getKey());
-                    normResults.set(normId, e.getValue());
-                }
-                slim.set("test_results", normResults);
+            if (cached != null && cached.mtime == mtime && cached.size == size) {
+                slim = cached.slim;
+                reused++;
+            } else {
+                slim = buildSlimRecord(file);
+                if (slim == null) continue; // unreadable, already logged
+                reparsed++;
             }
-            JsonNode narratives = root.path("narratives");
-            if (narratives.isArray())             slim.set("narratives",   narratives);
-            JsonNode guidances  = root.path("guidances");
-            if (guidances.isArray())              slim.set("guidances",    guidances);
+
+            newCache.put(name, new CachedRecord(mtime, size, slim));
+            applyToStats(stats, slim);
 
             currentPage.add(slim);
             if (currentPage.size() >= PAGE_SIZE) {
@@ -263,14 +289,186 @@ public class GenerateManifest {
         }
 
         stats.pageCount = pageNumber - 1;
-        LOG.info(String.format("  -> %d page(s) written (%d records)", stats.pageCount, stats.records));
+        saveCache(cacheFile, newCache);
+        totalReused += reused;
+        totalReparsed += reparsed;
+
+        LOG.info(String.format(
+                "  -> %d page(s) written (%d records; %d reused from cache, %d re-parsed)",
+                stats.pageCount, stats.records, reused, reparsed));
     }
 
-    /** 
+    /**
+     * Parses one result file from scratch and builds its slim page record.
+     * Does not touch aggregate stats — call {@link #applyToStats} with the
+     * result, whether freshly built here or retrieved from the cache.
+     *
+     * @param file the result file to parse
+     * @return the slim record, or {@code null} if the file could not be
+     *         read (already logged)
+     */
+    private ObjectNode buildSlimRecord(Path file) {
+        JsonNode root;
+        try {
+            root = mapper.readTree(file);
+        } catch (JacksonException e) {
+            LOG.warning("  Skipping unreadable file: " + file.getFileName() + " — " + e.getMessage());
+            return null;
+        }
+
+        JsonNode testResults = root.path("test_results");
+        double netScore = 0.0;
+        Set<String> passedNorm = new HashSet<>();
+        ObjectNode normResults = mapper.createObjectNode();
+        if (testResults.isObject()) {
+            for (Map.Entry<String, JsonNode> entry : testResults.properties()) {
+                String testId = entry.getKey().trim();
+                JsonNode val = entry.getValue();
+                String result = val.path("result").asString("indeterminate");
+                netScore += val.path("weight").asDouble(0.0);
+                if ("pass".equals(result)) {
+                    passedNorm.add(normTestId(testId));
+                }
+                normResults.set(normTestId(testId), val);
+            }
+        }
+        int recMaturity = computeMaturity(passedNorm);
+
+        ObjectNode slim = mapper.createObjectNode();
+        String testedGuid = root.path("testedguid").asString("");
+        String identifier = extractIdentifier(testedGuid);
+        slim.put("identifier", identifier);
+        slim.put("testedguid", testedGuid);
+        slim.put("netScore", netScore);
+        slim.put("maturity", recMaturity);
+        // Rewrite test_results with normalised test IDs.
+        // Keep all tests so tenant-specific mappings (e.g. Oxford) can
+        // still be categorised client-side via /api/config fair-map.
+        if (testResults.isObject()) {
+            slim.set("test_results", normResults);
+        }
+        JsonNode narratives = root.path("narratives");
+        if (narratives.isArray()) slim.set("narratives", narratives);
+        JsonNode guidances = root.path("guidances");
+        if (guidances.isArray()) slim.set("guidances", guidances);
+        return slim;
+    }
+
+    /**
+     * Folds one record's already-computed slim data into the running set
+     * stats. Deliberately driven off the slim record rather than the
+     * original file, so a cache hit and a fresh parse update stats
+     * identically — the slim record already carries normalised test IDs
+     * and the computed maturity level.
+     */
+    private void applyToStats(SetStats stats, ObjectNode slim) {
+        stats.records++;
+        int recMaturity = slim.path("maturity").asInt(0);
+        stats.maturityCounts[recMaturity]++;
+
+        JsonNode testResults = slim.path("test_results");
+        if (testResults.isObject()) {
+            for (Map.Entry<String, JsonNode> entry : testResults.properties()) {
+                String testId = entry.getKey(); // already normalised
+                String result = entry.getValue().path("result").asString("indeterminate");
+                stats.addTestResult(testId, result);
+            }
+        }
+    }
+
+    // ── Incremental cache ───────────────────────────────────────────────────
+
+    private record CachedRecord(long mtime, long size, ObjectNode slim) {}
+
+    /**
+     * Loads the per-set cache, or returns an empty cache (forcing full
+     * reprocessing of every file this run) if it is missing, unreadable,
+     * or was built under a different FAIR / maturity configuration.
+     */
+    private Map<String, CachedRecord> loadCache(Path cacheFile) {
+        Map<String, CachedRecord> result = new LinkedHashMap<>();
+        if (!Files.isRegularFile(cacheFile)) {
+            return result;
+        }
+        try {
+            JsonNode root = mapper.readTree(cacheFile.toFile());
+            String storedFingerprint = root.path("configFingerprint").asString("");
+            if (!storedFingerprint.equals(configFingerprint)) {
+                LOG.info("  FAIR map / maturity configuration has changed since "
+                        + "the cache was built — reprocessing all files this run.");
+                return result;
+            }
+            JsonNode filesNode = root.path("files");
+            if (filesNode.isObject()) {
+                for (Map.Entry<String, JsonNode> entry : filesNode.properties()) {
+                    JsonNode v = entry.getValue();
+                    JsonNode slimNode = v.get("slim");
+                    if (!(slimNode instanceof ObjectNode slim)) continue;
+                    result.put(entry.getKey(), new CachedRecord(
+                            v.path("mtime").asLong(-1),
+                            v.path("size").asLong(-1),
+                            slim));
+                }
+            }
+        } catch (JacksonException e) {
+            LOG.warning("  Could not read manifest cache (" + cacheFile.getFileName()
+                    + ") — reprocessing all files this run: " + e.getMessage());
+            result.clear();
+        }
+        return result;
+    }
+
+    /**
+     * Writes the per-set cache. A failure here is never fatal to the run —
+     * worst case, the next run just reprocesses everything again.
+     */
+    private void saveCache(Path cacheFile, Map<String, CachedRecord> cache) {
+        try {
+            ObjectNode root = mapper.createObjectNode();
+            root.put("configFingerprint", configFingerprint);
+            ObjectNode filesNode = mapper.createObjectNode();
+            for (Map.Entry<String, CachedRecord> e : cache.entrySet()) {
+                ObjectNode entryNode = mapper.createObjectNode();
+                entryNode.put("mtime", e.getValue().mtime());
+                entryNode.put("size", e.getValue().size());
+                entryNode.set("slim", e.getValue().slim());
+                filesNode.set(e.getKey(), entryNode);
+            }
+            root.set("files", filesNode);
+            // Compact, not pretty-printed: this is an internal cache, never
+            // read by the dashboard or a human.
+            mapper.writeValue(cacheFile.toFile(), root);
+        } catch (JacksonException e) {
+            LOG.warning("  Could not write manifest cache (" + cacheFile.getFileName()
+                    + "): " + e.getMessage());
+        }
+    }
+
+    /**
+     * Builds a stable fingerprint of the FAIR map and maturity level sets,
+     * so a change to either invalidates every set's cache on the next run.
+     * Built from a canonical (sorted) string form so the same configuration
+     * always yields the same fingerprint regardless of map/set iteration
+     * order.
+     */
+    private static String computeConfigFingerprint(
+            Map<String, String> fairMap,
+            Set<String> level1, Set<String> level2, Set<String> level3) {
+        StringBuilder sb = new StringBuilder();
+        new TreeMap<>(fairMap).forEach((k, v) -> sb.append(k).append('=').append(v).append(';'));
+        sb.append('|');
+        new TreeSet<>(level1).forEach(t -> sb.append(t).append(','));
+        sb.append('|');
+        new TreeSet<>(level2).forEach(t -> sb.append(t).append(','));
+        sb.append('|');
+        new TreeSet<>(level3).forEach(t -> sb.append(t).append(','));
+        return Integer.toHexString(sb.toString().hashCode());
+    }
+
+    /**
      * @param pagesDir
      * @param pageNumber
      * @param records
-     * @throws IOException
      */
     // ── Output writers ───────────────────────────────────────────────────────
     private void writePage(Path pagesDir, int pageNumber, List<ObjectNode> records) {
@@ -297,7 +495,7 @@ public class GenerateManifest {
      * }
      * </pre>
      */
-    private void writeSummary() throws IOException {
+    private void writeSummary() {
         ObjectNode root = mapper.createObjectNode();
         root.put("generated", java.time.Instant.now().toString());
 
@@ -333,7 +531,7 @@ public class GenerateManifest {
         LOG.info("Wrote " + out);
     }
 
-    /** 
+    /**
      * @param s
      * @param includePageCount
      * @return ObjectNode
@@ -443,7 +641,7 @@ public class GenerateManifest {
 
     // ── Inner class ──────────────────────────────────────────────────────────
 
-    private class SetStats {
+    private static class SetStats {
         private final Map<String, String> fairMap;
         int records   = 0;
         int pass      = 0;

@@ -17,6 +17,7 @@
 package eu.cessda.cmv.benchmark;
 
 import eu.cessda.cmv.benchmark.config.BenchmarkProperties;
+import eu.cessda.cmv.benchmark.tenant.TenantProperties;
 import org.apache.commons.cli.*;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -43,7 +44,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -74,6 +78,11 @@ import java.util.logging.Logger;
  * <pre>
  *   -s, --spreadsheetUri &lt;uri&gt;   SpreadsheetUri URI (overrides benchmark.algorithm)
  *   -r, --championUri &lt;uri&gt;        championUri URI (overrides benchmark.runner)
+ *   -t, --tenant &lt;tenant-id&gt;  Resolve algorithm/runner and data/results
+ *                              directories from tenants.config.&lt;tenant-id&gt;
+ *                              (an explicit -s/-r still overrides the
+ *                              resolved algorithm/runner). Omit for the
+ *                              shared top-level benchmark.* defaults.
  *   -p, --process-file &lt;file&gt; Process a single named GUID file
  *   -P, --process-all         Process all guids_XX.txt files for the
  *                              default set list
@@ -87,6 +96,19 @@ import java.util.logging.Logger;
  * If none of the mode flags are given, the file specified by
  * {@code -f} / {@code --filename} (default: {@value #DEFAULT_GUIDS_FILE})
  * is processed (legacy single-file mode).
+ * </p>
+ *
+ * <p>
+ * {@code -t} / {@code --tenant} makes this CLI tenant-aware, resolving
+ * the same {@code tenants.config.<tenant-id>} entry the REST API uses
+ * ({@code algorithm}, {@code runner}, and per-tenant
+ * {@code {data,results}-dir/<tenant-id>/} subdirectories) instead of
+ * the shared top-level {@code benchmark.*} defaults. This is intended
+ * for driving a per-tenant run from an external pipeline (e.g. CI/QA
+ * automation) without going through the REST API. It is not accepted
+ * by {@link GetOaiPmhIdentifiers}'s own {@code -t} / {@code --tenant}
+ * flag, which only selects an output subdirectory and does not affect
+ * which OAI-PMH endpoint is queried.
  * </p>
  */
 public class RunBenchmarkAssessment {
@@ -133,6 +155,7 @@ public class RunBenchmarkAssessment {
     private static final String PROCESS_FILE_ARG = "process-file";
     private static final String GUID_ARG = "guid";
     private static final String FILENAME_ARG = "filename";
+    private static final String TENANT_ARG = "tenant";
     private static final String RESPSAVED = "Saved response for GUID ";
 
     private final Duration requestTimeout;
@@ -144,10 +167,35 @@ public class RunBenchmarkAssessment {
     // -----------------------------------------------------------------------
     private static final int MAX_RETRIES = 3;
     private static final Duration INITIAL_BACKOFF = Duration.ofMillis(2_000);
-    private final Path dataDir;
+
+    /**
+     * Substring Champion writes into an indicator's {@code "result"}
+     * field — with {@code "log": null} — when it was too overloaded to
+     * actually evaluate that indicator, rather than genuinely finding
+     * it indeterminate. A normal indeterminate result instead carries
+     * a populated {@code "log"} such as
+     * {@code "Test result is indeterminate."}. Unlike a 5xx response,
+     * this shows up on an otherwise-successful HTTP response, so it
+     * has to be detected by inspecting the response body rather than
+     * the status code.
+     */
+    private static final String OVERWHELMED_RESULT_MARKER = "result data not found";
+
+    /**
+     * Tenant-scoped data directory. Not {@code final}: standalone CLI
+     * use via {@link #main(String[])} may override it after
+     * construction when {@code -t} / {@code --tenant} resolves a
+     * tenant's own data directory.
+     */
+    private Path dataDir;
 
     private final HttpClient httpClient;
-    private final Path resultsDir;
+
+    /**
+     * Tenant-scoped results directory. Not {@code final} for the same
+     * reason as {@link #dataDir}.
+     */
+    private Path resultsDir;
     /**
      * URI of the benchmark assessment spreadsheetUri, supplied by the
      * caller (e.g. resolved per-tenant by {@code BenchmarkService}, or
@@ -334,13 +382,23 @@ public class RunBenchmarkAssessment {
      * is ready.
      *
      * <p>
-     * This standalone entry point uses the shared top-level
-     * {@code benchmark.algorithm} / {@code benchmark.runner}
-     * properties, not any tenant-specific {@code tenants.config}
-     * entry — the CLI has no concept of "the current tenant". For
-     * per-tenant runs, use the REST API
+     * By default this standalone entry point uses the shared top-level
+     * {@code benchmark.algorithm} / {@code benchmark.runner} properties
+     * and the shared top-level {@code benchmark.data-dir} /
+     * {@code benchmark.results-dir} directories, not any
+     * tenant-specific {@code tenants.config} entry. Passing {@code -t}
+     * / {@code --tenant <tenant-id>} switches to that tenant's own
+     * algorithm, runner, and {@code {data,results}-dir/<tenant-id>/}
+     * directories, resolved from {@code tenants.config.<tenant-id>} —
+     * mirroring exactly how the REST API
      * ({@code POST /api/run-assessment} with a tenant's
-     * {@code X-API-Key}) instead.
+     * {@code X-API-Key}) resolves them for that same tenant. An
+     * explicit {@code -s} / {@code -r} always overrides the resolved
+     * algorithm/runner, whether or not {@code -t} is also given, so a
+     * one-off algorithm/runner substitution for a tenant run is still
+     * possible. If {@code -t} names a tenant with no
+     * {@code tenants.config} entry, an error is logged and processing
+     * stops before anything is submitted.
      * </p>
      *
      * @param args command-line arguments
@@ -364,6 +422,33 @@ public class RunBenchmarkAssessment {
             System.out.printf("Error parsing arguments: %s%nUse -h or --help for usage information.", e.getMessage());
             System.exit(-1);
             return;
+        }
+
+        // Resolve tenant-scoped algorithm/runner/data-dir/results-dir
+        // first, if -t/--tenant was given. This runs before the -s/-r
+        // override blocks below, so an explicit -s/-r flag still always
+        // wins even for a tenant-scoped run — the same precedence
+        // BenchmarkService applies for the REST API (explicit override
+        // > tenant config > shared top-level default).
+        if (cmd.hasOption(TENANT_ARG)) {
+            String tenantId = cmd.getOptionValue(TENANT_ARG);
+            TenantResolution resolution = resolveTenant(
+                    ctx.getBean(TenantProperties.class),
+                    ctx.getBean(BenchmarkProperties.class),
+                    tenantId);
+            if (resolution == null) {
+                logger.log(Level.SEVERE,
+                        "Unknown tenant ''{0}'' — no tenants.config.{0} entry in application.yml.",
+                        tenantId);
+                return;
+            }
+
+            client.spreadsheetUri = resolution.algorithm();
+            client.championUri = resolution.runner();
+            client.dataDir = resolution.dataDir();
+            client.resultsDir = resolution.resultsDir();
+            logger.log(Level.INFO, "Using tenant ''{0}'' (data-dir: {1}, results-dir: {2})",
+                    new Object[]{tenantId, client.dataDir, client.resultsDir});
         }
 
         // Allow the CLI to override the injected championUri URI.
@@ -416,6 +501,54 @@ public class RunBenchmarkAssessment {
     }
 
     /**
+     * The algorithm, runner, and data/results directories resolved for
+     * one tenant by {@link #resolveTenant}.
+     *
+     * @param algorithm  the tenant's effective algorithm URI
+     * @param runner     the tenant's effective runner URI
+     * @param dataDir    {@code {data-dir}/{tenantId}/}, absolute and
+     *                   normalized
+     * @param resultsDir {@code {results-dir}/{tenantId}/}, absolute and
+     *                   normalized
+     */
+    record TenantResolution(URI algorithm, URI runner, Path dataDir, Path resultsDir) {
+    }
+
+    /**
+     * Resolves one tenant's algorithm, runner, and data/results
+     * directories from {@code tenants.config.<tenantId>}, mirroring
+     * {@code BenchmarkService}'s own {@code resolveAlgorithm} /
+     * {@code resolveRunner} / {@code tenantDataDir} /
+     * {@code tenantResultsDir} logic for the REST API.
+     *
+     * @param tenantProperties    the bound {@code tenants.*} properties
+     * @param benchmarkProperties the bound shared {@code benchmark.*}
+     *                            properties, used for their
+     *                            {@code data-dir} / {@code results-dir}
+     *                            roots only
+     * @param tenantId            the tenant ID to resolve (not an API
+     *                            key)
+     * @return the resolved algorithm/runner/directories, or
+     *         {@code null} if no {@code tenants.config.<tenantId>}
+     *         entry exists
+     */
+    static TenantResolution resolveTenant(
+            TenantProperties tenantProperties,
+            BenchmarkProperties benchmarkProperties,
+            String tenantId) {
+
+        TenantProperties.TenantConfig tenantConfig = tenantProperties.getConfigFor(tenantId);
+        if (tenantConfig == null) {
+            return null;
+        }
+        return new TenantResolution(
+                tenantConfig.effectiveAlgorithm(),
+                tenantConfig.effectiveRunner(),
+                benchmarkProperties.getDataDir().resolve(tenantId).normalize(),
+                benchmarkProperties.getResultsDir().resolve(tenantId).normalize());
+    }
+
+    /**
      * Derives an output subdirectory name from an input filename by
      * stripping the file extension.
      * For example, {@code "guids_de.txt"} → {@code "guids_de"}.
@@ -464,6 +597,12 @@ public class RunBenchmarkAssessment {
                 "Process a single named GUID file");
         options.addOption("g", GUID_ARG, true,
                 "Process a single GetRecord URL on the command line");
+        options.addOption("t", TENANT_ARG, true,
+                "Tenant ID (resolves algorithm/runner and data/results "
+                        + "directories from tenants.config.<tenant-id>; "
+                        + "an explicit -s/-r still overrides the resolved "
+                        + "algorithm/runner). Omit for the shared "
+                        + "top-level benchmark.* defaults.");
         options.addOption("h", "help", false, "Show this help message");
 
         CommandLineParser parser = new DefaultParser();
@@ -671,7 +810,11 @@ public class RunBenchmarkAssessment {
     /**
      * Submits a single GUID to the Champion API and saves the response.
      * This method implements a retry mechanism for transient errors such as
-     * timeouts, with exponential backoff between attempts.
+     * timeouts and 5xx responses — and, since Champion can also return
+     * HTTP 200 while silently failing to evaluate one or more indicators
+     * under load, a response body containing an
+     * {@link #OVERWHELMED_RESULT_MARKER overwhelmed indicator} — with
+     * exponential backoff between attempts.
      * <p>
      * If all attempts fail, a structured error file is saved with details of the
      * failure.
@@ -735,11 +878,25 @@ public class RunBenchmarkAssessment {
                     continue; // trigger next retry iteration
                 }
 
-                try {
-                    writeResponseBodyAsJson(jsonOutputPath, response.body(), guid, response.statusCode());
-                } catch (JacksonException e) {
-                    logger.log(Level.SEVERE, "Failed to save JSON file for GUID: {0}", e.toString());
+                List<String> overwhelmedIndicators =
+                        findOverwhelmedIndicatorNames(response.body());
+                if (!overwhelmedIndicators.isEmpty()) {
+                    // A dedicated exception type — rather than folding the
+                    // names into a generic IOException's message — lets
+                    // saveErrorFile write them as a structured
+                    // "overwhelmedIndicators" array (and errorType itself
+                    // becomes an unambiguous category), instead of
+                    // downstream analysis having to regex a free-text
+                    // message whose wording can (and has) changed.
+                    lastException = new OverwhelmedIndicatorException(guid, overwhelmedIndicators);
+                    logger.log(Level.SEVERE,
+                            "Attempt {0} failed for GUID {1}: HTTP {2} response body contained {3} overwhelmed indicator(s): {4}",
+                            new Object[]{attempt + 1, guid, response.statusCode(),
+                                    overwhelmedIndicators.size(), String.join(", ", overwhelmedIndicators)});
+                    continue; // trigger next retry iteration
                 }
+
+                writeResponseBodyAsJson(jsonOutputPath, response.body(), guid, response.statusCode());
 
                 logger.info(RESPSAVED + guid + " (Status: " + response.statusCode() + ", Time: " + elapsedMs + "ms)");
                 return; // success — exit retry loop
@@ -761,6 +918,74 @@ public class RunBenchmarkAssessment {
         logger.log(Level.SEVERE, PROCFAIL + "{0}: all {1} attempts failed", new Object[]{guid, MAX_RETRIES});
         saveErrorFile(guid, lastException, subDir);
         throw new IOException("All retries exhausted for GUID: " + guid, lastException);
+    }
+
+    /**
+     * Finds the name(s) of every indicator in a Champion response body
+     * whose {@code "result"} field carries
+     * {@link #OVERWHELMED_RESULT_MARKER}, i.e. Champion was overloaded
+     * and could not actually evaluate that indicator. Non-JSON or
+     * unparseable bodies yield an empty list, since
+     * {@link #writeResponseBodyAsJson} already handles those by
+     * wrapping the raw body rather than expecting indicator objects.
+     *
+     * @param responseBody raw HTTP response body
+     * @return the overwhelmed indicators' names (e.g. {@code "F1_GUID"}),
+     *         in encounter order; empty if none (or the body isn't
+     *         parseable JSON)
+     */
+    static List<String> findOverwhelmedIndicatorNames(String responseBody) {
+        try {
+            JsonNode jsonNode = mapper.readTree(responseBody);
+            return collectOverwhelmedIndicatorNames(jsonNode, null);
+        } catch (JacksonException e) {
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Recursively walks a parsed Champion response collecting the
+     * name of every indicator object whose {@code "result"} field
+     * contains {@link #OVERWHELMED_RESULT_MARKER}. Recursion (rather
+     * than assuming indicators sit at the top level) keeps this
+     * working across the differently-shaped responses different
+     * tenants' algorithms may return.
+     *
+     * <p>
+     * {@code nameHint} carries the most recently descended-through
+     * object key — the same approach a downstream Python analysis
+     * script independently uses to attribute a match to its test name
+     * — so the indicator's own key (e.g. {@code "F1_GUID"}) is what
+     * ends up in {@code found}, not one of its ancestors'.
+     * </p>
+     *
+     * @param node     current node being inspected
+     * @param nameHint the most recent object key descended through, or
+     *                 {@code null} at the root
+     * @return
+     */
+    static List<String> collectOverwhelmedIndicatorNames(JsonNode node, String nameHint) {
+        List<String> found = new ArrayList<>();
+        if (node == null || !(node.isObject() || node.isArray())) {
+            return found;
+        }
+        if (node.isObject()) {
+            JsonNode resultNode = node.get("result");
+            if (resultNode != null && resultNode.isString()
+                    && resultNode.asString().contains(OVERWHELMED_RESULT_MARKER)) {
+                found.add(nameHint != null ? nameHint : "(unknown)");
+            }
+            for (Map.Entry<String, JsonNode> field : node.properties()) {
+                found.addAll(collectOverwhelmedIndicatorNames(field.getValue(), field.getKey()));
+            }
+        } else {
+            // Arrays carry no key of their own — propagate the hint
+            // from whichever object key held this array.
+            for (JsonNode child : node) {
+                found.addAll(collectOverwhelmedIndicatorNames(child, nameHint));
+            }
+        }
+        return found;
     }
 
     /**
@@ -886,19 +1111,34 @@ public class RunBenchmarkAssessment {
      * Spring configuration used only by {@link #main(String[])} to
      * load {@code application.yml} and bind the shared
      * {@code benchmark.algorithm} / {@code benchmark.runner}
-     * properties for standalone command-line use.
+     * properties, plus {@code tenants.config}, for standalone
+     * command-line use.
      *
      * <p>
      * This is deliberately separate from {@link RunBenchmarkAssessment}
      * itself, which is never a Spring bean — see the class-level
      * Javadoc for why a shared singleton is incompatible with
      * multi-tenancy. Standalone CLI use has no concept of "the current
-     * tenant", so it falls back to the shared top-level
+     * tenant" unless {@code -t} / {@code --tenant} is given, in which
+     * case {@link #main(String[])} resolves that tenant's algorithm,
+     * runner, and data/results directories from {@code tenants.config}
+     * itself, the same way {@code BenchmarkService} does for the REST
+     * API. Without {@code -t}, it falls back to the shared top-level
      * {@code benchmark.algorithm} / {@code benchmark.runner}
-     * properties rather than any {@code tenants.config} entry. Both
-     * properties default to an empty string if absent, rather than
-     * failing context startup, since a CLI user may always supply
-     * {@code -s} / {@code -r} instead.
+     * properties. Both of those top-level properties default to an
+     * empty string if absent, rather than failing context startup,
+     * since a CLI user may always supply {@code -s} / {@code -r}
+     * instead.
+     * </p>
+     *
+     * <p>
+     * Registering {@link TenantProperties} here means the CLI now also
+     * performs the same bean validation the REST API's context does:
+     * if {@code application.yml} configures any {@code tenants.config}
+     * entry missing a {@code title} or {@code footer}, context startup
+     * fails — even for a run that never passes {@code -t}. Every
+     * tenant configured for the REST API should already satisfy this,
+     * since it is validated there too.
      * </p>
      *
      * <p>
@@ -911,21 +1151,28 @@ public class RunBenchmarkAssessment {
      * the classpath (this one and {@code BenchmarkApplication}) makes
      * that auto-discovery ambiguous and fails every slice test in the
      * application. No {@code @ComponentScan} is needed here either,
-     * since this configuration declares its one {@code @Bean} method
-     * directly.
+     * since {@link TenantProperties} is registered explicitly via
+     * {@code @EnableConfigurationProperties} rather than discovered as
+     * a {@code @Component}, and this configuration declares its one
+     * {@code @Bean} method directly.
      * </p>
      */
     @Configuration
-    @EnableConfigurationProperties(BenchmarkProperties.class)
+    @EnableConfigurationProperties({BenchmarkProperties.class, TenantProperties.class})
     @EnableAutoConfiguration
     static class CliConfig {
 
         @Bean
         RunBenchmarkAssessment runBenchmarkAssessment(
                 BenchmarkProperties benchmarkProperties) {
-            return new RunBenchmarkAssessment(
+            RunBenchmarkAssessment runner = new RunBenchmarkAssessment(
                     benchmarkProperties.getAlgorithm(),
                     benchmarkProperties.getRunner());
+            if (benchmarkProperties.getBackoffBetweenProcessGuidMs() != null) {
+                runner.setBackoffBetweenProcessGuid(
+                        Duration.ofMillis(benchmarkProperties.getBackoffBetweenProcessGuidMs()));
+            }
+            return runner;
         }
     }
 

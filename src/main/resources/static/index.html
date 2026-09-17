@@ -123,7 +123,7 @@
     }
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(6, 1fr);
       gap: 1px;
       background: var(--border2);
       border: 1px solid var(--border2);
@@ -513,6 +513,91 @@
       opacity: 0.6;
       cursor: not-allowed;
     }
+
+    /* ── About / user guide modal ── */
+    #about-modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(28, 25, 23, 0.45);
+      z-index: 100;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 20px;
+      overflow-y: auto;
+    }
+    #about-modal-card {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+      padding: 32px 36px;
+      max-width: 640px;
+      width: 100%;
+      position: relative;
+    }
+    #about-modal-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1px solid var(--border2);
+      background: var(--bg);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1;
+    }
+    #about-modal-close:hover { background: var(--border); color: var(--text); }
+    #about-modal-title {
+      font-family: 'Fraunces', serif;
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      padding-right: 24px;
+    }
+    #about-modal-body { font-size: 12.5px; line-height: 1.7; color: var(--text); }
+    #about-modal-body h2 {
+      font-family: 'Fraunces', serif;
+      font-size: 15px;
+      font-weight: 700;
+      margin: 22px 0 8px;
+    }
+    #about-modal-body h2:first-child { margin-top: 0; }
+    #about-modal-body h3 {
+      font-size: 12px;
+      font-weight: 700;
+      margin: 16px 0 6px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    #about-modal-body p { margin-bottom: 10px; color: var(--muted); }
+    #about-modal-body ul, #about-modal-body ol { margin: 0 0 12px 20px; color: var(--muted); }
+    #about-modal-body li { margin-bottom: 4px; }
+    #about-modal-body code {
+      background: var(--bg);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: inherit;
+      border: 1px solid var(--border);
+      font-size: 11.5px;
+    }
+    #about-modal-body strong { color: var(--text); font-weight: 600; }
+    #about-modal-body a { color: var(--accent); }
+    #about-modal-body blockquote {
+      border-left: 3px solid var(--accent);
+      background: var(--accent-bg);
+      padding: 10px 14px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+    #about-modal-body blockquote p { color: var(--text); margin-bottom: 0; }
+    @media (max-width: 700px) {
+      #about-modal-card { padding: 24px 20px; }
+    }
   </style>
 </head>
 <body>
@@ -524,7 +609,9 @@
   </div>
   <div class="header-right">
     <span id="last-updated" aria-live="polite"></span>
+    <button class="reload-btn" id="about-btn" onclick="openAboutModal()">ⓘ About</button>
     <button class="reload-btn" id="change-key-btn" style="display:none" onclick="onChangeKeyClick()">Change key</button>
+    <button class="reload-btn" id="fetch-identifiers-btn" style="display:none" onclick="location.href='fetch-identifiers.html'">⤓ Fetch identifiers</button>
     <button class="reload-btn" id="generate-btn" style="display:none" onclick="onGenerateManifestClick()">⚙ Generate manifest</button>
     <button class="reload-btn" id="run-assessment-btn" style="display:none" onclick="onRunAssessmentClick()">▶ Run assessment</button>
     <button class="reload-btn" onclick="loadData()">↻ Refresh</button>
@@ -612,6 +699,11 @@
         <p class="kpi-sub" id="kpi-fail-sub"></p>
       </div>
       <div class="kpi-cell">
+        <p class="kpi-label">Indeterminate Rate</p>
+        <p class="kpi-value indet" id="kpi-indet-rate">—</p>
+        <p class="kpi-sub" id="kpi-indet-sub"></p>
+      </div>
+      <div class="kpi-cell">
         <p class="kpi-label">Sets</p>
         <p class="kpi-value" id="kpi-sets">—</p>
         <p class="kpi-sub">sets</p>
@@ -687,6 +779,14 @@
   <span>Results served via <code>API/</code></span>
 </footer>
 
+<div id="about-modal-backdrop" onclick="if (event.target === this) closeAboutModal()">
+  <div id="about-modal-card" role="dialog" aria-modal="true" aria-labelledby="about-modal-title">
+    <button id="about-modal-close" onclick="closeAboutModal()" aria-label="Close user guide">✕</button>
+    <h2 id="about-modal-title">User Guide</h2>
+    <div id="about-modal-body"><p>Loading…</p></div>
+  </div>
+</div>
+
 <script>
   // ── Tenant config (fetched from /api/config after key entry) ──────────────
   // Both maps start empty; init() populates them once the key is known.
@@ -733,6 +833,7 @@
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('error-msg').style.display = 'none';
     document.getElementById('change-key-btn').style.display = 'none';
+    document.getElementById('fetch-identifiers-btn').style.display = 'none';
     document.getElementById('generate-btn').style.display = 'none';
     document.getElementById('run-assessment-btn').style.display = 'none';
     document.getElementById('key-gate').style.display = 'flex';
@@ -743,6 +844,7 @@
     document.getElementById('key-gate').style.display = 'none';
     document.getElementById('key-gate-error').style.display = 'none';
     document.getElementById('change-key-btn').style.display = 'inline-block';
+    document.getElementById('fetch-identifiers-btn').style.display = 'inline-block';
     document.getElementById('generate-btn').style.display = 'inline-block';
     document.getElementById('run-assessment-btn').style.display = 'inline-block';
   }
@@ -1095,6 +1197,8 @@
     document.getElementById('kpi-pass-sub').textContent  = `${ov.pass.toLocaleString()} test passes`;
     document.getElementById('kpi-fail-rate').textContent = pct(ov.fail, totalTests) + '%';
     document.getElementById('kpi-fail-sub').textContent  = `${ov.fail.toLocaleString()} test failures`;
+    document.getElementById('kpi-indet-rate').textContent = pct(ov.indet, totalTests) + '%';
+    document.getElementById('kpi-indet-sub').textContent  = `${ov.indet.toLocaleString()} indeterminate`;
     document.getElementById('kpi-sets').textContent     = Object.keys(sets).length;
 
     for (const cat of ['F','A','I','R']) {
@@ -1206,8 +1310,104 @@
       <pre style="margin-top:12px;font-size:11px;text-align:left;display:inline-block;">${msg}</pre>`;
   }
 
+  // ── About / user guide modal ────────────────────────────────────────────
+  // The guide is a plain Markdown file served as a static resource
+  // (About_index.md), fetched without an API key — it is generic help
+  // text, not tenant data, so it is exempted from TenantAuthFilter the
+  // same way index.html itself is.
+  let aboutLoaded = false;
+
+  function openAboutModal() {
+    document.getElementById('about-modal-backdrop').style.display = 'flex';
+    document.getElementById('about-modal-close').focus();
+    if (!aboutLoaded) loadAboutContent();
+  }
+
+  function closeAboutModal() {
+    document.getElementById('about-modal-backdrop').style.display = 'none';
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape'
+        && document.getElementById('about-modal-backdrop').style.display === 'flex') {
+      closeAboutModal();
+    }
+  });
+
+  async function loadAboutContent() {
+    const bodyEl = document.getElementById('about-modal-body');
+    try {
+      const res = await fetch('About_index.md');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const md = await res.text();
+      bodyEl.innerHTML = renderMarkdown(md);
+      aboutLoaded = true;
+    } catch (e) {
+      bodyEl.innerHTML = `<p style="color:var(--fail)">Could not load the user guide (${e.message}).</p>`;
+    }
+  }
+
+  // Minimal Markdown -> HTML renderer, deliberately limited to the
+  // subset the About_*.md guides actually use (## / ### headings,
+  // paragraphs, - and 1. lists, **bold**, `code`, [links](url), and
+  // "> " blockquotes as callouts) rather than pulling in a general
+  // Markdown library.
+  function renderMarkdown(md) {
+    function esc(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function inline(text) {
+      return esc(text)
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+    }
+
+    const lines = md.replace(/\r\n/g, '\n').split('\n');
+    let html = '';
+    let listType = null;
+    let inQuote = false;
+    let para = [];
+
+    const flushPara = () => {
+      if (para.length) { html += `<p>${inline(para.join(' '))}</p>`; para = []; }
+    };
+    const closeList = () => { if (listType) { html += `</${listType}>`; listType = null; } };
+    const closeQuote = () => { if (inQuote) { html += '</blockquote>'; inQuote = false; } };
+
+    for (const raw of lines) {
+      const line = raw.trimEnd();
+      let m;
+      if (!line.trim()) {
+        flushPara(); closeList(); closeQuote();
+      } else if ((m = line.match(/^###\s+(.*)/))) {
+        flushPara(); closeList(); closeQuote();
+        html += `<h3>${inline(m[1])}</h3>`;
+      } else if ((m = line.match(/^##\s+(.*)/))) {
+        flushPara(); closeList(); closeQuote();
+        html += `<h2>${inline(m[1])}</h2>`;
+      } else if ((m = line.match(/^-\s+(.*)/))) {
+        flushPara(); closeQuote();
+        if (listType !== 'ul') { closeList(); html += '<ul>'; listType = 'ul'; }
+        html += `<li>${inline(m[1])}</li>`;
+      } else if ((m = line.match(/^\d+\.\s+(.*)/))) {
+        flushPara(); closeQuote();
+        if (listType !== 'ol') { closeList(); html += '<ol>'; listType = 'ol'; }
+        html += `<li>${inline(m[1])}</li>`;
+      } else if ((m = line.match(/^>\s?(.*)/))) {
+        flushPara(); closeList();
+        if (!inQuote) { html += '<blockquote>'; inQuote = true; }
+        html += `<p>${inline(m[1])}</p>`;
+      } else {
+        closeList(); closeQuote();
+        para.push(line.trim());
+      }
+    }
+    flushPara(); closeList(); closeQuote();
+    return html;
+  }
+
   init();
 </script>
 </body>
 </html>
-

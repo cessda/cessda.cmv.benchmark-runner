@@ -124,9 +124,26 @@
 
     .header-right {
       margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 14px;
       color: var(--muted);
       font-size: 12px;
     }
+
+    .about-btn {
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .about-btn:hover { background: var(--border); }
 
     main {
       max-width: 1280px;
@@ -878,6 +895,8 @@
       padding: 20px 48px;
       color: var(--muted);
       font-size: 12px;
+      display: flex;
+      justify-content: space-between;
       background: var(--surface);
     }
 
@@ -1011,6 +1030,8 @@
 
       footer {
         padding: 16px 20px;
+        flex-direction: column;
+        gap: 4px;
       }
 
       .summary-strip {
@@ -1020,7 +1041,91 @@
       .fair-row {
         grid-template-columns: repeat(2, 1fr);
       }
+
+      #about-modal-card { padding: 24px 20px; }
     }
+
+    /* ── About / user guide modal ── */
+    #about-modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(28, 25, 23, 0.45);
+      z-index: 100;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 20px;
+      overflow-y: auto;
+    }
+    #about-modal-card {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+      padding: 32px 36px;
+      max-width: 640px;
+      width: 100%;
+      position: relative;
+    }
+    #about-modal-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1px solid var(--border2);
+      background: var(--bg);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1;
+    }
+    #about-modal-close:hover { background: var(--border); color: var(--text); }
+    #about-modal-title {
+      font-family: 'Fraunces', serif;
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      padding-right: 24px;
+    }
+    #about-modal-body { font-size: 12.5px; line-height: 1.7; color: var(--text); }
+    #about-modal-body h2 {
+      font-family: 'Fraunces', serif;
+      font-size: 15px;
+      font-weight: 700;
+      margin: 22px 0 8px;
+    }
+    #about-modal-body h2:first-child { margin-top: 0; }
+    #about-modal-body h3 {
+      font-size: 12px;
+      font-weight: 700;
+      margin: 16px 0 6px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    #about-modal-body p { margin-bottom: 10px; color: var(--muted); }
+    #about-modal-body ul, #about-modal-body ol { margin: 0 0 12px 20px; color: var(--muted); }
+    #about-modal-body li { margin-bottom: 4px; }
+    #about-modal-body code {
+      background: var(--bg);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: inherit;
+      border: 1px solid var(--border);
+      font-size: 11.5px;
+    }
+    #about-modal-body strong { color: var(--text); font-weight: 600; }
+    #about-modal-body a { color: var(--accent); }
+    #about-modal-body blockquote {
+      border-left: 3px solid var(--accent);
+      background: var(--accent-bg);
+      padding: 10px 14px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+    #about-modal-body blockquote p { color: var(--text); margin-bottom: 0; }
   </style>
 </head>
 
@@ -1030,7 +1135,10 @@
     <a href="index.html" class="back-btn">← Dashboard</a>
     <span class="set-badge" id="hdr-set">—</span>
     <h1 id="hdr-title">Set Detail</h1>
-    <div class="header-right" id="hdr-count"></div>
+    <div class="header-right">
+      <span id="hdr-count"></span>
+      <button class="about-btn" id="about-btn" onclick="openAboutModal()">ⓘ About</button>
+    </div>
   </header>
 
   <main>
@@ -1167,7 +1275,10 @@
     </div>
   </main>
 
-  <footer>CESSDA FAIR Benchmark · <span id="footer-set"></span> detail view</footer>
+  <footer>
+    <span id="footer-text">FAIR Benchmark Dashboard</span>
+    <span><span id="footer-set"></span> detail view</span>
+  </footer>
 
   <!-- Side panel -->
   <div class="detail-overlay" id="overlay" onclick="closePanel()"></div>
@@ -1175,6 +1286,14 @@
     aria-labelledby="panel-heading">
     <button class="panel-close" onclick="closePanel()" aria-label="Close detail panel">✕</button>
     <div id="panel-content"></div>
+  </div>
+
+  <div id="about-modal-backdrop" onclick="if (event.target === this) closeAboutModal()">
+    <div id="about-modal-card" role="dialog" aria-modal="true" aria-labelledby="about-modal-title">
+      <button id="about-modal-close" onclick="closeAboutModal()" aria-label="Close user guide">✕</button>
+      <h2 id="about-modal-title">User Guide</h2>
+      <div id="about-modal-body"><p>Loading…</p></div>
+    </div>
   </div>
 
   <script>
@@ -1704,6 +1823,24 @@
     // Fetch tenant config (set-names, fair-map) before rendering anything that
     // depends on those maps.  Header text and page title are set here so they
     // always reflect the fetched names.
+
+    // Populates the footer with the current tenant's own branding text,
+    // the same way index.html (and fetch-identifiers.html) do -- this
+    // page previously showed a hardcoded "CESSDA FAIR Benchmark" string
+    // regardless of which tenant's key was in use.
+    async function loadBranding() {
+      try {
+        const res = await apiFetch('/api/tenant/branding');
+        if (!res.ok) return;
+        const branding = await res.json();
+        if (branding.footer) {
+          document.getElementById('footer-text').textContent = branding.footer;
+        }
+      } catch (e) {
+        console.warn('Could not load /api/tenant/branding:', e.message);
+      }
+    }
+
     async function init() {
       // Resolve set from URL first
       (function initSet() {
@@ -1722,6 +1859,8 @@
         return;
       }
 
+      loadBranding();
+
       try {
         const res = await apiFetch('/api/config');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1739,6 +1878,103 @@
       document.title = `FAIR Benchmark · ${SET_NAMES[set] || set} detail view`;
 
       loadData();
+    }
+
+    // ── About / user guide modal ────────────────────────────────────────────
+    // The guide is a plain Markdown file served as a static resource
+    // (About_detail.md), fetched without an API key -- it is generic help
+    // text, not tenant data, so it is exempted from TenantAuthFilter the
+    // same way detail.html itself is.
+    let aboutLoaded = false;
+
+    function openAboutModal() {
+      document.getElementById('about-modal-backdrop').style.display = 'flex';
+      document.getElementById('about-modal-close').focus();
+      if (!aboutLoaded) loadAboutContent();
+    }
+
+    function closeAboutModal() {
+      document.getElementById('about-modal-backdrop').style.display = 'none';
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape'
+          && document.getElementById('about-modal-backdrop').style.display === 'flex') {
+        closeAboutModal();
+      }
+    });
+
+    async function loadAboutContent() {
+      const bodyEl = document.getElementById('about-modal-body');
+      try {
+        const res = await fetch('About_detail.md');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const md = await res.text();
+        bodyEl.innerHTML = renderMarkdown(md);
+        aboutLoaded = true;
+      } catch (e) {
+        bodyEl.innerHTML = `<p style="color:var(--fail)">Could not load the user guide (${e.message}).</p>`;
+      }
+    }
+
+    // Minimal Markdown -> HTML renderer, deliberately limited to the
+    // subset the About_*.md guides actually use (## / ### headings,
+    // paragraphs, - and 1. lists, **bold**, `code`, [links](url), and
+    // "> " blockquotes as callouts) rather than pulling in a general
+    // Markdown library.
+    function renderMarkdown(md) {
+      function esc(s) {
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+      function inline(text) {
+        return esc(text)
+          .replace(/`([^`]+)`/g, '<code>$1</code>')
+          .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+          .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+      }
+
+      const lines = md.replace(/\r\n/g, '\n').split('\n');
+      let html = '';
+      let listType = null;
+      let inQuote = false;
+      let para = [];
+
+      const flushPara = () => {
+        if (para.length) { html += `<p>${inline(para.join(' '))}</p>`; para = []; }
+      };
+      const closeList = () => { if (listType) { html += `</${listType}>`; listType = null; } };
+      const closeQuote = () => { if (inQuote) { html += '</blockquote>'; inQuote = false; } };
+
+      for (const raw of lines) {
+        const line = raw.trimEnd();
+        let m;
+        if (!line.trim()) {
+          flushPara(); closeList(); closeQuote();
+        } else if ((m = line.match(/^###\s+(.*)/))) {
+          flushPara(); closeList(); closeQuote();
+          html += `<h3>${inline(m[1])}</h3>`;
+        } else if ((m = line.match(/^##\s+(.*)/))) {
+          flushPara(); closeList(); closeQuote();
+          html += `<h2>${inline(m[1])}</h2>`;
+        } else if ((m = line.match(/^-\s+(.*)/))) {
+          flushPara(); closeQuote();
+          if (listType !== 'ul') { closeList(); html += '<ul>'; listType = 'ul'; }
+          html += `<li>${inline(m[1])}</li>`;
+        } else if ((m = line.match(/^\d+\.\s+(.*)/))) {
+          flushPara(); closeQuote();
+          if (listType !== 'ol') { closeList(); html += '<ol>'; listType = 'ol'; }
+          html += `<li>${inline(m[1])}</li>`;
+        } else if ((m = line.match(/^>\s?(.*)/))) {
+          flushPara(); closeList();
+          if (!inQuote) { html += '<blockquote>'; inQuote = true; }
+          html += `<p>${inline(m[1])}</p>`;
+        } else {
+          closeList(); closeQuote();
+          para.push(line.trim());
+        }
+      }
+      flushPara(); closeList(); closeQuote();
+      return html;
     }
 
     init();
