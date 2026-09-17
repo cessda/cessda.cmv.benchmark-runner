@@ -58,7 +58,7 @@ public class BenchmarkService {
      * @return a two-element array: {@code [algorithm, runner]}.
      */
     public URI[] getDefaultAlgorithmAndRunner() {
-        return new URI[]{resolveAlgorithm(null), resolveRunner(null)};
+        return new URI[]{resolveAlgorithm(), resolveRunner()};
     }
 
     /**
@@ -124,10 +124,7 @@ public class BenchmarkService {
      * resolves the current tenant's configured
      * {@code tenants.config.<tenantId>.algorithm} value.</p>
      */
-    private URI resolveAlgorithm(URI requestedOverride) {
-        if (requestedOverride != null) {
-            return requestedOverride;
-        }
+    private URI resolveAlgorithm() {
         URI tenantValue = currentTenantConfig().effectiveAlgorithm();
         if (tenantValue != null) {
             return tenantValue;
@@ -147,10 +144,7 @@ public class BenchmarkService {
      * resolves the current tenant's configured
      * {@code tenants.config.<tenantId>.runner} value.</p>
      */
-    private URI resolveRunner(URI requestedOverride) {
-        if (requestedOverride != null) {
-            return requestedOverride;
-        }
+    private URI resolveRunner() {
         URI tenantValue = currentTenantConfig().effectiveRunner();
         if (tenantValue != null) {
             return tenantValue;
@@ -316,8 +310,8 @@ public class BenchmarkService {
         Files.createDirectories(tDataDir);
         Files.createDirectories(tResultsDir);
 
-        URI resolvedAlgorithm = resolveAlgorithm(spreadsheetUri);
-        URI resolvedRunner = resolveRunner(runnerUri);
+        URI resolvedAlgorithm = spreadsheetUri != null ? spreadsheetUri : resolveAlgorithm();
+        URI resolvedRunner = runnerUri != null ? runnerUri : resolveRunner();
 
         // Pass tenant-scoped dirs and tenant-scoped algorithm/runner
         // explicitly — no system property side effects, and no two
