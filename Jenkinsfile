@@ -70,5 +70,13 @@ pipeline {
             }
             when { branch 'main' }
         }
+        stage('Push Docker Image') {
+            steps {
+                sh "gcloud auth configure-docker ${ARTIFACT_REGISTRY_HOST}"
+                sh "docker push ${imageTag}"
+                sh "gcloud artifacts docker tags add ${imageTag} ${DOCKER_ARTIFACT_REGISTRY}/${productName}-${moduleName}:latest"
+            }
+            when { branch 'main' }
+        }
     }
 }
