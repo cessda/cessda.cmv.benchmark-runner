@@ -17,16 +17,19 @@
 
 package eu.cessda.cmv.benchmark;
 
+import eu.cessda.cmv.benchmark.models.*;
 import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -104,7 +107,7 @@ public class GenerateManifest {
 
     // ── Constants ────────────────────────────────────────────────────────────
 
-    private static final int PAGE_SIZE = 200;
+    public static final int PAGE_SIZE = 200;
 
     private static final List<String> FAIR_CATEGORIES = List.of("F", "A", "I", "R");
 
@@ -116,6 +119,7 @@ public class GenerateManifest {
      * there.
      */
     private static final String CACHE_FILENAME = ".manifest-cache.json";
+    static final String IDENTIFIER_PARAMETER = "identifier=";
 
     /**
      * Normalise a test ID to the canonical form used in tenant FAIR and
@@ -186,9 +190,32 @@ public class GenerateManifest {
 
     // ── Main processing ──────────────────────────────────────────────────────
 
+    /**
+     * Extracts the bare identifier from an OAI-PMH GetRecord URL.
+     * {@code https://…?verb=GetRecord&…&identifier=abc123} -> {@code abc123}
+     */
+    private static String extractIdentifier(URI url) {
+        if (url == null) {
+            return null;
+        }
+
+        // Attempt to extract the identifier from the query
+        String query = url.getQuery();
+        if (query != null) {
+            int idx = query.lastIndexOf(IDENTIFIER_PARAMETER);
+            if (idx != -1) {
+                String after = query.substring(idx + IDENTIFIER_PARAMETER.length());
+                int amp = after.indexOf('&');
+                return amp != -1 ? after.substring(0, amp) : after;
+            }
+        }
+
+        return url.toString();
+    }
+
     public void run() throws IOException {
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(resultsDir,
-                entry -> entry.getFileName().startsWith("guids_") || Files.isDirectory(entry))
+                entry -> entry.getFileName().startsWith("guids_") && Files.isDirectory(entry))
         ) {
             for (Path entry : stream) {
                 // Exclude "guids_" from the set name
@@ -196,8 +223,9 @@ public class GenerateManifest {
                 processSet(set, entry);
             }
         }
+        processSet("cessda", resultsDir);
         writeSummary();
-        int totalRecords = setStats.values().stream().mapToInt(s -> s.records).sum();
+        int totalRecords = setStats.values().stream().mapToInt(SetStats::getRecords).sum();
         LOG.info(String.format(
                 "Done. %d set(s), %d total records (%d reused from cache, %d re-parsed).",
                 setStats.size(), totalRecords, totalReused, totalReparsed));
@@ -214,14 +242,15 @@ public class GenerateManifest {
         LOG.info("Processing set: " + set);
 
         List<Path> files = new ArrayList<>();
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(setDir, "*.json")) {
+
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(setDir, p -> !p.startsWith("error_")
+                && !p.getFileName().toString().equals(CACHE_FILENAME)
+                && p.toString().endsWith(".json") && Files.isRegularFile(p))) {
             for (Path f : stream) {
-                String name = f.getFileName().toString();
-                if (!name.startsWith("error_") && !name.equals(CACHE_FILENAME)) {
-                    files.add(f);
-                }
+                files.add(f);
             }
         }
+
         files.sort(null);
 
         if (files.isEmpty()) {
@@ -244,7 +273,8 @@ public class GenerateManifest {
             for (Path p : old) Files.deleteIfExists(p);
         }
 
-        List<ObjectNode> currentPage = new ArrayList<>(PAGE_SIZE);
+        var currentPage = new ArrayList<SlimRecord>(PAGE_SIZE);
+
         int pageNumber = 1;
         int reused = 0;
         int reparsed = 0;
@@ -252,30 +282,27 @@ public class GenerateManifest {
         for (Path file : files) {
             String name = file.getFileName().toString();
 
-            long mtime;
-            long size;
-            try {
-                mtime = Files.getLastModifiedTime(file).toMillis();
-                size = Files.size(file);
-            } catch (IOException e) {
-                LOG.warning("  Skipping unreadable file: " + name + " — " + e.getMessage());
-                continue;
-            }
+            long mtime = Files.getLastModifiedTime(file).toMillis();
+            long size = Files.size(file);
 
             CachedRecord cached = cache.get(name);
-            ObjectNode slim;
+            SlimRecord slim;
 
-            if (cached != null && cached.mtime == mtime && cached.size == size) {
-                slim = cached.slim;
+            if (cached != null && cached.mtime() == mtime && cached.size() == size) {
+                slim = cached.slim();
                 reused++;
             } else {
-                slim = buildSlimRecord(file);
-                if (slim == null) continue; // unreadable, already logged
-                reparsed++;
+                try {
+                    slim = buildSlimRecord(file);
+                    reparsed++;
+                } catch (JacksonException e) {
+                    LOG.warning("Skipping unreadable file: " + file.getFileName() + " — " + e.getMessage());
+                    continue;
+                }
             }
 
             newCache.put(name, new CachedRecord(mtime, size, slim));
-            applyToStats(stats, slim);
+            stats.addTestResultMap(slim);
 
             currentPage.add(slim);
             if (currentPage.size() >= PAGE_SIZE) {
@@ -285,100 +312,78 @@ public class GenerateManifest {
         }
 
         if (!currentPage.isEmpty()) {
-            writePage(pagesDir, pageNumber++, currentPage);
+            writePage(pagesDir, pageNumber, currentPage);
         }
 
-        stats.pageCount = pageNumber - 1;
         saveCache(cacheFile, newCache);
         totalReused += reused;
         totalReparsed += reparsed;
 
         LOG.info(String.format(
                 "  -> %d page(s) written (%d records; %d reused from cache, %d re-parsed)",
-                stats.pageCount, stats.records, reused, reparsed));
+                pageNumber, stats.getRecords(), reused, reparsed));
     }
+
+    // ── Incremental cache ───────────────────────────────────────────────────
 
     /**
      * Parses one result file from scratch and builds its slim page record.
-     * Does not touch aggregate stats — call {@link #applyToStats} with the
      * result, whether freshly built here or retrieved from the cache.
      *
      * @param file the result file to parse
      * @return the slim record, or {@code null} if the file could not be
      *         read (already logged)
      */
-    private ObjectNode buildSlimRecord(Path file) {
-        JsonNode root;
-        try {
-            root = mapper.readTree(file);
-        } catch (JacksonException e) {
-            LOG.warning("  Skipping unreadable file: " + file.getFileName() + " — " + e.getMessage());
-            return null;
-        }
+    private SlimRecord buildSlimRecord(Path file) {
+        JsonNode root = mapper.readTree(file);
 
-        JsonNode testResults = root.path("test_results");
+
+        Map<String, SlimRecord.TestResults> testResultsMap = Collections.emptyMap();
+
         double netScore = 0.0;
         Set<String> passedNorm = new HashSet<>();
-        ObjectNode normResults = mapper.createObjectNode();
+
+        JsonNode testResults = root.path("test_results");
+
         if (testResults.isObject()) {
-            for (Map.Entry<String, JsonNode> entry : testResults.properties()) {
-                String testId = entry.getKey().trim();
-                JsonNode val = entry.getValue();
-                String result = val.path("result").asString("indeterminate");
-                netScore += val.path("weight").asDouble(0.0);
-                if ("pass".equals(result)) {
-                    passedNorm.add(normTestId(testId));
+            // Rewrite test_results with normalised test IDs.
+            // Keep all tests so tenant-specific mappings (e.g. Oxford) can
+            // still be categorised client-side via /api/config fair-map.
+            testResultsMap = mapper.convertValue(testResults, new TypeReference<>() {
+            });
+
+            // Build a set of passed tests
+            for (var entry : testResultsMap.entrySet()) {
+                if ("pass".equals(entry.getValue().result())) {
+                    passedNorm.add(entry.getKey());
                 }
-                normResults.set(normTestId(testId), val);
             }
         }
+
         int recMaturity = computeMaturity(passedNorm);
 
-        ObjectNode slim = mapper.createObjectNode();
-        String testedGuid = root.path("testedguid").asString("");
+        URI testedGuid = mapper.convertValue(root.path("testedguid"), URI.class);
         String identifier = extractIdentifier(testedGuid);
-        slim.put("identifier", identifier);
-        slim.put("testedguid", testedGuid);
-        slim.put("netScore", netScore);
-        slim.put("maturity", recMaturity);
-        // Rewrite test_results with normalised test IDs.
-        // Keep all tests so tenant-specific mappings (e.g. Oxford) can
-        // still be categorised client-side via /api/config fair-map.
-        if (testResults.isObject()) {
-            slim.set("test_results", normResults);
-        }
+
         JsonNode narratives = root.path("narratives");
-        if (narratives.isArray()) slim.set("narratives", narratives);
         JsonNode guidances = root.path("guidances");
-        if (guidances.isArray()) slim.set("guidances", guidances);
-        return slim;
+
+        var narrativesList = mapper.convertValue(narratives, new TypeReference<List<String>>() {
+        });
+        var guidancesList = mapper.convertValue(guidances, new TypeReference<List<List<List<String>>>>() {
+        });
+
+        return new SlimRecord(
+                identifier,
+                testedGuid,
+                netScore,
+                recMaturity,
+                testResultsMap,
+                narrativesList,
+                guidancesList
+        );
+
     }
-
-    /**
-     * Folds one record's already-computed slim data into the running set
-     * stats. Deliberately driven off the slim record rather than the
-     * original file, so a cache hit and a fresh parse update stats
-     * identically — the slim record already carries normalised test IDs
-     * and the computed maturity level.
-     */
-    private void applyToStats(SetStats stats, ObjectNode slim) {
-        stats.records++;
-        int recMaturity = slim.path("maturity").asInt(0);
-        stats.maturityCounts[recMaturity]++;
-
-        JsonNode testResults = slim.path("test_results");
-        if (testResults.isObject()) {
-            for (Map.Entry<String, JsonNode> entry : testResults.properties()) {
-                String testId = entry.getKey(); // already normalised
-                String result = entry.getValue().path("result").asString("indeterminate");
-                stats.addTestResult(testId, result);
-            }
-        }
-    }
-
-    // ── Incremental cache ───────────────────────────────────────────────────
-
-    private record CachedRecord(long mtime, long size, ObjectNode slim) {}
 
     /**
      * Loads the per-set cache, or returns an empty cache (forcing full
@@ -386,61 +391,25 @@ public class GenerateManifest {
      * or was built under a different FAIR / maturity configuration.
      */
     private Map<String, CachedRecord> loadCache(Path cacheFile) {
-        Map<String, CachedRecord> result = new LinkedHashMap<>();
         if (!Files.isRegularFile(cacheFile)) {
-            return result;
+            return Collections.emptyMap();
         }
+
         try {
-            JsonNode root = mapper.readTree(cacheFile.toFile());
-            String storedFingerprint = root.path("configFingerprint").asString("");
+            Cache cache = mapper.readValue(cacheFile.toFile(), Cache.class);
+
+            String storedFingerprint = cache.configFingerprint();
             if (!storedFingerprint.equals(configFingerprint)) {
                 LOG.info("  FAIR map / maturity configuration has changed since "
                         + "the cache was built — reprocessing all files this run.");
-                return result;
+                return Collections.emptyMap();
             }
-            JsonNode filesNode = root.path("files");
-            if (filesNode.isObject()) {
-                for (Map.Entry<String, JsonNode> entry : filesNode.properties()) {
-                    JsonNode v = entry.getValue();
-                    JsonNode slimNode = v.get("slim");
-                    if (!(slimNode instanceof ObjectNode slim)) continue;
-                    result.put(entry.getKey(), new CachedRecord(
-                            v.path("mtime").asLong(-1),
-                            v.path("size").asLong(-1),
-                            slim));
-                }
-            }
+
+            return cache.files();
         } catch (JacksonException e) {
             LOG.warning("  Could not read manifest cache (" + cacheFile.getFileName()
                     + ") — reprocessing all files this run: " + e.getMessage());
-            result.clear();
-        }
-        return result;
-    }
-
-    /**
-     * Writes the per-set cache. A failure here is never fatal to the run —
-     * worst case, the next run just reprocesses everything again.
-     */
-    private void saveCache(Path cacheFile, Map<String, CachedRecord> cache) {
-        try {
-            ObjectNode root = mapper.createObjectNode();
-            root.put("configFingerprint", configFingerprint);
-            ObjectNode filesNode = mapper.createObjectNode();
-            for (Map.Entry<String, CachedRecord> e : cache.entrySet()) {
-                ObjectNode entryNode = mapper.createObjectNode();
-                entryNode.put("mtime", e.getValue().mtime());
-                entryNode.put("size", e.getValue().size());
-                entryNode.set("slim", e.getValue().slim());
-                filesNode.set(e.getKey(), entryNode);
-            }
-            root.set("files", filesNode);
-            // Compact, not pretty-printed: this is an internal cache, never
-            // read by the dashboard or a human.
-            mapper.writeValue(cacheFile.toFile(), root);
-        } catch (JacksonException e) {
-            LOG.warning("  Could not write manifest cache (" + cacheFile.getFileName()
-                    + "): " + e.getMessage());
+            return Collections.emptyMap();
         }
     }
 
@@ -466,12 +435,26 @@ public class GenerateManifest {
     }
 
     /**
+     * Writes the per-set cache. A failure here is never fatal to the run —
+     * worst case, the next run just reprocesses everything again.
+     */
+    private void saveCache(Path cacheFile, Map<String, CachedRecord> cacheFileMap) {
+        try {
+            var cache = new Cache(configFingerprint, cacheFileMap);
+            mapper.writeValue(cacheFile, cache);
+        } catch (JacksonException e) {
+            LOG.warning("  Could not write manifest cache (" + cacheFile.getFileName()
+                    + "): " + e.getMessage());
+        }
+    }
+
+    /**
      * @param pagesDir
      * @param pageNumber
      * @param records
      */
     // ── Output writers ───────────────────────────────────────────────────────
-    private void writePage(Path pagesDir, int pageNumber, List<ObjectNode> records) {
+    private void writePage(Path pagesDir, int pageNumber, List<SlimRecord> records) {
         Path out = pagesDir.resolve(String.format("page-%03d.json", pageNumber));
         mapper.writerWithDefaultPrettyPrinter().writeValue(out, records);
     }
@@ -496,113 +479,78 @@ public class GenerateManifest {
      * </pre>
      */
     private void writeSummary() {
-        ObjectNode root = mapper.createObjectNode();
-        root.put("generated", java.time.Instant.now().toString());
+
+        int records = 0;
+        int pass = 0;
+        int fail = 0;
+        int indet = 0;
+
+        // maturity
+        int none = 0;
+        int level1 = 0;
+        int level2 = 0;
+        int level3 = 0;
+
+        // faircat
+        Map<String, List<SetStats.Fair>> fairList = new HashMap<>();
+
+        // test
+        Map<String, List<SetStats.Test>> testListMap = new HashMap<>();
+
+        for (SetStats ls : setStats.values()) {
+            records += ls.getRecords();
+            pass += ls.getPass();
+            fail += ls.getFail();
+            indet += ls.getIndet();
+
+            none += ls.getMatDist().getNone();
+            level1 += ls.getMatDist().getLevel1();
+            level2 += ls.getMatDist().getLevel2();
+            level3 += ls.getMatDist().getLevel3();
+
+            for (var fair : ls.getFair().entrySet()) {
+                fairList.computeIfAbsent(fair.getKey(), k -> new ArrayList<>()).add(fair.getValue());
+            }
+
+            for (var test : ls.getTests().entrySet()) {
+                testListMap.computeIfAbsent(test.getKey(), k -> new ArrayList<>()).add(test.getValue());
+            }
+        }
+
+        var matDist = new SetStats.MatDist(none, level1, level2, level3);
+
+        Map<String, SetStats.Fair> fair = new HashMap<>();
+        for (var cat : fairList.entrySet()) {
+            int passLocal = 0;
+            int totalLocal = 0;
+            for (var f : cat.getValue()) {
+                passLocal += f.getPass();
+                totalLocal += f.getTotal();
+            }
+            fair.put(cat.getKey(), new SetStats.Fair(passLocal, totalLocal));
+        }
+
+        Map<String, SetStats.Test> test = new HashMap<>();
+        for (var testEntry : testListMap.entrySet()) {
+            int passLocal = 0;
+            int failLocal = 0;
+            int indetLocal = 0;
+            for (var t : testEntry.getValue()) {
+                passLocal += t.getPass();
+                failLocal += t.getFail();
+                indetLocal += t.getIndet();
+            }
+            test.put(testEntry.getKey(), new SetStats.Test(passLocal, failLocal, indetLocal));
+        }
 
         // Overall aggregation
-        SetStats overall = new SetStats(fairMap);
-        for (SetStats ls : setStats.values()) {
-            overall.records += ls.records;
-            overall.pass    += ls.pass;
-            overall.fail    += ls.fail;
-            overall.indet   += ls.indet;
-            for (int i = 0; i < 4; i++) overall.maturityCounts[i] += ls.maturityCounts[i];
-            for (String cat : FAIR_CATEGORIES) {
-                overall.fair.get(cat)[0] += ls.fair.get(cat)[0];
-                overall.fair.get(cat)[1] += ls.fair.get(cat)[1];
-            }
-            for (Map.Entry<String, int[]> e : ls.tests.entrySet()) {
-                int[] dst = overall.tests.computeIfAbsent(e.getKey(), k -> new int[3]);
-                int[] src = e.getValue();
-                dst[0] += src[0]; dst[1] += src[1]; dst[2] += src[2];
-            }
-        }
-        root.set("overall", statsToJson(overall, false));
+        SetStats overall = new SetStats(fairMap, records, pass, fail, indet, fair, test, matDist);
 
-        ObjectNode setsNode = mapper.createObjectNode();
-        for (Map.Entry<String, SetStats> e : setStats.entrySet()) {
-            ObjectNode ls = statsToJson(e.getValue(), true);
-            setsNode.set(e.getKey(), ls);
-        }
-        root.set("sets", setsNode);
+        var summaryStats = new SummaryStats(Instant.now(), overall, setStats);
 
         Path out = resultsDir.resolve("summary.json");
-        mapper.writerWithDefaultPrettyPrinter().writeValue(out.toFile(), root);
+        mapper.writerWithDefaultPrettyPrinter().writeValue(out, summaryStats);
         LOG.info("Wrote " + out);
-    }
-
-    /**
-     * @param s
-     * @param includePageCount
-     * @return ObjectNode
-     */
-    // ── Helpers ──────────────────────────────────────────────────────────────
-
-    private ObjectNode statsToJson(SetStats s, boolean includePageCount) {
-        ObjectNode node = mapper.createObjectNode();
-        node.put("records", s.records);
-        if (includePageCount) node.put("pageCount", s.pageCount);
-        node.put("pass",    s.pass);
-        node.put("fail",    s.fail);
-        node.put("indet",   s.indet);
-
-        // Maturity level for this set: the highest level achieved by at
-        // least one record, derived from the per-record maturityCounts
-        // already accumulated in processSet().
-        //
-        // The previous approach (checking which tests have at least one
-        // pass across the whole set) incorrectly returned L0 whenever a
-        // required test never passed for any record — even when many
-        // records individually met a higher level through a different
-        // combination of passing tests.
-        int setMaturity = 0;
-        for (int i = 3; i >= 1; i--) {
-            if (s.maturityCounts[i] > 0) { setMaturity = i; break; }
-        }
-        node.put("maturityLevel", setMaturity);
-
-        // Maturity distribution across records
-        ObjectNode matDist = mapper.createObjectNode();
-        matDist.put("none",    s.maturityCounts[0]);
-        matDist.put("level1",  s.maturityCounts[1]);
-        matDist.put("level2",  s.maturityCounts[2]);
-        matDist.put("level3",  s.maturityCounts[3]);
-        node.set("maturityDistribution", matDist);
-
-        ObjectNode fairNode = mapper.createObjectNode();
-        for (String cat : FAIR_CATEGORIES) {
-            int[] d = s.fair.get(cat);
-            ObjectNode c = mapper.createObjectNode();
-            c.put("pass",  d[0]);
-            c.put("total", d[1]);
-            fairNode.set(cat, c);
-        }
-        node.set("fair", fairNode);
-
-        ObjectNode testsNode = mapper.createObjectNode();
-        for (Map.Entry<String, int[]> e : new TreeMap<>(s.tests).entrySet()) {
-            int[] d = e.getValue();
-            ObjectNode t = mapper.createObjectNode();
-            t.put("pass",  d[0]);
-            t.put("fail",  d[1]);
-            t.put("indet", d[2]);
-            testsNode.set(e.getKey(), t);
-        }
-        node.set("tests", testsNode);
-        return node;
-    }
-
-    /**
-     * Extracts the bare identifier from an OAI-PMH GetRecord URL.
-     * {@code https://…?verb=GetRecord&…&identifier=abc123} -> {@code abc123}
-     */
-    private static String extractIdentifier(String url) {
-        if (url == null || url.isBlank()) return "";
-        int idx = url.lastIndexOf("identifier=");
-        if (idx < 0) return url;
-        String after = url.substring(idx + "identifier=".length());
-        int amp = after.indexOf('&');
-        return amp >= 0 ? after.substring(0, amp) : after;
     }
 
     private int computeMaturity(Set<String> passedNorm) {
@@ -641,58 +589,4 @@ public class GenerateManifest {
 
     // ── Inner class ──────────────────────────────────────────────────────────
 
-    private static class SetStats {
-        private final Map<String, String> fairMap;
-        int records   = 0;
-        int pass      = 0;
-        int fail      = 0;
-        int indet     = 0;
-        int pageCount = 0;
-
-        /** FAIR category -> [passCount, totalCount] */
-        final Map<String, int[]> fair  = new LinkedHashMap<>();
-        /** test ID -> [pass, fail, indet] */
-        final Map<String, int[]> tests = new LinkedHashMap<>();
-
-        /**
-         * Count of records at each maturity level: index 0 = none, 1 = L1, 2 = L2, 3 = L3.
-         * For the set-level summary this is populated by processSet(); for _overall it
-         * is summed in writeSummary().
-         */
-        final int[] maturityCounts = new int[4];
-
-        SetStats(Map<String, String> fairMap) {
-            this.fairMap = fairMap;
-            for (String cat : FAIR_CATEGORIES) fair.put(cat, new int[2]);
-        }
-
-        void addTestResult(String testId, String result) {
-            String normId = normTestId(testId);
-
-            switch (result) {
-                case "pass" -> pass++;
-                case "fail" -> fail++;
-                default -> indet++;
-            }
-
-            String cat = fairMap.get(normId);
-            if (cat == null) return;
-            int[] bucket = tests.computeIfAbsent(normId, k -> new int[3]);
-            switch (result) {
-                case "pass" -> {
-                    bucket[0]++;
-                    fair.get(cat)[0]++;
-                    fair.get(cat)[1]++;
-                }
-                case "fail" -> {
-                    bucket[1]++;
-                    fair.get(cat)[1]++;
-                }
-                default -> {
-                    bucket[2]++;
-                    fair.get(cat)[1]++;
-                }
-            }
-        }
-    }
 }

@@ -218,7 +218,7 @@ public class BenchmarkController {
                                 "'guidFile' and 'processAll', but not over 'guid'.") @RequestParam(required = false) List<Path> guidFiles,
 
                         @Parameter(description = "A single full OAI-PMH GetRecord URL to assess directly. " +
-                                        "Takes priority over 'guidFiles', 'guidFile', and 'processAll'.") @RequestParam(required = false) String guid,
+                                "Takes priority over 'guidFiles', 'guidFile', and 'processAll'.") @RequestParam(required = false) URI guid,
 
                         @Parameter(description = "When true, process guids_*.txt files for all default sets " +
                                         "(de, el, en, fi, fr, hr, nl, sl, sl-SI, sv). Ignored when " +

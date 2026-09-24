@@ -284,23 +284,25 @@ class BenchmarkControllerTest {
         @Test
         @DisplayName("Passes single guid URL parameter to service")
         void singleGuidParameterIsForwarded() throws Exception {
-            String guidUrl =
+            String guid =
                 "https://datacatalogue.cessda.eu/oai-pmh/v0/oai"
                 + "?verb=GetRecord&metadataPrefix=oai_ddi25"
                 + "&identifier=abc123";
 
+            URI guidUri = URI.create(guid);
+
             when(service.runAssessment(
-        isNull(), isNull(), isNull(), isNull(), eq(guidUrl), eq(false)))
+                    isNull(), isNull(), isNull(), isNull(), eq(guidUri), eq(false)))
                 .thenReturn(
-                    "Processed single GUID: " + guidUrl
+                        "Processed single GUID: " + guid
                     + " -> results written to /results");
 
             mvc.perform(post("/api/run-assessment")
-                    .param("guid", guidUrl))
+                            .param("guid", guid))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status", is("ok")));
 
-            verify(service).runAssessment(null, null, null, null, guidUrl, false);
+            verify(service).runAssessment(null, null, null, null, guidUri, false);
         }
 
         @Test
