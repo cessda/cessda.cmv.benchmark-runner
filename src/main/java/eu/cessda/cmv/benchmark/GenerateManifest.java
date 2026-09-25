@@ -215,7 +215,7 @@ public class GenerateManifest {
 
     public void run() throws IOException {
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(resultsDir,
-                entry -> entry.getFileName().startsWith("guids_") && Files.isDirectory(entry))
+                entry -> entry.getFileName().toString().startsWith("guids_") && Files.isDirectory(entry))
         ) {
             for (Path entry : stream) {
                 // Exclude "guids_" from the set name
@@ -223,7 +223,6 @@ public class GenerateManifest {
                 processSet(set, entry);
             }
         }
-        processSet("cessda", resultsDir);
         writeSummary();
         int totalRecords = setStats.values().stream().mapToInt(SetStats::getRecords).sum();
         LOG.info(String.format(
@@ -243,9 +242,13 @@ public class GenerateManifest {
 
         List<Path> files = new ArrayList<>();
 
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(setDir, p -> !p.startsWith("error_")
-                && !p.getFileName().toString().equals(CACHE_FILENAME)
-                && p.toString().endsWith(".json") && Files.isRegularFile(p))) {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(setDir, p -> {
+            String fileName = p.getFileName().toString();
+            return !fileName.startsWith("error_") // Filter out error files
+                    && !fileName.equals(CACHE_FILENAME) // Filter out caches
+                    && fileName.endsWith(".json")  // Select JSON files
+                    && Files.isRegularFile(p); // Exclude directories
+        })) {
             for (Path f : stream) {
                 files.add(f);
             }
@@ -545,6 +548,9 @@ public class GenerateManifest {
 
         // Overall aggregation
         SetStats overall = new SetStats(fairMap, records, pass, fail, indet, fair, test, matDist);
+
+        // Disable writing page count for top level stats
+        overall.writePageCount(false);
 
         var summaryStats = new SummaryStats(Instant.now(), overall, setStats);
 

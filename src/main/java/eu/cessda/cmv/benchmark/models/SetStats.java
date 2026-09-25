@@ -1,6 +1,8 @@
 package eu.cessda.cmv.benchmark.models;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -9,6 +11,7 @@ import java.util.Objects;
 import static eu.cessda.cmv.benchmark.GenerateManifest.PAGE_SIZE;
 import static java.lang.Math.max;
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class SetStats {
     private final Map<String, String> fairMap;
     /**
@@ -29,6 +32,8 @@ public class SetStats {
     private int pass;
     private int fail;
     private int indet;
+
+    private boolean writePageCount = true;
 
     public SetStats(Map<String, String> fairMap) {
         this.fairMap = fairMap;
@@ -135,8 +140,12 @@ public class SetStats {
         return indet;
     }
 
-    public int getPageCount() {
-        return (max(records - 1, 0) / PAGE_SIZE) + 1;
+    public Integer getPageCount() {
+        if (writePageCount) {
+            return (max(records - 1, 0) / PAGE_SIZE) + 1;
+        } else {
+            return null;
+        }
     }
 
     public Map<String, Fair> getFair() {
@@ -160,6 +169,11 @@ public class SetStats {
     @Override
     public int hashCode() {
         return Objects.hash(fairMap, records, pass, fail, indet, fair, tests, matDist);
+    }
+
+    @JsonIgnore
+    public void writePageCount(boolean writePageCount) {
+        this.writePageCount = writePageCount;
     }
 
     public static final class MatDist {

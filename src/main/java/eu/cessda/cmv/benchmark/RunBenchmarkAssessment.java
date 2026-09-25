@@ -119,7 +119,7 @@ public class RunBenchmarkAssessment {
     // -----------------------------------------------------------------------
 
     /** Default GUID file processed in legacy single-file mode. */
-    public static final String DEFAULT_GUIDS_FILE = "guids_en.txt";
+    public static final String DEFAULT_GUIDS_FILE = "guids_hr.txt";
 
     private static final String DEFAULT_OAI_PMH_BASE_URL = "https://datacatalogue.cessda.eu/oai-pmh/v0/oai?verb=GetRecord&metadataPrefix=oai_ddi25&identifier=";
     static final String PROCFAIL = "Failed to process GUID ";
@@ -706,6 +706,9 @@ public class RunBenchmarkAssessment {
                 processSingleFile(filename);
             } catch (IOException e) {
                 logger.log(Level.SEVERE, "Skipping {0} — : {1}", new Object[]{filename, e.toString()});
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
             }
         }
         logger.info("Finished processing all set files.");
@@ -723,7 +726,7 @@ public class RunBenchmarkAssessment {
      *                 are checked first, then the current directory)
      * @throws IOException          if a file operation fails
      */
-    public void processSingleFile(Path filename) throws IOException {
+    public void processSingleFile(Path filename) throws IOException, InterruptedException {
 
         Path previousFilename = guidsFilename;
         guidsFilename = filename;
@@ -737,8 +740,6 @@ public class RunBenchmarkAssessment {
             Path subDir = deriveSubdirectory(filename);
             processGuids(guids, subDir);
             logger.log(Level.INFO, PROCCOMP + " ({0})", filename);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         } finally {
             guidsFilename = previousFilename;
         }
