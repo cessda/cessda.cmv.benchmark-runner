@@ -147,70 +147,57 @@ tenants:
         mrc: Medical Research Council
         nerc: Natural Environment Research Council
         wellcome: Wellcome Trust
+      # Oxford's Benchmark Assessment Algorithm scores by FAIR category
+      # rather than by a fixed test checklist -- see maturity-levels
+      # below. This map is derived directly from the four category
+      # formulas Oxford supplied (each test's prefix -- ft_f/ft_a/ft_i/
+      # ft_r -- states its own category), so it covers exactly the 25
+      # tests those formulas reference, plus any extra FAIR tests
+      # Oxford runs that aren't part of a maturity-level formula yet
+      # (e.g. ft_i3_m_versioned_records, kept here for possible future
+      # use). Extra entries like that simply don't affect maturity-level
+      # scoring, which only sums the categoryMax'd categories below --
+      # they only feed the dashboard's per-category pass/fail stats.
       fair-map:
-        F1_Unique: F
-        F1_Resolve: F
-        F1_Persist: F
-        F2_PublisherInfo: F
-        F3_SelfID: F
-        F3_DataID: F
-        F4_GenericSearch: F
-        F2_Fields: F
-        F2_Tags: F
-        A1_1_HTTP: A
-        A1_2_Auth: A
-        A1_2_FS_Auth: A
-        A2_Policy: A
-        I1_Semant: I
-        I1_DBSem: I
-        I3_Related: I
-        R1_3_GenFormat: R
-        R1_1_DBLic: R
-        R1_1_DataLic: R
-        R1_2_ORCID: R
-        R1_2_Fund: R
-        R1_2_FundROR: R
-        R1_2_Affil: R
-        R1_2_Pubs: R
-        R1_3_ISO639: R
+        ft_f1_m_metadata_id_unique: F
+        ft_f1_m_metadata_id_resolvable: F
+        ft_f1_m_metadata_id_persistent: F
+        ft_f2_m_discoveryfields: F
+        ft_f2_m_discoverytags: F
+        ft_f2_m_discoverypublisher: F
+        ft_f3_m_meta_ident: F
+        ft_f3_m_data_ident: F
+        ft_f4_m_meta_indexed: F
+        ft_a1_1_m_https_retrieval_protocol: A
+        ft_a1_2_m_retrieval_protocol_supports_auth: A
+        ft_a2_m_dbpersistencepolicy: A
+        ft_i1_m_db_knowledge_semantic: I
+        ft_i2_m_vocab_url: I
+        ft_i3_m_reference_research_objects: I
+        ft_i3_m_versioned_records: I
+        ft_r1_1_m_database_level_licenses: R
+        ft_r1_1_m_std_lic: R
+        ft_r1_2_m_original_source: R
+        ft_r1_2_m_creator_orcid: R
+        ft_r1_2_m_funding_defined_in_metadata: R
+        ft_r1_2_m_ror_id_for_funder: R
+        ft_r1_2_m_author_affiliation_in_metadata: R
+        ft_r1_2_m_linked_publications: R
+        ft_r1_3_m_recognised_structured_metadata: R
+        ft_r1_3_m_uses_iso639_language: R
+      # Oxford's model: average, across F/A/I/R, of (category's earned
+      # test weight / categoryMax) * 100 -- matching the Benchmark
+      # Assessment Algorithm spreadsheet formulas Oxford supplied.
+      # level1 >= 25%, level2 >= 50%, level3 == 100% (a perfect score
+      # across all four categories; expressed as a threshold since the
+      # average can never exceed 100).
       maturity-levels:
-        level1:
-          - F1_Unique
-          - F1_Resolve
-          - F2_PublisherInfo
-          - A1_1_HTTP
-        level2:
-          - F1_Unique
-          - F1_Resolve
-          - F2_PublisherInfo
-          - A1_1_HTTP
-          - F1_Persist
-          - F3_SelfID
-          - I1_Semant
-          - R1_1_DataLic
-        level3:
-          - F1_Unique
-          - F1_Resolve
-          - F2_PublisherInfo
-          - A1_1_HTTP
-          - F1_Persist
-          - F3_SelfID
-          - I1_Semant
-          - R1_1_DataLic
-          - F3_DataID
-          - F4_GenericSearch
-          - F2_Fields
-          - F2_Tags
-          - A1_2_Auth
-          - A1_2_FS_Auth
-          - A2_Policy
-          - I1_DBSem
-          - I3_Related
-          - R1_3_GenFormat
-          - R1_1_DBLic
-          - R1_2_ORCID
-          - R1_2_Fund
-          - R1_2_FundROR
-          - R1_2_Affil
-          - R1_2_Pubs
-          - R1_3_ISO639
+        method: weighted-score
+        category-max:
+          F: 32
+          A: 14
+          I: 13
+          R: 36
+        level1-threshold: 25
+        level2-threshold: 50
+        level3-threshold: 100

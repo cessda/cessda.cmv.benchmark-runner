@@ -7,6 +7,7 @@ import eu.cessda.cmv.benchmark.config.BenchmarkProperties;
 import eu.cessda.cmv.benchmark.tenant.TenantContext;
 import eu.cessda.cmv.benchmark.tenant.TenantProperties;
 import eu.cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig;
+import eu.cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig.MaturityLevels;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -379,17 +380,29 @@ public class BenchmarkService {
             throw new IOException("Results directory not found: " + targetDir);
         }
 
-        new GenerateManifest(
-                targetDir,
-                cfg.getFairMap(),
-                cfg.getMaturityLevels().getLevel1(),
-                cfg.getMaturityLevels().getLevel2(),
-                cfg.getMaturityLevels().getLevel3())
+        new GenerateManifest(targetDir, cfg.getFairMap(), toMaturityConfig(cfg.getMaturityLevels()))
             .run();
         return "Manifest generated in: " + targetDir;
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
+
+    /**
+     * Adapts a tenant's {@code tenants.config.&lt;id&gt;.maturity-levels}
+     * to the decoupled {@link GenerateManifest.MaturityConfig} shape
+     * {@link GenerateManifest} itself understands.
+     */
+    private static GenerateManifest.MaturityConfig toMaturityConfig(MaturityLevels levels) {
+        if (levels.getMethod() == MaturityLevels.Method.WEIGHTED_SCORE) {
+            return GenerateManifest.MaturityConfig.weightedScore(
+                    levels.getCategoryMax(),
+                    levels.getLevel1Threshold(),
+                    levels.getLevel2Threshold(),
+                    levels.getLevel3Threshold());
+        }
+        return GenerateManifest.MaturityConfig.checklist(
+                levels.getLevel1(), levels.getLevel2(), levels.getLevel3());
+    }
 
     private Path resolveGuidFile(Path asGiven, Path tDataDir) {
         if (Files.exists(asGiven)) return asGiven;
