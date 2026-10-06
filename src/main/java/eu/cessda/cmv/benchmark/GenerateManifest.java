@@ -131,55 +131,6 @@ public class GenerateManifest {
 
     private static final Logger LOG = Logger.getLogger(GenerateManifest.class.getName());
 
-    /**
-     * How a record's maturity level (0-3) is derived from its test
-     * results, decoupled from {@link eu.cessda.cmv.benchmark.tenant.TenantProperties}
-     * so this class stays usable standalone from the CLI. Build one via
-     * {@link #checklist} (CESSDA's model — unchanged from before
-     * weighted-score support existed) or {@link #weightedScore}
-     * (Oxford's model).
-     *
-     * @param method       which model to use
-     * @param level1       CHECKLIST: test IDs required for level 1
-     * @param level2       CHECKLIST: test IDs required for level 2
-     * @param level3       CHECKLIST: test IDs required for level 3
-     * @param categoryMax  WEIGHTED_SCORE: FAIR category letter (F/A/I/R)
-     *                     -&gt; that category's maximum achievable weight.
-     *                     A category absent here is excluded from the
-     *                     average, not treated as 0%.
-     * @param level1Threshold WEIGHTED_SCORE: minimum average category
-     *                        score (0-100) for level 1, or {@code null}
-     *                        to never award it
-     * @param level2Threshold WEIGHTED_SCORE: as above, for level 2
-     * @param level3Threshold WEIGHTED_SCORE: as above, for level 3
-     */
-    public record MaturityConfig(
-            Method method,
-            List<String> level1,
-            List<String> level2,
-            List<String> level3,
-            Map<String, Double> categoryMax,
-            Double level1Threshold,
-            Double level2Threshold,
-            Double level3Threshold) {
-
-        public enum Method { CHECKLIST, WEIGHTED_SCORE }
-
-        public static MaturityConfig checklist(
-                List<String> level1, List<String> level2, List<String> level3) {
-            return new MaturityConfig(
-                    Method.CHECKLIST, level1, level2, level3, Map.of(), null, null, null);
-        }
-
-        public static MaturityConfig weightedScore(
-                Map<String, Double> categoryMax,
-                Double level1Threshold, Double level2Threshold, Double level3Threshold) {
-            return new MaturityConfig(
-                    Method.WEIGHTED_SCORE, List.of(), List.of(), List.of(),
-                    categoryMax, level1Threshold, level2Threshold, level3Threshold);
-        }
-    }
-
     // ── Entry point ──────────────────────────────────────────────────────────
     @SuppressWarnings("java:S106")
     public static void main(String[] args) throws IOException {
@@ -226,9 +177,9 @@ public class GenerateManifest {
         this.resultsDir = resultsDir;
         this.fairMap = normaliseFairMap(fairMap);
         this.maturityConfig = maturityConfig;
-        this.maturityLevel1Tests = normaliseTestIdSet(maturityConfig.level1());
-        this.maturityLevel2Tests = normaliseTestIdSet(maturityConfig.level2());
-        this.maturityLevel3Tests = normaliseTestIdSet(maturityConfig.level3());
+        this.maturityLevel1Tests = normaliseTestIdSet(maturityConfig.getLevel1());
+        this.maturityLevel2Tests = normaliseTestIdSet(maturityConfig.getLevel2());
+        this.maturityLevel3Tests = normaliseTestIdSet(maturityConfig.getLevel3());
         this.configFingerprint = computeConfigFingerprint(this.fairMap, maturityConfig);
     }
 
@@ -514,17 +465,17 @@ public class GenerateManifest {
             Map<String, String> fairMap, MaturityConfig config) {
         StringBuilder sb = new StringBuilder();
         new TreeMap<>(fairMap).forEach((k, v) -> sb.append(k).append('=').append(v).append(';'));
-        sb.append('|').append(config.method()).append('|');
-        new TreeSet<>(normaliseTestIdSet(config.level1())).forEach(t -> sb.append(t).append(','));
+        sb.append('|').append(config.getMethod()).append('|');
+        new TreeSet<>(normaliseTestIdSet(config.getLevel1())).forEach(t -> sb.append(t).append(','));
         sb.append('|');
-        new TreeSet<>(normaliseTestIdSet(config.level2())).forEach(t -> sb.append(t).append(','));
+        new TreeSet<>(normaliseTestIdSet(config.getLevel2())).forEach(t -> sb.append(t).append(','));
         sb.append('|');
-        new TreeSet<>(normaliseTestIdSet(config.level3())).forEach(t -> sb.append(t).append(','));
+        new TreeSet<>(normaliseTestIdSet(config.getLevel3())).forEach(t -> sb.append(t).append(','));
         sb.append('|');
-        new TreeMap<>(config.categoryMax()).forEach((k, v) -> sb.append(k).append('=').append(v).append(';'));
-        sb.append('|').append(config.level1Threshold())
-          .append(',').append(config.level2Threshold())
-          .append(',').append(config.level3Threshold());
+        new TreeMap<>(config.getCategoryMax()).forEach((k, v) -> sb.append(k).append('=').append(v).append(';'));
+        sb.append('|').append(config.getLevel1Threshold())
+                .append(',').append(config.getLevel2Threshold())
+                .append(',').append(config.getLevel3Threshold());
         return Integer.toHexString(sb.toString().hashCode());
     }
 
@@ -669,7 +620,7 @@ public class GenerateManifest {
     }
 
     private int computeMaturity(Set<String> passedNorm, Map<String, Double> categoryWeightEarned) {
-        return switch (maturityConfig.method()) {
+        return switch (maturityConfig.getMethod()) {
             case CHECKLIST -> computeMaturityChecklist(passedNorm);
             case WEIGHTED_SCORE -> computeMaturityWeightedScore(categoryWeightEarned);
         };
@@ -696,7 +647,7 @@ public class GenerateManifest {
 
     /**
      * Oxford's model: average, across every FAIR category configured in
-     * {@link MaturityConfig#categoryMax}, of {@code (that category's
+     * {@link MaturityConfig#getCategoryMax()}, of {@code (that category's
      * earned weight in this record) / (that category's configured max)
      * * 100}. A category with no max configured (or a max &lt;= 0) is
      * excluded from the average rather than counted as 0%, so a tenant
@@ -705,7 +656,7 @@ public class GenerateManifest {
      * Checked from 3 down to 1, same as the checklist method.
      */
     private int computeMaturityWeightedScore(Map<String, Double> categoryWeightEarned) {
-        Map<String, Double> categoryMax = maturityConfig.categoryMax();
+        Map<String, Double> categoryMax = maturityConfig.getCategoryMax();
         double sumOfPercentages = 0.0;
         int categoriesCounted = 0;
         for (Map.Entry<String, Double> entry : categoryMax.entrySet()) {
@@ -719,9 +670,12 @@ public class GenerateManifest {
         if (categoriesCounted == 0) return 0;
         double score = sumOfPercentages / categoriesCounted;
 
-        if (meetsThreshold(score, maturityConfig.level3Threshold())) return 3;
-        if (meetsThreshold(score, maturityConfig.level2Threshold())) return 2;
-        if (meetsThreshold(score, maturityConfig.level1Threshold())) return 1;
+        if (maturityConfig.getLevel3Threshold() != null && meetsThreshold(score, maturityConfig.getLevel3Threshold()))
+            return 3;
+        if (maturityConfig.getLevel2Threshold() != null && meetsThreshold(score, maturityConfig.getLevel2Threshold()))
+            return 2;
+        if (maturityConfig.getLevel1Threshold() != null && meetsThreshold(score, maturityConfig.getLevel1Threshold()))
+            return 1;
         return 0;
     }
 

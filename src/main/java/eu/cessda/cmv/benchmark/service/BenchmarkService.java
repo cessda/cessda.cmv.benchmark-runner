@@ -2,12 +2,12 @@ package eu.cessda.cmv.benchmark.service;
 
 import eu.cessda.cmv.benchmark.GenerateManifest;
 import eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers;
+import eu.cessda.cmv.benchmark.MaturityConfig;
 import eu.cessda.cmv.benchmark.RunBenchmarkAssessment;
 import eu.cessda.cmv.benchmark.config.BenchmarkProperties;
 import eu.cessda.cmv.benchmark.tenant.TenantContext;
 import eu.cessda.cmv.benchmark.tenant.TenantProperties;
 import eu.cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig;
-import eu.cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig.MaturityLevels;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -389,18 +389,18 @@ public class BenchmarkService {
 
     /**
      * Adapts a tenant's {@code tenants.config.&lt;id&gt;.maturity-levels}
-     * to the decoupled {@link GenerateManifest.MaturityConfig} shape
+     * to the decoupled {@link MaturityConfig} shape
      * {@link GenerateManifest} itself understands.
      */
-    private static GenerateManifest.MaturityConfig toMaturityConfig(MaturityLevels levels) {
-        if (levels.getMethod() == MaturityLevels.Method.WEIGHTED_SCORE) {
-            return GenerateManifest.MaturityConfig.weightedScore(
+    private static MaturityConfig toMaturityConfig(MaturityConfig levels) {
+        if (levels.getMethod() == MaturityConfig.Method.WEIGHTED_SCORE) {
+            return MaturityConfig.weightedScore(
                     levels.getCategoryMax(),
                     levels.getLevel1Threshold(),
                     levels.getLevel2Threshold(),
                     levels.getLevel3Threshold());
         }
-        return GenerateManifest.MaturityConfig.checklist(
+        return MaturityConfig.checklist(
                 levels.getLevel1(), levels.getLevel2(), levels.getLevel3());
     }
 

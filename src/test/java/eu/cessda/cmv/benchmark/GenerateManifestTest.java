@@ -22,9 +22,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for {@link GenerateManifest}, focused on the two maturity-level
- * computation models it supports: {@link GenerateManifest.MaturityConfig.Method#CHECKLIST}
+ * computation models it supports: {@link MaturityConfig.Method#CHECKLIST}
  * (CESSDA's model, unchanged from before weighted-score support existed) and
- * {@link GenerateManifest.MaturityConfig.Method#WEIGHTED_SCORE} (Oxford's model).
+ * {@link MaturityConfig.Method#WEIGHTED_SCORE} (Oxford's model).
  *
  * <p>{@link GenerateManifest} has no public accessor for a single record's
  * computed maturity level, so every test here drives the class the way it is
@@ -83,6 +83,18 @@ class GenerateManifestTest {
 
     // ── CHECKLIST (CESSDA) ──────────────────────────────────────────────────
 
+    @Test
+    @DisplayName("main()'s default MaturityConfig.checklist(...) matches CHECKLIST behaviour")
+    void defaultMaturityConfigIsChecklist() {
+        MaturityConfig config =
+                MaturityConfig.checklist(List.of(), List.of(), List.of());
+        assertEquals(MaturityConfig.Method.CHECKLIST, config.getMethod());
+        assertTrue(config.getCategoryMax().isEmpty());
+        assertNull(config.getLevel1Threshold());
+    }
+
+    // ── WEIGHTED_SCORE (Oxford) ──────────────────────────────────────────────
+
     @Nested
     @DisplayName("CHECKLIST method (CESSDA)")
     class Checklist {
@@ -96,7 +108,7 @@ class GenerateManifestTest {
             Map<String, String> fairMap = Map.of("A", "F", "B", "F", "C", "A", "D", "R");
 
             // Level lists are cumulative by convention, as CESSDA's real config is.
-            GenerateManifest.MaturityConfig config = GenerateManifest.MaturityConfig.checklist(
+            MaturityConfig config = MaturityConfig.checklist(
                     List.of("A", "B"),
                     List.of("A", "B", "C"),
                     List.of("A", "B", "C", "D"));
@@ -125,7 +137,7 @@ class GenerateManifestTest {
             setDir = resultsDir.resolve("guids_de");
             Files.createDirectories(setDir);
 
-            GenerateManifest.MaturityConfig config = GenerateManifest.MaturityConfig.checklist(
+            MaturityConfig config = MaturityConfig.checklist(
                     List.of("A", "B"), List.of(), List.of());
 
             writeRecord("rec.json", "https://x/?identifier=rec",
@@ -143,7 +155,7 @@ class GenerateManifestTest {
             Files.createDirectories(setDir);
 
             // Only level1 configured; level2/level3 default to empty lists.
-            GenerateManifest.MaturityConfig config = GenerateManifest.MaturityConfig.checklist(
+            MaturityConfig config = MaturityConfig.checklist(
                     List.of("A"), List.of(), List.of());
 
             writeRecord("rec.json", "https://x/?identifier=rec",
@@ -155,7 +167,7 @@ class GenerateManifestTest {
         }
     }
 
-    // ── WEIGHTED_SCORE (Oxford) ──────────────────────────────────────────────
+    // ── Backward compatibility ───────────────────────────────────────────────
 
     @Nested
     @DisplayName("WEIGHTED_SCORE method (Oxford)")
@@ -179,7 +191,7 @@ class GenerateManifestTest {
             categoryMax.put("F", 10.0);
             categoryMax.put("A", 10.0);
 
-            GenerateManifest.MaturityConfig config = GenerateManifest.MaturityConfig.weightedScore(
+            MaturityConfig config = MaturityConfig.weightedScore(
                     categoryMax, 25.0, 50.0, 75.0);
 
             // F earned 5/10 = 50%, A earned 2.5/10 = 25% -> avg (F,A only) = 37.5%
@@ -206,7 +218,7 @@ class GenerateManifestTest {
             categoryMax.put("F", 10.0);
             categoryMax.put("A", 10.0);
 
-            GenerateManifest.MaturityConfig config = GenerateManifest.MaturityConfig.weightedScore(
+            MaturityConfig config = MaturityConfig.weightedScore(
                     categoryMax, 25.0, 50.0, 75.0);
 
             writeRecord("rec-full.json", "https://x/?identifier=rec-full", Map.of(
@@ -228,7 +240,7 @@ class GenerateManifestTest {
             categoryMax.put("F", 10.0);
             categoryMax.put("A", 10.0);
 
-            GenerateManifest.MaturityConfig config = GenerateManifest.MaturityConfig.weightedScore(
+            MaturityConfig config = MaturityConfig.weightedScore(
                     categoryMax, 25.0, 50.0, 75.0);
 
             writeRecord("rec-zero.json", "https://x/?identifier=rec-zero", Map.of(
@@ -250,7 +262,7 @@ class GenerateManifestTest {
             categoryMax.put("F", 10.0);
             categoryMax.put("I", 0.0); // must be excluded, not divide-by-zero or count as 0%
 
-            GenerateManifest.MaturityConfig config = GenerateManifest.MaturityConfig.weightedScore(
+            MaturityConfig config = MaturityConfig.weightedScore(
                     categoryMax, 25.0, 50.0, 75.0);
 
             // F earned 10/10 = 100%. If I were wrongly averaged in as 0%, the
@@ -274,7 +286,7 @@ class GenerateManifestTest {
             categoryMax.put("F", 10.0);
 
             // level3Threshold left null -- Oxford has not supplied it yet.
-            GenerateManifest.MaturityConfig config = GenerateManifest.MaturityConfig.weightedScore(
+            MaturityConfig config = MaturityConfig.weightedScore(
                     categoryMax, 25.0, 50.0, null);
 
             writeRecord("rec.json", "https://x/?identifier=rec", Map.of(
@@ -287,17 +299,5 @@ class GenerateManifestTest {
             // highest configured threshold it clears) is the ceiling.
             assertEquals(2, maturityOf("bhf", "rec"));
         }
-    }
-
-    // ── Backward compatibility ───────────────────────────────────────────────
-
-    @Test
-    @DisplayName("main()'s default MaturityConfig.checklist(...) matches CHECKLIST behaviour")
-    void defaultMaturityConfigIsChecklist() {
-        GenerateManifest.MaturityConfig config =
-                GenerateManifest.MaturityConfig.checklist(List.of(), List.of(), List.of());
-        assertEquals(GenerateManifest.MaturityConfig.Method.CHECKLIST, config.method());
-        assertTrue(config.categoryMax().isEmpty());
-        assertNull(config.level1Threshold());
     }
 }
