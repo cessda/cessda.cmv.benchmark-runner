@@ -662,10 +662,11 @@ public class GenerateManifest {
         for (Map.Entry<String, Double> entry : categoryMax.entrySet()) {
             String category = entry.getKey();
             double max = entry.getValue() != null ? entry.getValue() : 0.0;
-            if (max <= 0.0) continue;
-            double earned = categoryWeightEarned.getOrDefault(category, 0.0);
-            sumOfPercentages += (earned / max) * 100.0;
-            categoriesCounted++;
+            if (max > 0.0) {
+                double earned = categoryWeightEarned.getOrDefault(category, 0.0);
+                sumOfPercentages += (earned / max) * 100.0;
+                categoriesCounted++;
+            }
         }
         if (categoriesCounted == 0) return 0;
         double score = sumOfPercentages / categoriesCounted;
