@@ -679,8 +679,8 @@ public class GenerateManifest {
         return 0;
     }
 
-    private static boolean meetsThreshold(double score, Double threshold) {
-        return threshold != null && score >= threshold;
+    private static boolean meetsThreshold(double score, double threshold) {
+        return score >= threshold;
     }
 
     private static Map<String, String> normaliseFairMap(Map<String, String> fairMap) {
