@@ -51,6 +51,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -167,6 +168,14 @@ public class RunBenchmarkAssessment {
     // -----------------------------------------------------------------------
     private static final int MAX_RETRIES = 3;
     private static final Duration INITIAL_BACKOFF = Duration.ofMillis(2_000);
+
+    /**
+     * Maximum number of GUID submissions in flight at once. Kept below
+     * the HTTP/2 {@code MAX_CONCURRENT_STREAMS} limit Champion's
+     * server advertises on the shared connection, which otherwise
+     * fails requests with "too many concurrent streams".
+     */
+    private static final int MAX_CONCURRENT_REQUESTS = 5;
 
     /**
      * Substring Champion writes into an indicator's {@code "result"}
@@ -760,8 +769,9 @@ public class RunBenchmarkAssessment {
     }
 
     /**
-     * Submits all GUIDs to the Champion API using a fixed thread pool
-     * of five workers and awaits completion for up to ten minutes.
+     * Submits all GUIDs to the Champion API, with at most
+     * {@link #MAX_CONCURRENT_REQUESTS} submissions in flight at once,
+     * and awaits completion for up to ten minutes.
      * Every submission after the first ({@code index > 0}) is preceded
      * by a {@link #backoffBetweenProcessGuid}-millisecond pause, to
      * ease the burst of concurrent requests Champion otherwise sees.
@@ -776,14 +786,25 @@ public class RunBenchmarkAssessment {
             List<String> guids,
             Path subDir) throws InterruptedException {
 
+        final Semaphore inFlight = new Semaphore(MAX_CONCURRENT_REQUESTS);
+
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
 
-            for (String rawGuid : guids) {
-                final String guid = normaliseGuid(rawGuid);
+            for (int index = 0; index < guids.size(); index++) {
+                final String guid = normaliseGuid(guids.get(index));
+                final boolean first = index == 0;
 
                 CompletableFuture.runAsync(() -> {
                     try {
-                        processOneGuid(guid, subDir);
+                        inFlight.acquire();
+                        try {
+                            if (!first) {
+                                Thread.sleep(backoffBetweenProcessGuid);
+                            }
+                            processOneGuid(guid, subDir);
+                        } finally {
+                            inFlight.release();
+                        }
                     } catch (IOException ioe) {
                         logger.log(Level.SEVERE, PROCERROR, new Object[]{guid, ioe.toString()});
                         saveErrorFile(guid, ioe, subDir);
@@ -907,6 +928,13 @@ public class RunBenchmarkAssessment {
                 logger.log(Level.FINE, "Attempt {0} failed for GUID {1}: {2}",
                         new Object[]{attempt + 1, guid, e.toString()});
             } catch (IOException e) {
+                if (e.getMessage() != null && e.getMessage().contains("too many concurrent streams")) {
+                    // Transient HTTP/2 stream-limit rejection — retry
+                    lastException = e;
+                    logger.log(Level.FINE, "Attempt {0} failed for GUID {1}: {2}",
+                            new Object[]{attempt + 1, guid, e.toString()});
+                    continue;
+                }
                 // Non-transient — fail immediately
                 logger.log(Level.SEVERE, PROCFAIL + "{0}: {1}", new Object[]{guid, e.getMessage()});
                 saveErrorFile(guid, e, subDir);
