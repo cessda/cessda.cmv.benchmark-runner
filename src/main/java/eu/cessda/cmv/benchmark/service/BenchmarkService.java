@@ -2,6 +2,7 @@ package eu.cessda.cmv.benchmark.service;
 
 import eu.cessda.cmv.benchmark.GenerateManifest;
 import eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers;
+import eu.cessda.cmv.benchmark.MaturityConfig;
 import eu.cessda.cmv.benchmark.RunBenchmarkAssessment;
 import eu.cessda.cmv.benchmark.config.BenchmarkProperties;
 import eu.cessda.cmv.benchmark.tenant.TenantContext;
@@ -379,17 +380,29 @@ public class BenchmarkService {
             throw new IOException("Results directory not found: " + targetDir);
         }
 
-        new GenerateManifest(
-                targetDir,
-                cfg.getFairMap(),
-                cfg.getMaturityLevels().getLevel1(),
-                cfg.getMaturityLevels().getLevel2(),
-                cfg.getMaturityLevels().getLevel3())
+        new GenerateManifest(targetDir, cfg.getFairMap(), toMaturityConfig(cfg.getMaturityLevels()))
             .run();
         return "Manifest generated in: " + targetDir;
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
+
+    /**
+     * Adapts a tenant's {@code tenants.config.&lt;id&gt;.maturity-levels}
+     * to the decoupled {@link MaturityConfig} shape
+     * {@link GenerateManifest} itself understands.
+     */
+    private static MaturityConfig toMaturityConfig(MaturityConfig levels) {
+        if (levels.getMethod() == MaturityConfig.Method.WEIGHTED_SCORE) {
+            return MaturityConfig.weightedScore(
+                    levels.getCategoryMax(),
+                    levels.getLevel1Threshold(),
+                    levels.getLevel2Threshold(),
+                    levels.getLevel3Threshold());
+        }
+        return MaturityConfig.checklist(
+                levels.getLevel1(), levels.getLevel2(), levels.getLevel3());
+    }
 
     private Path resolveGuidFile(Path asGiven, Path tDataDir) {
         if (Files.exists(asGiven)) return asGiven;

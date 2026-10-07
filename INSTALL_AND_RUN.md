@@ -426,9 +426,28 @@ in the dashboard.
 
 #### Maturity Levels
 
-The `maturity-levels` section defines which indicators must be met to
-achieve each maturity level. This creates a progression path from
-basic to advanced FAIR compliance.
+The `maturity-levels` section defines how a record's maturity level
+(0-3) is derived from its test results. Two models are supported,
+selected per tenant via `method`:
+
+- **`checklist`** (the default when `method` is left unset) — a
+  record reaches a level only if it passed every test named in that
+  level's list. This is CESSDA's model, and the only one that
+  existed before `weighted-score` support was added.
+- **`weighted-score`** — each FAIR category (F, A, I, R) contributes
+  a percentage of its configured maximum score; a record's overall
+  score is the average of those percentages, and a level is reached
+  once that average meets its threshold. This is Oxford's model,
+  matching a Benchmark Assessment Algorithm spreadsheet that scores
+  by category rather than by a fixed checklist.
+
+A tenant's `maturity-levels` block uses one model or the other, never
+both. Existing tenants that only ever set `level1`/`level2`/`level3`
+(and never `method`) are unaffected by `weighted-score` support —
+they continue to use the checklist model exactly as before, with no
+changes required.
+
+##### Checklist method
 
 ```yaml
 one:
@@ -464,14 +483,57 @@ one:
       - R1_3_DSPV
 ```
 
-Each maturity level contains:
+Each level contains:
 
-- **Key**: The level identifier (e.g., `level1`, `level2`, `level3`)
-- **Value**: A list of assessment indicators that must be met to
-  achieve that level
+- **Key**: The level identifier (`level1`, `level2`, or `level3`)
+- **Value**: A list of assessment indicators that must *all* be
+  passed to achieve that level
 
-Typically, higher maturity levels include all indicators from lower
-levels plus additional requirements.
+Levels are checked from `level3` down to `level1`, so a record is
+reported at the highest level whose full list it satisfies. Lists
+are cumulative by convention — `level2` should list a superset of
+`level1`'s tests, and so on — though this is not enforced. A level
+left empty, or omitted entirely, is never awarded.
+
+##### Weighted-score method
+
+```yaml
+oxford:
+  maturity-levels:
+    method: weighted-score
+    category-max:
+      F: 32
+      A: 14
+      I: 13
+      R: 36
+    level1-threshold: 25
+    level2-threshold: 50
+    level3-threshold: 100
+```
+
+- **`method`**: set to `weighted-score` to opt in to this model
+- **`category-max`**: for each FAIR category letter (`F`, `A`, `I`,
+  `R`), the maximum achievable weight across that category's tests.
+  A category left out of `category-max` is excluded from the score
+  average entirely, rather than counted as 0% — so a tenant can
+  score fewer than all four FAIR categories if needed
+- **`level1-threshold`**, **`level2-threshold`**,
+  **`level3-threshold`**: the minimum average category score (0-100)
+  required for each level. Leaving a threshold unset means that
+  level can never be awarded
+
+A record's score is calculated as:
+
+```text
+average, across every category configured in category-max, of:
+  (that category's earned test weight in this record / categoryMax) * 100
+```
+
+A record's earned weight for a test comes from that test's `weight`
+field in the raw FAIR Champion result — already the earned points
+(0 if the test failed, its point value if it passed) — summed per
+category using the tenant's `fair-map`. Levels are checked from
+`level3` down to `level1`, the same as the checklist method.
 
 ### Complete Example
 
@@ -518,6 +580,27 @@ tenants:
           - ORG_R1
 ```
 
+The same tenant using the `weighted-score` method instead only
+differs in its `maturity-levels` block:
+
+```yaml
+tenants:
+  config:
+    my-org:
+      # ... algorithm, runner, oai-pmh-base-url, title, footer,
+      # set-names, and fair-map as above ...
+      maturity-levels:
+        method: weighted-score
+        category-max:
+          F: 10
+          A: 10
+          I: 10
+          R: 10
+        level1-threshold: 25
+        level2-threshold: 50
+        level3-threshold: 75
+```
+
 ### Runtime Behaviour
 
 Once configured, tenants operate independently:
@@ -531,8 +614,8 @@ Once configured, tenants operate independently:
   overridden for a single run in the **Fetch identifiers** page
 - The dashboard displays information using the tenant's title,
   footer, and display names
-- Maturity level assessments are calculated based on the tenant's
-  definitions
+- Maturity level assessments are calculated using whichever method
+  (`checklist` or `weighted-score`) the tenant configures
 
 ### API Access
 
@@ -568,6 +651,14 @@ to the compiled-in CESSDA endpoint; unset `set-names`, `fair-map`, or
 `maturity-levels` simply leave the dashboard showing raw set codes, no
 FAIR breakdown, or no maturity level respectively, rather than causing
 a startup or request failure.
+
+`maturity-levels.method` defaults to `checklist` whenever it is left
+unset, so an existing tenant's `application.yaml` needs no changes to
+keep working. Within `weighted-score`, an empty or unset
+`category-max` means no category is ever scored, so every record
+gets a level of 0; an unset `levelN-threshold` means that specific
+level can never be awarded, even if lower or higher levels are
+reachable.
 
 ## Troubleshooting
 

@@ -143,7 +143,8 @@ public class GenerateManifest {
         }
 
         LOG.log(Level.INFO, "Scanning {0} ...", resultsDir);
-        new GenerateManifest(resultsDir, Map.of(), List.of(), List.of(), List.of()).run();
+        new GenerateManifest(resultsDir, Map.of(),
+                MaturityConfig.checklist(List.of(), List.of(), List.of())).run();
     }
 
     // ── Fields ───────────────────────────────────────────────────────────────
@@ -152,14 +153,15 @@ public class GenerateManifest {
     private final ObjectMapper mapper = new ObjectMapper();
     private final Map<String, SetStats> setStats = new TreeMap<>();
     private final Map<String, String> fairMap;
+    private final MaturityConfig maturityConfig;
     private final Set<String> maturityLevel1Tests;
     private final Set<String> maturityLevel2Tests;
     private final Set<String> maturityLevel3Tests;
 
     /**
-     * Fingerprint of {@link #fairMap} and the three maturity level sets,
-     * used to invalidate the per-set cache whenever the tenant's FAIR /
-     * maturity configuration changes between runs.
+     * Fingerprint of {@link #fairMap} and {@link #maturityConfig}, used to
+     * invalidate the per-set cache whenever the tenant's FAIR / maturity
+     * configuration changes between runs.
      */
     private final String configFingerprint;
 
@@ -171,17 +173,14 @@ public class GenerateManifest {
     public GenerateManifest(
             Path resultsDir,
             Map<String, String> fairMap,
-            List<String> maturityLevel1,
-            List<String> maturityLevel2,
-            List<String> maturityLevel3) {
+            MaturityConfig maturityConfig) {
         this.resultsDir = resultsDir;
         this.fairMap = normaliseFairMap(fairMap);
-        this.maturityLevel1Tests = normaliseTestIdSet(maturityLevel1);
-        this.maturityLevel2Tests = normaliseTestIdSet(maturityLevel2);
-        this.maturityLevel3Tests = normaliseTestIdSet(maturityLevel3);
-        this.configFingerprint = computeConfigFingerprint(
-                this.fairMap, this.maturityLevel1Tests,
-                this.maturityLevel2Tests, this.maturityLevel3Tests);
+        this.maturityConfig = maturityConfig;
+        this.maturityLevel1Tests = normaliseTestIdSet(maturityConfig.getLevel1());
+        this.maturityLevel2Tests = normaliseTestIdSet(maturityConfig.getLevel2());
+        this.maturityLevel3Tests = normaliseTestIdSet(maturityConfig.getLevel3());
+        this.configFingerprint = computeConfigFingerprint(this.fairMap, maturityConfig);
     }
 
     // ── Main processing ──────────────────────────────────────────────────────
@@ -319,20 +318,31 @@ public class GenerateManifest {
         JsonNode testResults = root.path("test_results");
         double netScore = 0.0;
         Set<String> passedNorm = new HashSet<>();
+        // FAIR category -> sum of "weight" for that category's tests in
+        // this record. Only meaningful (and only used) for
+        // Method.WEIGHTED_SCORE tenants, but cheap enough to always
+        // compute -- see computeMaturity().
+        Map<String, Double> categoryWeightEarned = new HashMap<>();
         ObjectNode normResults = mapper.createObjectNode();
         if (testResults.isObject()) {
             for (Map.Entry<String, JsonNode> entry : testResults.properties()) {
                 String testId = entry.getKey().trim();
                 JsonNode val = entry.getValue();
                 String result = val.path("result").asString("indeterminate");
-                netScore += val.path("weight").asDouble(0.0);
+                double weight = val.path("weight").asDouble(0.0);
+                netScore += weight;
+                String normId = normTestId(testId);
                 if ("pass".equals(result)) {
-                    passedNorm.add(normTestId(testId));
+                    passedNorm.add(normId);
                 }
-                normResults.set(normTestId(testId), val);
+                String category = fairMap.get(normId);
+                if (category != null) {
+                    categoryWeightEarned.merge(category, weight, Double::sum);
+                }
+                normResults.set(normId, val);
             }
         }
-        int recMaturity = computeMaturity(passedNorm);
+        int recMaturity = computeMaturity(passedNorm, categoryWeightEarned);
 
         ObjectNode slim = mapper.createObjectNode();
         String testedGuid = root.path("testedguid").asString("");
@@ -445,23 +455,27 @@ public class GenerateManifest {
     }
 
     /**
-     * Builds a stable fingerprint of the FAIR map and maturity level sets,
-     * so a change to either invalidates every set's cache on the next run.
-     * Built from a canonical (sorted) string form so the same configuration
-     * always yields the same fingerprint regardless of map/set iteration
-     * order.
+     * Builds a stable fingerprint of the FAIR map and the maturity
+     * configuration (whichever method is in use), so a change to either
+     * invalidates every set's cache on the next run. Built from a
+     * canonical (sorted) string form so the same configuration always
+     * yields the same fingerprint regardless of map/set iteration order.
      */
     private static String computeConfigFingerprint(
-            Map<String, String> fairMap,
-            Set<String> level1, Set<String> level2, Set<String> level3) {
+            Map<String, String> fairMap, MaturityConfig config) {
         StringBuilder sb = new StringBuilder();
         new TreeMap<>(fairMap).forEach((k, v) -> sb.append(k).append('=').append(v).append(';'));
+        sb.append('|').append(config.getMethod()).append('|');
+        new TreeSet<>(normaliseTestIdSet(config.getLevel1())).forEach(t -> sb.append(t).append(','));
         sb.append('|');
-        new TreeSet<>(level1).forEach(t -> sb.append(t).append(','));
+        new TreeSet<>(normaliseTestIdSet(config.getLevel2())).forEach(t -> sb.append(t).append(','));
         sb.append('|');
-        new TreeSet<>(level2).forEach(t -> sb.append(t).append(','));
+        new TreeSet<>(normaliseTestIdSet(config.getLevel3())).forEach(t -> sb.append(t).append(','));
         sb.append('|');
-        new TreeSet<>(level3).forEach(t -> sb.append(t).append(','));
+        new TreeMap<>(config.getCategoryMax()).forEach((k, v) -> sb.append(k).append('=').append(v).append(';'));
+        sb.append('|').append(config.getLevel1Threshold())
+                .append(',').append(config.getLevel2Threshold())
+                .append(',').append(config.getLevel3Threshold());
         return Integer.toHexString(sb.toString().hashCode());
     }
 
@@ -605,7 +619,23 @@ public class GenerateManifest {
         return amp >= 0 ? after.substring(0, amp) : after;
     }
 
-    private int computeMaturity(Set<String> passedNorm) {
+    private int computeMaturity(Set<String> passedNorm, Map<String, Double> categoryWeightEarned) {
+        return switch (maturityConfig.getMethod()) {
+            case CHECKLIST -> computeMaturityChecklist(passedNorm);
+            case WEIGHTED_SCORE -> computeMaturityWeightedScore(categoryWeightEarned);
+        };
+    }
+
+    /**
+     * CESSDA's model: a record reaches a level only if it passed every
+     * test named in that level's list. Levels are checked from 3 down to
+     * 1 so a record satisfying a higher level's (by convention, superset)
+     * list is not also reported against a lower one. A level with an
+     * empty test list is never awarded -- that is what "not configured"
+     * means for this method, exactly as before weighted-score support
+     * existed.
+     */
+    private int computeMaturityChecklist(Set<String> passedNorm) {
         if (!maturityLevel3Tests.isEmpty()
                 && passedNorm.containsAll(maturityLevel3Tests)) return 3;
         if (!maturityLevel2Tests.isEmpty()
@@ -613,6 +643,45 @@ public class GenerateManifest {
         if (!maturityLevel1Tests.isEmpty()
                 && passedNorm.containsAll(maturityLevel1Tests)) return 1;
         return 0;
+    }
+
+    /**
+     * Oxford's model: average, across every FAIR category configured in
+     * {@link MaturityConfig#getCategoryMax()}, of {@code (that category's
+     * earned weight in this record) / (that category's configured max)
+     * * 100}. A category with no max configured (or a max &lt;= 0) is
+     * excluded from the average rather than counted as 0%, so a tenant
+     * can configure fewer than all four FAIR categories if needed. A
+     * threshold left {@code null} means that level can never be awarded.
+     * Checked from 3 down to 1, same as the checklist method.
+     */
+    private int computeMaturityWeightedScore(Map<String, Double> categoryWeightEarned) {
+        Map<String, Double> categoryMax = maturityConfig.getCategoryMax();
+        double sumOfPercentages = 0.0;
+        int categoriesCounted = 0;
+        for (Map.Entry<String, Double> entry : categoryMax.entrySet()) {
+            String category = entry.getKey();
+            double max = entry.getValue() != null ? entry.getValue() : 0.0;
+            if (max > 0.0) {
+                double earned = categoryWeightEarned.getOrDefault(category, 0.0);
+                sumOfPercentages += (earned / max) * 100.0;
+                categoriesCounted++;
+            }
+        }
+        if (categoriesCounted == 0) return 0;
+        double score = sumOfPercentages / categoriesCounted;
+
+        if (maturityConfig.getLevel3Threshold() != null && meetsThreshold(score, maturityConfig.getLevel3Threshold()))
+            return 3;
+        if (maturityConfig.getLevel2Threshold() != null && meetsThreshold(score, maturityConfig.getLevel2Threshold()))
+            return 2;
+        if (maturityConfig.getLevel1Threshold() != null && meetsThreshold(score, maturityConfig.getLevel1Threshold()))
+            return 1;
+        return 0;
+    }
+
+    private static boolean meetsThreshold(double score, double threshold) {
+        return score >= threshold;
     }
 
     private static Map<String, String> normaliseFairMap(Map<String, String> fairMap) {
