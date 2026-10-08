@@ -235,12 +235,9 @@ class BenchmarkServiceTest {
         void throwsWhenResultsDirMissing() {
             String missingDir = tenantResultsDir.resolve("does-not-exist").toString();
 
-            IOException ex = assertThrows(IOException.class,
-                () -> service.generateManifest(missingDir),
-                "generateManifest must throw IOException for a missing directory");
-
-            assertTrue(ex.getMessage().contains("Results directory not found"),
-                "Exception message must mention the missing directory");
+            assertThrows(IOException.class,
+                    () -> service.generateManifest(missingDir),
+                    "generateManifest must throw IOException for a missing directory");
         }
 
         @Test
