@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.jspecify.annotations.NullMarked;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -24,7 +25,7 @@ import java.io.IOException;
 @ConditionalOnProperty(name = "tenants.enabled", havingValue = "true")
 public class TenantAuthFilter extends OncePerRequestFilter {
 
-    private static final String API_KEY_HEADER = "X-API-Key";
+    private static final String API_KEY_HEADER = "x-api-key";
 
     private final TenantProperties tenantProperties;
     private final TenantContext tenantContext;
@@ -39,32 +40,9 @@ public class TenantAuthFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
 
-        // Exempt health checks, the static dashboard HTML/assets, the
-        // per-page About_*.md user guides, and the SpringDoc/Swagger UI
-        // paths so the API documentation is accessible without an API
-        // key.
-        //
-        // Spring Boot's WelcomePageHandlerMapping internally forwards
-        // "GET /" to "/index.html" before this filter evaluates the
-        // request, so the servlet path seen here is "/index.html", not
-        // "/" — both must be exempted explicitly. Only the /api/**
-        // endpoints the dashboard JavaScript calls via fetch() require
-        // an API key; the HTML shell, its static assets, and the
-        // About_*.md guides (generic help text, not tenant data) do
-        // not. /results is not listed here, so it falls through to
-        // "requires auth" like /api — this allowlist form protects it
-        // implicitly rather than needing an explicit prefix check.
-        return path.startsWith("/actuator")
-            || path.startsWith("/static")
-            || path.equals("/")
-            || path.equals("/index.html")
-            || path.equals("/detail.html")
-            || path.equals("/fetch-identifiers.html")
-            || (path.startsWith("/About_") && path.endsWith(".md"))
-            || path.startsWith("/css/")
-            || path.startsWith("/js/")
-            || path.equals("/favicon.ico")
-            || path.startsWith("/api-docs");
+        // Only the /api/** endpoints the dashboard JavaScript calls
+        // via fetch() require an API key, all other endpoints do not
+        return !path.startsWith("/api");
     }
 
     @Override
@@ -78,10 +56,7 @@ public class TenantAuthFilter extends OncePerRequestFilter {
         String tenantId = tenantProperties.resolve(apiKey);
 
         if (tenantId == null) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json");
-            response.getWriter()
-                    .write("{\"error\":\"Missing or invalid API key\"}");
+            response.sendError(HttpStatus.UNAUTHORIZED.value(), "Missing or invalid API key");
             return;
         }
 

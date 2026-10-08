@@ -218,7 +218,7 @@ public class BenchmarkController {
                                 "'guidFile' and 'processAll', but not over 'guid'.") @RequestParam(required = false) List<Path> guidFiles,
 
                         @Parameter(description = "A single full OAI-PMH GetRecord URL to assess directly. " +
-                                        "Takes priority over 'guidFiles', 'guidFile', and 'processAll'.") @RequestParam(required = false) String guid,
+                                "Takes priority over 'guidFiles', 'guidFile', and 'processAll'.") @RequestParam(required = false) URI guid,
 
                         @Parameter(description = "When true, process guids_*.txt files for all default sets " +
                                         "(de, el, en, fi, fr, hr, nl, sl, sl-SI, sv). Ignored when " +
@@ -242,6 +242,7 @@ public class BenchmarkController {
                         "Equivalent to running GenerateManifest from the command line or " +
                         "the first step of start-dashboard.sh.", responses = {
                                         @ApiResponse(responseCode = "200", description = "Manifest generated successfully", content = @Content(schema = @Schema(example = "{\"status\":\"ok\",\"message\":\"Manifest generated in: /results\"}"))),
+                                        @ApiResponse(responseCode = "404", description = "JSON result files not found"),
                                         @ApiResponse(responseCode = "500", description = "Manifest generation failed")
                         })
         @PostMapping("/generate-manifest")
@@ -271,11 +272,5 @@ public class BenchmarkController {
         @GetMapping("/run-assessment/guid-files")
         public Map<String, List<String>> listGuidFiles() throws IOException {
                 return Map.of("files", service.listGuidFiles());
-        }
-
-        @ExceptionHandler
-        @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-        private Map<String, String> handleException(Exception e) {
-                return response("error", e.getMessage());
         }
 }

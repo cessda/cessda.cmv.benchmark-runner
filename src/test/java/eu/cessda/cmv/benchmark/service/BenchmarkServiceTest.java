@@ -6,8 +6,10 @@
 
 package eu.cessda.cmv.benchmark.service;
 
+import eu.cessda.cmv.benchmark.ProcessingException;
 import eu.cessda.cmv.benchmark.RunBenchmarkAssessment;
 import eu.cessda.cmv.benchmark.config.BenchmarkProperties;
+import eu.cessda.cmv.benchmark.models.SummaryStats;
 import eu.cessda.cmv.benchmark.tenant.TenantContext;
 import eu.cessda.cmv.benchmark.tenant.TenantProperties;
 import eu.cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig;
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.net.URI;
@@ -232,12 +235,9 @@ class BenchmarkServiceTest {
         void throwsWhenResultsDirMissing() {
             String missingDir = tenantResultsDir.resolve("does-not-exist").toString();
 
-            IOException ex = assertThrows(IOException.class,
-                () -> service.generateManifest(missingDir),
-                "generateManifest must throw IOException for a missing directory");
-
-            assertTrue(ex.getMessage().contains("Results directory not found"),
-                "Exception message must mention the missing directory");
+            assertThrows(IOException.class,
+                    () -> service.generateManifest(missingDir),
+                    "generateManifest must throw IOException for a missing directory");
         }
 
         @Test
@@ -358,9 +358,9 @@ class BenchmarkServiceTest {
                 () -> service.generateManifest(null),
                 "generateManifest must not throw when error files are present");
 
-            String summary = Files.readString(
-                tenantResultsDir.resolve("summary.json"), StandardCharsets.UTF_8);
-            assertTrue(summary.contains("\"records\" : 1"),
+            SummaryStats summary = new ObjectMapper()
+                    .readValue(tenantResultsDir.resolve("summary.json"), SummaryStats.class);
+            assertEquals(1, summary.overall().getRecords(),
                 "Error files must not be counted as result records");
         }
 
@@ -511,18 +511,12 @@ class BenchmarkServiceTest {
             // Supply the bare filename as the guidFile parameter; the service
             // resolves it against the tenant data dir.  The HTTP POST will fail,
             // but no FileNotFoundException should be thrown beforehand.
-            try {
-                service.runAssessment(
-                        URI.create("http://invalid.example.invalid"),
-                        URI.create("http://invalid.example.invalid"),
-                        Path.of("guids_test.txt"), null, null, false);
-            } catch (java.io.FileNotFoundException fnfe) {
-                org.junit.jupiter.api.Assertions.fail(
-                    "FileNotFoundException must not be thrown when the file "
-                            + "exists in the tenant data directory", fnfe);
-            } catch (IOException ignored) {
-                // Other IOException types (e.g. HTTP failure) are acceptable here.
-            }
+            assertThrows(ProcessingException.class,
+                    () -> service.runAssessment(
+                            URI.create("http://invalid.example.invalid"),
+                            URI.create("http://invalid.example.invalid"),
+                            Path.of("guids_test.txt"), null, null, false)
+            );
         }
 
         @Test

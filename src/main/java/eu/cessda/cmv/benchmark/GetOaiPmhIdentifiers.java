@@ -260,16 +260,14 @@ public class GetOaiPmhIdentifiers {
      * following resumption tokens until the full list has been retrieved, then
      * writes them as full GetRecord URLs to {@code guids_<set>.txt}.
      *
-     * @param set the set name, e.g. {@code "de"}
+     * @param setSpec the set name, e.g. {@code openaire_data}
      * @throws IOException          if an I/O error occurs
      * @throws InterruptedException if interrupted
      */
-    public void fetchIdentifiersForSet(String set)
+    public void fetchIdentifiersForSet(String setSpec)
             throws IOException, InterruptedException {
-        logger.log(Level.INFO, "Fetching identifiers for set: {0}", new Object[]{set});
+        logger.log(Level.INFO, "Fetching identifiers for set: {0}", new Object[]{setSpec});
         List<String> identifiers = new ArrayList<>();
-
-        String setSpec = qualifySetSpec(set);
 
         // The output filename must stay filesystem-safe (":" is
         // invalid in Windows paths) and match the guids_<code>.txt
@@ -285,9 +283,7 @@ public class GetOaiPmhIdentifiers {
                 + "&metadataPrefix=" + URLEncoder.encode(metadataPrefix, StandardCharsets.UTF_8)
                 + "&set=" + URLEncoder.encode(setSpec, StandardCharsets.UTF_8));
 
-        int page = 1;
         while (true) {
-            logger.log(Level.INFO, "Fetching page {0} (set={1}): {2}", new Object[]{page, set, url});
             Document xml;
             try (InputStream xmlStream = fetchUrl(url, HttpResponse.BodyHandlers.ofInputStream())) {
                 InputSource inputSource = new InputSource();
@@ -297,10 +293,10 @@ public class GetOaiPmhIdentifiers {
             } catch (ParserConfigurationException | SAXException e) {
                 throw new IOException("Failed to parse OAI-PMH XML: " + e.getMessage(), e);
             }
-            checkForOaiPmhError(xml, "set '" + setSpec + "', page " + page);
+            checkForOaiPmhError(xml, "set '" + setSpec);
             List<String> pageIdentifiers = parseIdentifiers(xml);
             identifiers.addAll(pageIdentifiers);
-            logger.log(Level.INFO, "Page {0}: retrieved {1} identifier(s) (total so far: {2})", new Object[]{page, pageIdentifiers.size(), identifiers.size()});
+            logger.log(Level.FINE, "Retrieved {0} identifier(s) (total so far: {1})", new Object[]{pageIdentifiers.size(), identifiers.size()});
 
             String resumptionToken = parseResumptionToken(xml);
             if (resumptionToken != null && !resumptionToken.isBlank()) {
@@ -308,37 +304,13 @@ public class GetOaiPmhIdentifiers {
                         + "?verb=" + URLEncoder.encode(verb, StandardCharsets.UTF_8)
                         + "&resumptionToken="
                         + URLEncoder.encode(resumptionToken, StandardCharsets.UTF_8));
-                page++;
             } else {
                 break;
             }
         }
 
-        logger.log(Level.INFO, "Fetched {0} identifier(s) for set: {1}", new Object[]{identifiers.size(), set});
+        logger.log(Level.INFO, "Fetched {0} identifier(s) for set: {1}", new Object[]{identifiers.size(), setSpec});
         writeGuidsFile(fileCode, identifiers);
-    }
-
-    /**
-     * Qualifies a set value into a full OAI-PMH setSpec.
-     *
-     * <p>{@code set} may be a short code (e.g. {@code "de"}) -- this
-     * repository expects those as {@code "language:<code>"}, see
-     * {@link #SET_SPEC_PREFIX} -- or it may already be a fully
-     * qualified setSpec as returned by {@link #listSets()} (e.g.
-     * {@code "language:hr"}, or a different tenant's own scheme
-     * entirely, which need not use a {@code "language:"} prefix or
-     * even contain a colon at all). The prefix is only prepended when
-     * the value doesn't already look qualified, so short codes keep
-     * working unchanged for the CLI's compiled-in CESSDA default while
-     * a setSpec obtained live from whichever endpoint is actually
-     * configured for a tenant is never double-prefixed.</p>
-     *
-     * @param set a short code or an already-qualified setSpec
-     * @return a setSpec ready to send as the {@code set} query
-     *         parameter
-     */
-    static String qualifySetSpec(String set) {
-        return set.contains(":") ? set : SET_SPEC_PREFIX + set;
     }
 
     /**

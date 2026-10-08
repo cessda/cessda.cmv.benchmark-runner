@@ -7,6 +7,7 @@
 package eu.cessda.cmv.benchmark;
 
 import eu.cessda.cmv.benchmark.config.BenchmarkProperties;
+import eu.cessda.cmv.benchmark.models.TenantResolution;
 import eu.cessda.cmv.benchmark.tenant.TenantProperties;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.ParseException;
@@ -124,7 +125,7 @@ class RunBenchmarkAssessmentTest {
                 RunBenchmarkAssessment localClient = new RunBenchmarkAssessment(assessment.getSpreadsheetUri(),
                         assessment.getChampionUri());
 
-                List<String> guids = localClient.readGuidsFromResource(guidFile);
+                List<URI> guids = localClient.readGuidsFromResource(guidFile);
                 assertTrue(guids.isEmpty(), "Comment-only file must produce an empty GUID list");
         }
 
@@ -244,7 +245,7 @@ class RunBenchmarkAssessmentTest {
                 TenantProperties tenantProperties = new TenantProperties();
                 BenchmarkProperties benchmarkProperties = benchmarkPropertiesWithDirs("./guids", "./results");
 
-                RunBenchmarkAssessment.TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
+                TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
                                 tenantProperties, benchmarkProperties, "no-such-tenant");
 
                 assertNull(resolution);
@@ -261,7 +262,7 @@ class RunBenchmarkAssessmentTest {
                 TenantProperties tenantProperties = tenantPropertiesWith("example", config);
                 BenchmarkProperties benchmarkProperties = benchmarkPropertiesWithDirs("./guids", "./results");
 
-                RunBenchmarkAssessment.TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
+                TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
                                 tenantProperties, benchmarkProperties, "example");
 
                 assertNotNull(resolution);
@@ -281,7 +282,7 @@ class RunBenchmarkAssessmentTest {
                 TenantProperties tenantProperties = tenantPropertiesWith("legacy", config);
                 BenchmarkProperties benchmarkProperties = benchmarkPropertiesWithDirs("./guids", "./results");
 
-                RunBenchmarkAssessment.TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
+                TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
                                 tenantProperties, benchmarkProperties, "legacy");
 
                 assertNotNull(resolution);
@@ -301,7 +302,7 @@ class RunBenchmarkAssessmentTest {
                 TenantProperties tenantProperties = tenantPropertiesWith("cessda", config);
                 BenchmarkProperties benchmarkProperties = benchmarkPropertiesWithDirs("./guids", "./results");
 
-                RunBenchmarkAssessment.TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
+                TenantResolution resolution = RunBenchmarkAssessment.resolveTenant(
                                 tenantProperties, benchmarkProperties, "cessda");
 
                 Path expectedDataDir = benchmarkProperties.getDataDir().resolve("cessda").normalize();
@@ -320,7 +321,7 @@ class RunBenchmarkAssessmentTest {
 
         @Test
         void findOverwhelmedIndicatorNamesReturnsEmptyForNonJsonBody() {
-                List<String> found = RunBenchmarkAssessment.findOverwhelmedIndicatorNames("<html>not json</html>");
+                List<String> found = assessment.findOverwhelmedIndicatorNames("<html>not json</html>");
                 assertTrue(found.isEmpty());
         }
 
@@ -334,7 +335,7 @@ class RunBenchmarkAssessmentTest {
                                   }
                                 }
                                 """;
-                assertTrue(RunBenchmarkAssessment.findOverwhelmedIndicatorNames(body).isEmpty());
+                assertTrue(assessment.findOverwhelmedIndicatorNames(body).isEmpty());
         }
 
         @Test
@@ -347,7 +348,7 @@ class RunBenchmarkAssessmentTest {
                                   }
                                 }
                                 """;
-                assertEquals(List.of("F1_GUID"), RunBenchmarkAssessment.findOverwhelmedIndicatorNames(body));
+                assertEquals(List.of("F1_GUID"), assessment.findOverwhelmedIndicatorNames(body));
         }
 
         @Test
@@ -361,8 +362,7 @@ class RunBenchmarkAssessmentTest {
                                   }
                                 }
                                 """;
-                assertEquals(List.of("F1_GUID", "I1_GUID"),
-                                RunBenchmarkAssessment.findOverwhelmedIndicatorNames(body));
+                assertEquals(List.of("F1_GUID", "I1_GUID"), assessment.findOverwhelmedIndicatorNames(body));
         }
 
         @Test
@@ -374,7 +374,7 @@ class RunBenchmarkAssessmentTest {
                                   ]
                                 }
                                 """;
-                assertEquals(List.of("test_results"), RunBenchmarkAssessment.findOverwhelmedIndicatorNames(body));
+                assertEquals(List.of("test_results"), assessment.findOverwhelmedIndicatorNames(body));
         }
 
         @Test
@@ -382,7 +382,7 @@ class RunBenchmarkAssessmentTest {
                 String body = """
                                 { "result": "result data not found", "log": null }
                                 """;
-                assertEquals(List.of("(unknown)"), RunBenchmarkAssessment.findOverwhelmedIndicatorNames(body));
+                assertEquals(List.of("(unknown)"), assessment.findOverwhelmedIndicatorNames(body));
         }
 
         // ── OverwhelmedIndicatorException ────────────────────────────────────────
@@ -390,7 +390,7 @@ class RunBenchmarkAssessmentTest {
         @Test
         void overwhelmedIndicatorExceptionMessageListsIndicators() {
                 var exception = new OverwhelmedIndicatorException(
-                                "https://example.org/oai?identifier=abc", List.of("F1_GUID", "A1_GUID"));
+                        URI.create("https://example.org/oai?identifier=abc"), List.of("F1_GUID", "A1_GUID"));
 
                 assertAll(
                                 () -> assertTrue(exception.getMessage().contains("F1_GUID")),
