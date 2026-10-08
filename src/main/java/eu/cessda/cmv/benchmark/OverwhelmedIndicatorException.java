@@ -2,6 +2,7 @@ package eu.cessda.cmv.benchmark;
 
 import java.io.IOException;
 import java.io.Serial;
+import java.net.URI;
 import java.util.List;
 
 public final class OverwhelmedIndicatorException extends IOException {
@@ -10,7 +11,7 @@ public final class OverwhelmedIndicatorException extends IOException {
 
     private final List<String> indicators;
 
-    public OverwhelmedIndicatorException(String guid, List<String> indicators) {
+    public OverwhelmedIndicatorException(URI guid, List<String> indicators) {
         super("Champion response for GUID " + guid
                 + " contained overwhelmed indicator(s): "
                 + String.join(", ", indicators));

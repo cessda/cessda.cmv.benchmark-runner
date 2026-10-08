@@ -29,7 +29,7 @@ public class BenchmarkService {
     public record Branding(String title, String footer) {}
 
     public BenchmarkService(BenchmarkProperties benchmarkProperties,
-                             TenantContext tenantContext,
+                            TenantContext tenantContext,
                              TenantProperties tenantProperties) {
         this.benchmarkProperties = benchmarkProperties;
         this.tenantContext    = tenantContext;
@@ -303,7 +303,7 @@ public class BenchmarkService {
             URI runnerUri,
             Path guidFile,
             List<Path> guidFiles,
-            String guid,
+            URI guid,
             boolean processAll) throws IOException, InterruptedException {
 
         Path tDataDir    = tenantDataDir();
@@ -326,10 +326,9 @@ public class BenchmarkService {
                     Duration.ofMillis(benchmarkProperties.getBackoffBetweenProcessGuidMs()));
         }
 
-        if (guid != null && !guid.isBlank()) {
-            runner.processSingleGuid(guid.trim());
-            return "Processed single GUID: " + guid.trim()
-                    + " -> " + tResultsDir;
+        if (guid != null) {
+            runner.processSingleGuid(guid);
+            return "Processed single GUID: " + guid + " -> " + tResultsDir;
         }
 
         if (guidFiles != null && !guidFiles.isEmpty()) {
@@ -375,10 +374,6 @@ public class BenchmarkService {
         Path targetDir = (overrideResultsDir != null && !overrideResultsDir.isBlank())
                 ? Path.of(overrideResultsDir).toAbsolutePath().normalize()
                 : tenantResultsDir();   // <-- tenant-scoped by default
-
-        if (!Files.isDirectory(targetDir)) {
-            throw new IOException("Results directory not found: " + targetDir);
-        }
 
         new GenerateManifest(targetDir, cfg.getFairMap(), toMaturityConfig(cfg.getMaturityLevels()))
             .run();

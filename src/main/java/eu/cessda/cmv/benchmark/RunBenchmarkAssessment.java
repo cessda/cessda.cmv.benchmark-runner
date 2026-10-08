@@ -17,6 +17,10 @@
 package eu.cessda.cmv.benchmark;
 
 import eu.cessda.cmv.benchmark.config.BenchmarkProperties;
+import eu.cessda.cmv.benchmark.models.ErrorDescription;
+import eu.cessda.cmv.benchmark.models.Payload;
+import eu.cessda.cmv.benchmark.models.Response;
+import eu.cessda.cmv.benchmark.models.TenantResolution;
 import eu.cessda.cmv.benchmark.tenant.TenantProperties;
 import org.apache.commons.cli.*;
 import org.springframework.boot.WebApplicationType;
@@ -29,10 +33,10 @@ import org.springframework.context.annotation.Configuration;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -122,8 +126,7 @@ public class RunBenchmarkAssessment {
     public static final String DEFAULT_GUIDS_FILE = "guids_hr.txt";
 
     private static final String DEFAULT_OAI_PMH_BASE_URL = "https://datacatalogue.cessda.eu/oai-pmh/v0/oai?verb=GetRecord&metadataPrefix=oai_ddi25&identifier=";
-
-    private static final ObjectMapper mapper = new ObjectMapper();
+    static final String PROCFAIL = "Failed to process GUID ";
 
     /**
      * Set codes whose {@code guids_XX.txt} files are processed
@@ -143,12 +146,11 @@ public class RunBenchmarkAssessment {
     private static final String PROCCOMP = "Processing completed!";
     static final String CHAMPION_URI_ARG = "championUri";
     private static final String FOUNDGUIDS = "Found {0} GUID(s) to process";
-    private static final String TASKTOOLONG = "Some tasks did not complete in time!";
     private static final String TASKSUCCESS = "All tasks completed successfully.";
     private static final String REQSEND = "Sending request to ";
     private static final String FILESAVEERR = "Could not save error file: ";
     private static final String PROCERROR = "Error processing GUID {0}: {1}";
-    private static final String PROCFAIL = "Failed to process GUID ";
+    private final ObjectMapper objectMapper;
 
     // CLI option names
     private static final String SPREADSHEET_ARG = "spreadsheetUri";
@@ -239,6 +241,7 @@ public class RunBenchmarkAssessment {
             URI championUri,
             Path guidsFilename,
             HttpClient httpClient,
+            ObjectMapper objectMapper,
             Path dataDir,
             Path resultsDir
     ) {
@@ -247,6 +250,7 @@ public class RunBenchmarkAssessment {
         this.championUri = championUri;
         this.guidsFilename = guidsFilename;
         this.httpClient = httpClient;
+        this.objectMapper = objectMapper;
         this.dataDir = dataDir;
         this.resultsDir = resultsDir;
     }
@@ -272,7 +276,8 @@ public class RunBenchmarkAssessment {
             URI spreadsheetUri,
             URI championUri,
             Duration requestTimeout,
-            HttpClient httpClient
+            HttpClient httpClient,
+            ObjectMapper objectMapper
     ) {
         this(
                 requestTimeout,
@@ -280,6 +285,7 @@ public class RunBenchmarkAssessment {
                 championUri,
                 Path.of(DEFAULT_GUIDS_FILE),
                 httpClient,
+                objectMapper,
                 Paths.get("data"),
                 Paths.get(OUTPUT_DIR)
         );
@@ -324,6 +330,7 @@ public class RunBenchmarkAssessment {
                 championUri,
                 Path.of(DEFAULT_GUIDS_FILE),
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build(),
+                new ObjectMapper(),
                 dataDir,
                 resultsDir
         );
@@ -349,7 +356,8 @@ public class RunBenchmarkAssessment {
                 spreadsheetUri,
                 championUri,
                 Duration.ofSeconds(120),
-                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build()
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build(),
+                new ObjectMapper()
         );
     }
 
@@ -412,13 +420,12 @@ public class RunBenchmarkAssessment {
      *
      * @param args command-line arguments
      */
-    public static void main(String[] args) throws IOException, InterruptedException {
+    public static void main(String[] args) throws IOException, InterruptedException, ProcessingException, URISyntaxException {
         logger.setLevel(Level.INFO);
 
         // Boot Spring without a web server so application.yml is
         // loaded and the shared benchmark.* properties are bound.
-        ApplicationContext ctx = new SpringApplicationBuilder(
-                CliConfig.class)
+        ApplicationContext ctx = new SpringApplicationBuilder(CliConfig.class)
                 .web(WebApplicationType.NONE)
                 .run(args);
 
@@ -492,13 +499,15 @@ public class RunBenchmarkAssessment {
         } else if (processFile) {
             client.processSingleFile(Path.of(cmd.getOptionValue(PROCESS_FILE_ARG)));
         } else if (singleGuid) {
-            client.processSingleGuid(cmd.getOptionValue(GUID_ARG));
+            var guid = cmd.getOptionValue(GUID_ARG);
+            var guidUri = new URI(guid);
+            client.processSingleGuid(guidUri);
         } else {
             // Legacy mode: process the file given by -f/--filename.
             if (cmd.hasOption(FILENAME_ARG)) {
                 client.guidsFilename = Path.of(cmd.getOptionValue(FILENAME_ARG));
             }
-            List<String> guids = client.readGuidsFromResource(client.guidsFilename);
+            List<URI> guids = client.readGuidsFromResource(client.guidsFilename);
             if (guids.isEmpty()) {
                 logger.info(NOGUIDS);
             } else {
@@ -507,20 +516,6 @@ public class RunBenchmarkAssessment {
                 logger.info(PROCCOMP);
             }
         }
-    }
-
-    /**
-     * The algorithm, runner, and data/results directories resolved for
-     * one tenant by {@link #resolveTenant}.
-     *
-     * @param algorithm  the tenant's effective algorithm URI
-     * @param runner     the tenant's effective runner URI
-     * @param dataDir    {@code {data-dir}/{tenantId}/}, absolute and
-     *                   normalized
-     * @param resultsDir {@code {results-dir}/{tenantId}/}, absolute and
-     *                   normalized
-     */
-    record TenantResolution(URI algorithm, URI runner, Path dataDir, Path resultsDir) {
     }
 
     /**
@@ -659,319 +654,6 @@ public class RunBenchmarkAssessment {
     // -----------------------------------------------------------------------
 
     /**
-     * Iterates over every set in {@link #DEFAULT_SETS}, resolves the
-     * corresponding {@code guids_XX.txt} file, and processes it if
-     * found. Missing files are logged and skipped rather than causing
-     * a hard failure.
-     *
-     * @throws InterruptedException if processing is interrupted
-     */
-    public void processAllSetFiles() throws InterruptedException {
-
-        logger.info("Processing GUID files for all sets...");
-        for (String set : DEFAULT_SETS) {
-            Path filename = Path.of("guids_" + set + ".txt");
-            logger.log(Level.INFO, "Processing file: {0}", filename);
-            try {
-                processSingleFile(filename);
-            } catch (IOException e) {
-                logger.log(Level.SEVERE, "Skipping {0} — : {1}", new Object[]{filename, e.toString()});
-            }
-        }
-        logger.info("Finished processing all set files.");
-    }
-
-    // -----------------------------------------------------------------------
-    // GUID processing
-    // -----------------------------------------------------------------------
-
-    /**
-     * Reads GUIDs from the named file and processes them.
-     *
-     * <p>
-     * Each non-blank, non-comment line is treated as a full
-     * GetRecord URL as produced by {@link GetOaiPmhIdentifiers}.
-     * </p>
-     *
-     * @param filename name of the file to read (classpath resources
-     *                 are checked first, then the current directory)
-     * @throws IOException          if a file operation fails
-     * @throws InterruptedException if processing is interrupted
-     */
-    public void processSingleFile(Path filename)
-            throws IOException, InterruptedException {
-
-        Path previousFilename = guidsFilename;
-        guidsFilename = filename;
-        try {
-            List<String> guids = readGuidsFromResource(guidsFilename);
-            if (guids.isEmpty()) {
-                logger.log(Level.INFO, "No GUIDs found in {0}. Skipping.", filename);
-                return;
-            }
-            logger.log(Level.INFO, FOUNDGUIDS + " in {1}", new Object[]{guids.size(), filename});
-            Path subDir = deriveSubdirectory(filename);
-            processGuids(guids, subDir);
-            logger.log(Level.INFO, PROCCOMP + " ({0})", filename);
-        } finally {
-            guidsFilename = previousFilename;
-        }
-    }
-
-    /**
-     * Processes a single GetRecord URL supplied directly on the
-     * command line.
-     *
-     * @param guid the full GetRecord URL to submit
-     * @throws IOException          if a file operation fails
-     * @throws InterruptedException if processing is interrupted
-     */
-    public void processSingleGuid(String guid)
-            throws IOException, InterruptedException {
-
-        logger.log(Level.INFO, "Processing single GUID: {0}", guid);
-        processOneGuid(guid, null);
-        logger.info(PROCCOMP);
-    }
-
-    /**
-     * Reads GUIDs from the file identified by {@link #guidsFilename}.
-     *
-     * @return an immutable list of GUID / GetRecord URL strings
-     * @throws IOException if the file cannot be found or read
-     */
-    List<String> readGuidsFromResource(Path guidsFilename) throws IOException {
-        List<String> guidsFromFile;
-
-        try {
-            guidsFromFile = Files.readAllLines(guidsFilename, StandardCharsets.UTF_8);
-        } catch (NoSuchFileException noSuchFileException) {
-            if (guidsFilename.isAbsolute()) {
-                // No point attempting to resolve, it would try guidsFilename again
-                throw noSuchFileException;
-            }
-
-            // Fall back to resolving the bare filename under the tenant data directory
-            try {
-                guidsFromFile = Files.readAllLines(dataDir.resolve(guidsFilename), StandardCharsets.UTF_8);
-            } catch (IOException ioException) {
-                // Add suppressed exception
-                ioException.addSuppressed(noSuchFileException);
-                throw ioException;
-            }
-        }
-
-        return guidsFromFile
-                .stream()
-                .map(String::trim)
-                .filter(l -> !l.isBlank() && !l.startsWith("#"))
-                .toList();
-    }
-
-    /**
-     * Submits all GUIDs to the Champion API, with at most
-     * {@link #MAX_CONCURRENT_REQUESTS} submissions in flight at once,
-     * and awaits completion for up to ten minutes.
-     * Every submission after the first ({@code index > 0}) is preceded
-     * by a {@link #backoffBetweenProcessGuid}-millisecond pause, to
-     * ease the burst of concurrent requests Champion otherwise sees.
-     *
-     * @param guids  list of GetRecord URLs to submit
-     * @param subDir subdirectory under {@code resultsDir} for
-     *               results (may be {@code null})
-     * @throws InterruptedException if the executor is interrupted
-     *                              while waiting
-     */
-    private void processGuids(
-            List<String> guids,
-            Path subDir) throws InterruptedException {
-
-        final Semaphore inFlight = new Semaphore(MAX_CONCURRENT_REQUESTS);
-
-        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-
-            for (int index = 0; index < guids.size(); index++) {
-                final String guid = normaliseGuid(guids.get(index));
-                final boolean first = index == 0;
-
-                CompletableFuture.runAsync(() -> {
-                    try {
-                        inFlight.acquire();
-                        try {
-                            if (!first) {
-                                Thread.sleep(backoffBetweenProcessGuid);
-                            }
-                            processOneGuid(guid, subDir);
-                        } finally {
-                            inFlight.release();
-                        }
-                    } catch (IOException ioe) {
-                        logger.log(Level.SEVERE, PROCERROR, new Object[]{guid, ioe.toString()});
-                        saveErrorFile(guid, ioe, subDir);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                    }
-                }, executor);
-            }
-
-            executor.shutdown();
-
-            if (executor.awaitTermination(10, TimeUnit.MINUTES)) {
-                logger.info(TASKSUCCESS);
-            } else {
-                logger.warning(TASKTOOLONG);
-            }
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // Response / error writing
-    // -----------------------------------------------------------------------
-
-    /**
-     * Submits a single GUID to the Champion API and saves the response.
-     * This method implements a retry mechanism for transient errors such as
-     * timeouts and 5xx responses — and, since Champion can also return
-     * HTTP 200 while silently failing to evaluate one or more indicators
-     * under load, a response body containing an
-     * {@link #OVERWHELMED_RESULT_MARKER overwhelmed indicator} — with
-     * exponential backoff between attempts.
-     * <p>
-     * If all attempts fail, a structured error file is saved with details of the
-     * failure.
-     *
-     * @param guid   full GetRecord URL to submit as the {@code "guid"}
-     *               payload field
-     * @param subDir subdirectory under {@code resultsDir} for
-     *               results (may be {@code null})
-     * @throws IOException          if the HTTP request or file write
-     *                              fails
-     * @throws InterruptedException if interrupted awaiting the response
-     */
-    private void processOneGuid(
-            String guid,
-            Path subDir) throws IOException, InterruptedException {
-
-        logger.log(Level.INFO, "Processing GUID {0}", guid);
-
-        ObjectNode payload = mapper.createObjectNode();
-        payload.put("calculation_uri", spreadsheetUri.toString());
-        payload.put("guid", guid);
-        String jsonPayload = mapper.writeValueAsString(payload);
-        logger.log(Level.INFO, REQSEND + "{0} — {1}", new Object[]{championUri, jsonPayload});
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(championUri)
-                .header(ACCEPT, HEADER_VALUE)
-                .header(CONTENT_TYPE, HEADER_VALUE)
-                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
-                .timeout(requestTimeout)
-                .build();
-
-        Exception lastException = null;
-        for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
-            if (attempt > 0) {
-                Duration backoff = INITIAL_BACKOFF.multipliedBy((1L << (attempt - 1))); // 2s, 4s, 8s...
-                logger.log(Level.INFO, "Retry {0}/{1} for GUID {2} after {3}ms backoff",
-                        new Object[]{attempt, MAX_RETRIES - 1, guid, backoff}
-                );
-                Thread.sleep(backoff);
-            }
-            try {
-                Instant requestStart = Instant.now();
-                HttpResponse<String> response = httpClient.send(
-                        request, HttpResponse.BodyHandlers.ofString());
-                long elapsedMs = Duration.between(requestStart, Instant.now()).toMillis();
-
-                Path outputDir = resolveOutputDir(subDir);
-                Files.createDirectories(outputDir);
-
-                String sanitisedGuid = guid
-                        .replaceAll(".*[?&]identifier=([^&]+).*", "$1")
-                        .replaceAll("[^a-zA-Z0-9._-]", "_");
-                Path jsonOutputPath = outputDir.resolve(sanitisedGuid + ".json");
-
-                if (response.statusCode() >= 500 && response.statusCode() <= 599) {
-                    lastException = new IOException(
-                            "Gateway error: HTTP " + response.statusCode());
-                    logger.log(Level.FINE, "Attempt {0} failed for GUID {1}: HTTP {2}",
-                            new Object[]{attempt + 1, guid, response.statusCode()});
-                    continue; // trigger next retry iteration
-                }
-
-                List<String> overwhelmedIndicators =
-                        findOverwhelmedIndicatorNames(response.body());
-                if (!overwhelmedIndicators.isEmpty()) {
-                    // A dedicated exception type — rather than folding the
-                    // names into a generic IOException's message — lets
-                    // saveErrorFile write them as a structured
-                    // "overwhelmedIndicators" array (and errorType itself
-                    // becomes an unambiguous category), instead of
-                    // downstream analysis having to regex a free-text
-                    // message whose wording can (and has) changed.
-                    lastException = new OverwhelmedIndicatorException(guid, overwhelmedIndicators);
-                    logger.log(Level.SEVERE,
-                            "Attempt {0} failed for GUID {1}: HTTP {2} response body contained {3} overwhelmed indicator(s): {4}",
-                            new Object[]{attempt + 1, guid, response.statusCode(),
-                                    overwhelmedIndicators.size(), String.join(", ", overwhelmedIndicators)});
-                    continue; // trigger next retry iteration
-                }
-
-                writeResponseBodyAsJson(jsonOutputPath, response.body(), guid, response.statusCode());
-
-                logger.info(RESPSAVED + guid + " (Status: " + response.statusCode() + ", Time: " + elapsedMs + "ms)");
-                return; // success — exit retry loop
-
-            } catch (HttpTimeoutException e) {
-                // Transient errors worth retrying
-                lastException = e;
-                logger.log(Level.FINE, "Attempt {0} failed for GUID {1}: {2}",
-                        new Object[]{attempt + 1, guid, e.toString()});
-            } catch (IOException e) {
-                if (e.getMessage() != null && e.getMessage().contains("too many concurrent streams")) {
-                    // Transient HTTP/2 stream-limit rejection — retry
-                    lastException = e;
-                    logger.log(Level.FINE, "Attempt {0} failed for GUID {1}: {2}",
-                            new Object[]{attempt + 1, guid, e.toString()});
-                    continue;
-                }
-                // Non-transient — fail immediately
-                logger.log(Level.SEVERE, PROCFAIL + "{0}: {1}", new Object[]{guid, e.getMessage()});
-                saveErrorFile(guid, e, subDir);
-                throw e;
-            }
-        }
-
-        // All retries exhausted
-        logger.log(Level.SEVERE, PROCFAIL + "{0}: all {1} attempts failed", new Object[]{guid, MAX_RETRIES});
-        saveErrorFile(guid, lastException, subDir);
-        throw new IOException("All retries exhausted for GUID: " + guid, lastException);
-    }
-
-    /**
-     * Finds the name(s) of every indicator in a Champion response body
-     * whose {@code "result"} field carries
-     * {@link #OVERWHELMED_RESULT_MARKER}, i.e. Champion was overloaded
-     * and could not actually evaluate that indicator. Non-JSON or
-     * unparseable bodies yield an empty list, since
-     * {@link #writeResponseBodyAsJson} already handles those by
-     * wrapping the raw body rather than expecting indicator objects.
-     *
-     * @param responseBody raw HTTP response body
-     * @return the overwhelmed indicators' names (e.g. {@code "F1_GUID"}),
-     *         in encounter order; empty if none (or the body isn't
-     *         parseable JSON)
-     */
-    static List<String> findOverwhelmedIndicatorNames(String responseBody) {
-        try {
-            JsonNode jsonNode = mapper.readTree(responseBody);
-            return collectOverwhelmedIndicatorNames(jsonNode, null);
-        } catch (JacksonException e) {
-            return Collections.emptyList();
-        }
-    }
-
-    /**
      * Recursively walks a parsed Champion response collecting the
      * name of every indicator object whose {@code "result"} field
      * contains {@link #OVERWHELMED_RESULT_MARKER}. Recursion (rather
@@ -990,7 +672,7 @@ public class RunBenchmarkAssessment {
      * @param node     current node being inspected
      * @param nameHint the most recent object key descended through, or
      *                 {@code null} at the root
-     * @return
+     * @return a list of found overwhelmed indicators.
      */
     static List<String> collectOverwhelmedIndicatorNames(JsonNode node, String nameHint) {
         List<String> found = new ArrayList<>();
@@ -1016,6 +698,287 @@ public class RunBenchmarkAssessment {
         return found;
     }
 
+    // -----------------------------------------------------------------------
+    // GUID processing
+    // -----------------------------------------------------------------------
+
+    /**
+     * Iterates over every set in {@link #DEFAULT_SETS}, resolves the
+     * corresponding {@code guids_XX.txt} file, and processes it if
+     * found. Missing files are logged and skipped rather than causing
+     * a hard failure.
+     */
+    public void processAllSetFiles() {
+
+        logger.info("Processing GUID files for all sets...");
+        for (String set : DEFAULT_SETS) {
+            Path filename = Path.of("guids_" + set + ".txt");
+            logger.log(Level.INFO, "Processing file: {0}", filename);
+            try {
+                processSingleFile(filename);
+            } catch (IOException e) {
+                logger.log(Level.SEVERE, "Skipping {0} — : {1}", new Object[]{filename, e.toString()});
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        logger.info("Finished processing all set files.");
+    }
+
+    /**
+     * Reads GUIDs from the named file and processes them.
+     *
+     * <p>
+     * Each non-blank, non-comment line is treated as a full
+     * GetRecord URL as produced by {@link GetOaiPmhIdentifiers}.
+     * </p>
+     *
+     * @param filename name of the file to read (classpath resources
+     *                 are checked first, then the current directory)
+     * @throws IOException          if a file operation fails
+     */
+    public void processSingleFile(Path filename) throws IOException, InterruptedException {
+
+        Path previousFilename = guidsFilename;
+        guidsFilename = filename;
+        try {
+            List<URI> guids = readGuidsFromResource(guidsFilename);
+            if (guids.isEmpty()) {
+                logger.log(Level.INFO, "No GUIDs found in {0}. Skipping.", filename);
+                return;
+            }
+            logger.log(Level.INFO, FOUNDGUIDS + " in {1}", new Object[]{guids.size(), filename});
+            Path subDir = deriveSubdirectory(filename);
+            processGuids(guids, subDir);
+            logger.log(Level.INFO, PROCCOMP + " ({0})", filename);
+        } finally {
+            guidsFilename = previousFilename;
+        }
+    }
+
+    /**
+     * Processes a single GetRecord URL supplied directly on the
+     * command line.
+     *
+     * @param guid the full GetRecord URL to submit
+     * @throws InterruptedException if processing is interrupted
+     */
+    public void processSingleGuid(URI guid) throws InterruptedException, ProcessingException {
+
+        logger.log(Level.INFO, "Processing single GUID: {0}", guid);
+        processOneGuid(guid, null);
+        logger.info(PROCCOMP);
+    }
+
+    /**
+     * Reads GUIDs from the file identified by {@link #guidsFilename}.
+     *
+     * @return an immutable list of GUID / GetRecord URL strings
+     * @throws IOException if the file cannot be found or read
+     */
+    List<URI> readGuidsFromResource(Path guidsFilename) throws IOException {
+
+        List<String> guidsFromFile;
+
+        try {
+            guidsFromFile = Files.readAllLines(guidsFilename, StandardCharsets.UTF_8);
+        } catch (NoSuchFileException noSuchFileException) {
+            if (guidsFilename.isAbsolute()) {
+                // No point attempting to resolve, it would try guidsFilename again
+                throw noSuchFileException;
+            }
+
+            // Fall back to resolving the bare filename under the tenant data directory
+            try {
+                guidsFromFile = Files.readAllLines(dataDir.resolve(guidsFilename), StandardCharsets.UTF_8);
+            } catch (IOException ioException) {
+                // Add suppressed exception
+                ioException.addSuppressed(noSuchFileException);
+                throw ioException;
+            }
+        }
+
+        var guidList = new ArrayList<URI>(guidsFromFile.size());
+        for (var line : guidsFromFile) {
+            // Ignore comments
+            int commentStart = line.indexOf('#');
+            if (commentStart != -1) {
+                line = line.substring(0, line.indexOf('#'));
+            }
+
+            // Trim string
+            var uriString = line.trim();
+            if (!uriString.isBlank()) {
+
+                // Construct the URI
+                var uri = URI.create(uriString);
+                guidList.add(uri);
+            }
+        }
+
+        return guidList;
+    }
+
+    // -----------------------------------------------------------------------
+    // Response / error writing
+    // -----------------------------------------------------------------------
+
+    /**
+     * Submits all GUIDs to the Champion API, with at most
+     * {@link #MAX_CONCURRENT_REQUESTS} submissions in flight at once,
+     * and awaits completion for up to ten minutes.
+     * Every submission after the first ({@code index > 0}) is preceded
+     * by a {@link #backoffBetweenProcessGuid}-millisecond pause, to
+     * ease the burst of concurrent requests Champion otherwise sees.
+     *
+     * @param guids  list of GetRecord URLs to submit
+     * @param subDir subdirectory under {@code resultsDir} for
+     *               results (may be {@code null})
+     * @return a {@link CompletableFuture} that completes when all guids finish processing.
+     */
+    private void processGuids(List<URI> guids, Path subDir) throws InterruptedException {
+        for (URI uri : guids) {
+            URI guid = normaliseGuid(uri);
+            processOneGuid(guid, subDir);
+        }
+
+        logger.info(TASKSUCCESS);
+    }
+
+    /**
+     * Submits a single GUID to the Champion API and saves the response.
+     * This method implements a retry mechanism for transient errors such as
+     * timeouts and 5xx responses — and, since Champion can also return
+     * HTTP 200 while silently failing to evaluate one or more indicators
+     * under load, a response body containing an
+     * {@link #OVERWHELMED_RESULT_MARKER overwhelmed indicator} — with
+     * exponential backoff between attempts.
+     * <p>
+     * If all attempts fail, a structured error file is saved with details of the
+     * failure.
+     *
+     * @param guid   full GetRecord URL to submit as the {@code "guid"}
+     *               payload field
+     * @param subDir subdirectory under {@code resultsDir} for
+     *               results (may be {@code null})
+     * @throws InterruptedException if interrupted awaiting the response
+     */
+    private void processOneGuid(URI guid, Path subDir) throws InterruptedException, ProcessingException {
+
+        logger.log(Level.INFO, "Processing GUID {0}", guid);
+
+        var payload = new Payload(spreadsheetUri, guid);
+        String jsonPayload = objectMapper.writeValueAsString(payload);
+
+        logger.log(Level.INFO, REQSEND + "{0} — {1}", new Object[]{championUri, jsonPayload});
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(championUri)
+                .header(ACCEPT, HEADER_VALUE)
+                .header(CONTENT_TYPE, HEADER_VALUE)
+                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
+                .timeout(requestTimeout)
+                .build();
+
+        Exception lastException = null;
+        for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
+            if (attempt > 0) {
+                Duration backoff = INITIAL_BACKOFF.multipliedBy((1L << (attempt - 1))); // 2s, 4s, 8s...
+                logger.log(Level.INFO, "Retry {0}/{1} for GUID {2} after {3}ms backoff",
+                        new Object[]{attempt, MAX_RETRIES - 1, guid, backoff}
+                );
+                Thread.sleep(backoff);
+            }
+            try {
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+                Path outputDir = resolveOutputDir(subDir);
+                Files.createDirectories(outputDir);
+
+                String sanitisedGuid = guid.toString()
+                        .replaceAll(".*[?&]identifier=([^&]+).*", "$1")
+                        .replaceAll("[^a-zA-Z0-9._-]", "_");
+                Path jsonOutputPath = outputDir.resolve(sanitisedGuid + ".json");
+
+                if (response.statusCode() >= 500 && response.statusCode() <= 599) {
+                    lastException = new IOException("Gateway error: HTTP " + response.statusCode());
+                    logger.log(Level.FINE, "Attempt {0} failed for GUID {1}: HTTP {2}",
+                            new Object[]{attempt + 1, guid, response.statusCode()});
+                    continue; // trigger next retry iteration
+                }
+
+                List<String> overwhelmedIndicators =
+                        findOverwhelmedIndicatorNames(response.body());
+                if (!overwhelmedIndicators.isEmpty()) {
+                    // A dedicated exception type — rather than folding the
+                    // names into a generic IOException's message — lets
+                    // saveErrorFile write them as a structured
+                    // "overwhelmedIndicators" array (and errorType itself
+                    // becomes an unambiguous category), instead of
+                    // downstream analysis having to regex a free-text
+                    // message whose wording can (and has) changed.
+                    lastException = new OverwhelmedIndicatorException(guid, overwhelmedIndicators);
+                    logger.log(Level.SEVERE,
+                            "Attempt {0} failed for GUID {1}: HTTP {2} response body contained {3} overwhelmed indicator(s): {4}",
+                            new Object[]{attempt + 1, guid, response.statusCode(),
+                                    overwhelmedIndicators.size(), String.join(", ", overwhelmedIndicators)});
+                    continue; // trigger next retry iteration
+                }
+
+                writeResponseBodyAsJson(jsonOutputPath, response.body(), guid, response.statusCode());
+                logger.log(Level.INFO, RESPSAVED + "{0} to {1} (Status: {2})",
+                        new Object[]{guid, jsonOutputPath.getFileName(), response.statusCode()});
+                return; // success — exit retry loop
+
+            } catch (HttpTimeoutException e) {
+                // Transient errors worth retrying
+                lastException = e;
+                logger.log(Level.FINE, "Attempt {0} failed for GUID {1}: {2}",
+                        new Object[]{attempt + 1, guid, e.toString()});
+            } catch (IOException e) {
+                if (e.getMessage() != null && e.getMessage().contains("too many concurrent streams")) {
+                    // Transient HTTP/2 stream-limit rejection — retry
+                    lastException = e;
+                    logger.log(Level.FINE, "Attempt {0} failed for GUID {1}: {2}",
+                            new Object[]{attempt + 1, guid, e.toString()});
+                    continue;
+                }
+                // Non-transient — fail immediately
+                saveErrorFile(guid, e, subDir);
+                throw new ProcessingException(guid, e);
+            }
+        }
+
+        // All retries exhausted
+        logger.log(Level.SEVERE, PROCFAIL + "{0}: all {1} attempts failed", new Object[]{guid, MAX_RETRIES});
+        saveErrorFile(guid, lastException, subDir);
+        throw new ProcessingException(guid, lastException);
+    }
+
+    /**
+     * Finds the name(s) of every indicator in a Champion response body
+     * whose {@code "result"} field carries
+     * {@link #OVERWHELMED_RESULT_MARKER}, i.e. Champion was overloaded
+     * and could not actually evaluate that indicator. Non-JSON or
+     * unparseable bodies yield an empty list, since
+     * {@link #writeResponseBodyAsJson} already handles those by
+     * wrapping the raw body rather than expecting indicator objects.
+     *
+     * @param responseBody raw HTTP response body
+     * @return the overwhelmed indicators' names (e.g. {@code "F1_GUID"}),
+     *         in encounter order; empty if none (or the body isn't
+     *         parseable JSON)
+     */
+    List<String> findOverwhelmedIndicatorNames(String responseBody) {
+        try {
+            JsonNode jsonNode = objectMapper.readTree(responseBody);
+            return collectOverwhelmedIndicatorNames(jsonNode, null);
+        } catch (JacksonException e) {
+            return Collections.emptyList();
+        }
+    }
+
     /**
      * Writes the raw API response body to a JSON file. If the body is
      * already valid JSON it is written as-is; otherwise it is wrapped
@@ -1030,24 +993,18 @@ public class RunBenchmarkAssessment {
     private void writeResponseBodyAsJson(
             Path path,
             String responseBody,
-            String guid,
-            int statusCode) {
-        JsonNode jsonContent;
-
+            URI guid,
+            int statusCode) throws IOException {
+        var writer = Files.newBufferedWriter(path);
         try {
-            jsonContent = mapper.readTree(responseBody);
+            objectMapper.readTree(responseBody);
+            writer.write(responseBody);
         } catch (JacksonException e) {
-            ObjectNode wrapper = mapper.createObjectNode();
-            wrapper.put("guid", guid);
-            wrapper.put("statusCode", statusCode);
-            wrapper.put("responseType", "html");
-            wrapper.put("content", responseBody);
-            wrapper.put("timestamp", Instant.now().toString());
-            jsonContent = wrapper;
+            var response = new Response(guid, statusCode, "html", responseBody, Instant.now());
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(writer, response);
+        } finally {
+            writer.close();
         }
-
-        mapper.writerWithDefaultPrettyPrinter().writeValue(path, jsonContent);
-        logger.log(Level.INFO, "Saved JSON response for GUID to {0}", path.getFileName());
     }
 
     // -----------------------------------------------------------------------
@@ -1066,15 +1023,17 @@ public class RunBenchmarkAssessment {
      *               (may be {@code null})
      */
     private void saveErrorFile(
-            String guid,
-            Exception error,
+            URI guid,
+            Throwable error,
             Path subDir) {
 
         try {
+            // Create destination directory
             Path outputDir = resolveOutputDir(subDir);
             Files.createDirectories(outputDir);
 
-            String sanitisedGuid = guid
+            // Create error file path
+            String sanitisedGuid = guid.toString()
                     .replaceAll("[^a-zA-Z0-9._-]", "_");
             String errorFilename = "error_" + sanitisedGuid + ".json";
             Path errorPath = outputDir.resolve(errorFilename);
@@ -1086,25 +1045,10 @@ public class RunBenchmarkAssessment {
                 errorPath = outputDir.resolve(errorFilename);
             }
 
-            ObjectNode errorJson = mapper.createObjectNode();
-            errorJson.put("guid", guid);
-            errorJson.put("error", error.getMessage());
-            errorJson.put("errorType",
-                    error.getClass().getSimpleName());
-            errorJson.put("timestamp", Instant.now().toString());
-            if (error.getCause() != null) {
-                errorJson.put("cause",
-                        error.getCause().getMessage());
-            }
-            if (error instanceof OverwhelmedIndicatorException overwhelmed) {
-                var indicatorsArray = errorJson.putArray("overwhelmedIndicators");
-                for (String indicator : overwhelmed.getIndicators()) {
-                    indicatorsArray.add(indicator);
-                }
-            }
+            var errorJson = new ErrorDescription(guid, error);
 
-            mapper.writerWithDefaultPrettyPrinter()
-                    .writeValue(errorPath.toFile(), errorJson);
+            objectMapper.writerWithDefaultPrettyPrinter()
+                    .writeValue(errorPath, errorJson);
 
             logger.log(Level.INFO, "Saved error details to {0}", errorFilename);
 
@@ -1134,6 +1078,22 @@ public class RunBenchmarkAssessment {
     // -----------------------------------------------------------------------
     // CLI
     // -----------------------------------------------------------------------
+
+    /**
+     * Normalises a GUID by checking if it already starts with "http://" or
+     * "https://".
+     * If it does, it returns the GUID as is. If it does not, it prepends the
+     * DEFAULT_OAI_PMH_BASE_URL to the GUID and returns the resulting string.
+     *
+     * @param guid the GUID to normalise
+     * @return the normalised GUID
+     */
+    private URI normaliseGuid(URI guid) {
+        if (guid.isAbsolute() && (guid.getScheme().equals("http") || guid.getScheme().equals("https"))) {
+            return guid;
+        }
+        return URI.create(DEFAULT_OAI_PMH_BASE_URL + guid);
+    }
 
     /**
      * Spring configuration used only by {@link #main(String[])} to
@@ -1195,29 +1155,15 @@ public class RunBenchmarkAssessment {
                 BenchmarkProperties benchmarkProperties) {
             RunBenchmarkAssessment runner = new RunBenchmarkAssessment(
                     benchmarkProperties.getAlgorithm(),
-                    benchmarkProperties.getRunner());
+                    benchmarkProperties.getRunner(),
+                    benchmarkProperties.getDataDir(),
+                    benchmarkProperties.getResultsDir());
             if (benchmarkProperties.getBackoffBetweenProcessGuidMs() != null) {
                 runner.setBackoffBetweenProcessGuid(
                         Duration.ofMillis(benchmarkProperties.getBackoffBetweenProcessGuidMs()));
             }
             return runner;
         }
-    }
-
-    /**
-     * Normalises a GUID by checking if it already starts with "http://" or
-     * "https://".
-     * If it does, it returns the GUID as is. If it does not, it prepends the
-     * DEFAULT_OAI_PMH_BASE_URL to the GUID and returns the resulting string.
-     *
-     * @param guid the GUID to normalise
-     * @return the normalised GUID
-     */
-    private String normaliseGuid(String guid) {
-        if (guid.startsWith("http://") || guid.startsWith("https://")) {
-            return guid;
-        }
-        return DEFAULT_OAI_PMH_BASE_URL + guid;
     }
 
 }

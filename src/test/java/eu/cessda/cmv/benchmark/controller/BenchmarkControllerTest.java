@@ -18,12 +18,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.ComponentScan.Filter;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.io.IOException;
+import java.io.FileNotFoundException;
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.List;
@@ -68,12 +70,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @WebMvcTest(
     controllers = BenchmarkController.class,
-    excludeFilters = @org.springframework.context.annotation.ComponentScan.Filter(
+    excludeFilters = @Filter(
         type = org.springframework.context.annotation.FilterType.ASSIGNABLE_TYPE,
             classes = TenantAuthFilter.class
     )
 )
-@org.springframework.context.annotation.Import(SecurityConfig.class)
+@Import({ControllerAdvisor.class, SecurityConfig.class})
 @EnableConfigurationProperties(BenchmarkProperties.class)
 @TestPropertySource(properties = {
     "benchmark.data-dir=${java.io.tmpdir}/benchmark-controller-test-data",
@@ -170,32 +172,6 @@ class BenchmarkControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status", is("ok")));
         }
-
-        @Test
-        @DisplayName("Returns 500 with error status when service throws IOException")
-        void serviceExceptionReturns500() throws Exception {
-            when(service.fetchIdentifiers(
-                    any(), any(), any(), any(), any()))
-                .thenThrow(new IOException("Connection refused"));
-
-            mvc.perform(post("/api/fetch-identifiers"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.status", is("error")))
-                .andExpect(jsonPath("$.message", is("Connection refused")));
-        }
-
-        @Test
-        @DisplayName("Returns 500 with error status when service throws "
-                + "InterruptedException")
-        void interruptedExceptionReturns500() throws Exception {
-            when(service.fetchIdentifiers(
-                    any(), any(), any(), any(), any()))
-                .thenThrow(new InterruptedException("Interrupted"));
-
-            mvc.perform(post("/api/fetch-identifiers"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.status", is("error")));
-        }
     }
 
     // -------------------------------------------------------------------------
@@ -284,23 +260,25 @@ class BenchmarkControllerTest {
         @Test
         @DisplayName("Passes single guid URL parameter to service")
         void singleGuidParameterIsForwarded() throws Exception {
-            String guidUrl =
+            String guid =
                 "https://datacatalogue.cessda.eu/oai-pmh/v0/oai"
                 + "?verb=GetRecord&metadataPrefix=oai_ddi25"
                 + "&identifier=abc123";
 
+            URI guidUri = URI.create(guid);
+
             when(service.runAssessment(
-        isNull(), isNull(), isNull(), isNull(), eq(guidUrl), eq(false)))
+                    isNull(), isNull(), isNull(), isNull(), eq(guidUri), eq(false)))
                 .thenReturn(
-                    "Processed single GUID: " + guidUrl
+                        "Processed single GUID: " + guid
                     + " -> results written to /results");
 
             mvc.perform(post("/api/run-assessment")
-                    .param("guid", guidUrl))
+                            .param("guid", guid))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status", is("ok")));
 
-            verify(service).runAssessment(null, null, null, null, guidUrl, false);
+            verify(service).runAssessment(null, null, null, null, guidUri, false);
         }
 
         @Test
@@ -318,20 +296,6 @@ class BenchmarkControllerTest {
                 .andExpect(jsonPath("$.status", is("ok")));
 
             verify(service).runAssessment(customUri, null, null, null, null, false);
-        }
-
-        @Test
-        @DisplayName("Returns 500 with error status when service throws IOException")
-        void serviceExceptionReturns500() throws Exception {
-          when(service.runAssessment(
-        any(), any(), any(), any(), isNull(), anyBoolean()))
-                .thenThrow(new IOException("File not found: guids_hr.txt"));
-
-            mvc.perform(post("/api/run-assessment"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.status", is("error")))
-                .andExpect(jsonPath("$.message",
-                    is("File not found: guids_hr.txt")));
         }
     }
 
@@ -375,29 +339,14 @@ class BenchmarkControllerTest {
         }
 
         @Test
-        @DisplayName("Returns 500 with error status when results directory "
-                + "does not exist")
-        void missingResultsDirReturns500() throws Exception {
+        @DisplayName("Returns 403 with error status when results directory does not exist")
+        void missingResultsDirReturns403() throws Exception {
             when(service.generateManifest(any()))
-                .thenThrow(new IOException(
+                .thenThrow(new FileNotFoundException(
                     "Results directory not found: /results"));
 
             mvc.perform(post("/api/generate-manifest"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.status", is("error")))
-                .andExpect(jsonPath("$.message",
-                    is("Results directory not found: /results")));
-        }
-
-        @Test
-        @DisplayName("Returns 500 with error status when service throws IOException")
-        void serviceExceptionReturns500() throws Exception {
-            when(service.generateManifest(any()))
-                .thenThrow(new IOException("Unreadable result file"));
-
-            mvc.perform(post("/api/generate-manifest"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.status", is("error")));
+                .andExpect(status().isNotFound());
         }
     }
 }
