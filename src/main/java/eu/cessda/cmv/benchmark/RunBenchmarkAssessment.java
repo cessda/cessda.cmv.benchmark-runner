@@ -52,11 +52,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -149,7 +144,6 @@ public class RunBenchmarkAssessment {
     private static final String TASKSUCCESS = "All tasks completed successfully.";
     private static final String REQSEND = "Sending request to ";
     private static final String FILESAVEERR = "Could not save error file: ";
-    private static final String PROCERROR = "Error processing GUID {0}: {1}";
     private final ObjectMapper objectMapper;
 
     // CLI option names
@@ -170,14 +164,6 @@ public class RunBenchmarkAssessment {
     // -----------------------------------------------------------------------
     private static final int MAX_RETRIES = 3;
     private static final Duration INITIAL_BACKOFF = Duration.ofMillis(2_000);
-
-    /**
-     * Maximum number of GUID submissions in flight at once. Kept below
-     * the HTTP/2 {@code MAX_CONCURRENT_STREAMS} limit Champion's
-     * server advertises on the shared connection, which otherwise
-     * fails requests with "too many concurrent streams".
-     */
-    private static final int MAX_CONCURRENT_REQUESTS = 5;
 
     /**
      * Substring Champion writes into an indicator's {@code "result"}
@@ -825,17 +811,11 @@ public class RunBenchmarkAssessment {
     // -----------------------------------------------------------------------
 
     /**
-     * Submits all GUIDs to the Champion API, with at most
-     * {@link #MAX_CONCURRENT_REQUESTS} submissions in flight at once,
-     * and awaits completion for up to ten minutes.
-     * Every submission after the first ({@code index > 0}) is preceded
-     * by a {@link #backoffBetweenProcessGuid}-millisecond pause, to
-     * ease the burst of concurrent requests Champion otherwise sees.
+     * Submits all GUIDs to the Champion API.
      *
      * @param guids  list of GetRecord URLs to submit
      * @param subDir subdirectory under {@code resultsDir} for
      *               results (may be {@code null})
-     * @return a {@link CompletableFuture} that completes when all guids finish processing.
      */
     private void processGuids(List<URI> guids, Path subDir) throws InterruptedException {
         for (URI uri : guids) {
