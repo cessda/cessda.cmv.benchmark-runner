@@ -39,16 +39,6 @@ springdoc:
     description: REST API for the CESSDA CMV FAIR benchmark pipeline
     version: 2.0.0
 
-# ── Static resources (HTML dashboard) ────────────────────────────────────────
-# Spring Boot serves src/main/resources/static/ at / by default.
-# This covers index.html and detail.html.
-# The /results/** URL prefix is mapped to the results volume by WebConfig.java,
-# matching the relative fetch() paths used in the dashboard JavaScript.
-spring:
-  web:
-    resources:
-      static-locations: classpath:/static/
-
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging:
   level:

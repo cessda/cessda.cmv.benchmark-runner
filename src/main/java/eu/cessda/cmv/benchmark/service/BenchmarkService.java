@@ -374,10 +374,6 @@ public class BenchmarkService {
                 ? Path.of(overrideResultsDir).toAbsolutePath().normalize()
                 : tenantResultsDir();   // <-- tenant-scoped by default
 
-        if (!Files.isDirectory(targetDir)) {
-            throw new IOException("Results directory not found: " + targetDir);
-        }
-
         new GenerateManifest(
                 targetDir,
                 cfg.getFairMap(),

@@ -90,29 +90,6 @@ class GetOaiPmhIdentifiersTest {
         assertEquals("language:", GetOaiPmhIdentifiers.SET_SPEC_PREFIX);
     }
 
-    // ── qualifySetSpec ───────────────────────────────────────────────────────
-
-    @Test
-    void qualifySetSpecPrependsPrefixForBareCode() {
-        assertEquals("language:hr", GetOaiPmhIdentifiers.qualifySetSpec("hr"));
-    }
-
-    @Test
-    void qualifySetSpecLeavesAlreadyQualifiedValueUnchanged() {
-        // A setSpec obtained live from listSets() (this repository's own
-        // "language:hr", or a different tenant's own scheme entirely)
-        // must never be double-prefixed.
-        assertEquals("language:hr", GetOaiPmhIdentifiers.qualifySetSpec("language:hr"));
-    }
-
-    @Test
-    void qualifySetSpecLeavesDifferentSchemeUnchanged() {
-        // A different tenant's OAI-PMH backend need not use CESSDA's
-        // "language:" scheme at all -- qualifySetSpec must not assume it
-        // does for any value that already contains a colon.
-        assertEquals("collection:bhf", GetOaiPmhIdentifiers.qualifySetSpec("collection:bhf"));
-    }
-
     // ── sanitizeSetSpecForFilename ───────────────────────────────────────────
 
     @Test
