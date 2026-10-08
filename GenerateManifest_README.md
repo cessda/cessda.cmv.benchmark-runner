@@ -140,6 +140,25 @@ but still appear in the per-test breakdown.
 See the tenant configuration section in the README for details on how to
 configure the `fair-map` for your deployment.
 
+## Maturity level calculation
+
+Each record's `maturity` field (0-3) is computed by one of two
+models, selected per tenant via `maturity-levels.method`:
+
+- **`checklist`** (the default) — a record reaches a level only if
+  it passed every test named in that level's `level1`/`level2`/
+  `level3` list.
+- **`weighted-score`** — a record's score is the average, across the
+  FAIR categories configured in `category-max`, of that category's
+  earned test weight (already summed per category via `fair-map`)
+  divided by its configured maximum, as a percentage. A level is
+  reached once that average meets its `levelN-threshold`.
+
+Both models check `level3` down to `level1`, so a record is reported
+at the highest level it satisfies. See the "Maturity Levels" section
+in [INSTALL_AND_RUN.md](INSTALL_AND_RUN.md#maturity-levels) for the
+full configuration reference and worked examples of both methods.
+
 ## How it works
 
 1. The results directory is scanned for subdirectories whose names
@@ -150,7 +169,9 @@ configure the `fair-map` for your deployment.
    fail, and indeterminate counts, broken down by test ID and FAIR
    category (using the tenant's `fair-map` configuration).
 4. Per-record maturity level is computed based on the tenant's
-   `maturity-levels` configuration.
+   `maturity-levels` configuration, using whichever method
+   (`checklist` or `weighted-score`) that tenant selects — see
+   [Maturity level calculation](#maturity-level-calculation) below.
 5. A slim record object is built for each file and buffered. When the
    buffer reaches 200 records it is flushed to the next page file.
 6. After all sets are processed, `summary.json` is written with

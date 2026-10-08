@@ -193,7 +193,11 @@ configuring its properties, and creating its directories on disk.
    - `footer` — dashboard footer
    - `set-names` — friendly set names
    - `fair-map` — test ID to FAIR category mapping
-   - `maturity-levels` — tests required for each maturity level
+   - `maturity-levels` — how each maturity level is reached; either a
+     `checklist` of required tests (the default) or an Oxford-style
+     `weighted-score` per FAIR category — see
+     [INSTALL_AND_RUN.md](INSTALL_AND_RUN.md#maturity-levels) for
+     both formats
 
 3. Create matching subdirectories under the configured data and
    results directories:
