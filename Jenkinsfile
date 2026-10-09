@@ -78,7 +78,7 @@ pipeline {
         }
         stage('Deploy Benchmark Runner') {
             steps {
-                build job: 'cessda.cmv.deploy/main', parameters: [string(name: 'benchmarkRunnerImageTag', value: "${IMAGE_TAG}")], wait: false
+                build job: 'cessda.cmv.deploy/main', parameters: [string(name: 'benchmarkRunnerImageTag', value: env.GIT_COMMIT)], wait: false
             }
             when { branch 'main' }           
         }
