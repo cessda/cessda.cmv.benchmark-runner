@@ -8,7 +8,7 @@ pipeline {
     environment {
         productName = "cmv"
         moduleName = "benchmark-runner"
-        imageTag = "${DOCKER_ARTIFACT_REGISTRY}/${productName}-${moduleName}:${env.GIT_COMMIT}"
+        IMAGE_TAG = "${DOCKER_ARTIFACT_REGISTRY}/${productName}-${moduleName}:${env.GIT_COMMIT}"
     }
 
     agent {
@@ -64,15 +64,15 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 withMaven {
-                    sh "./mvnw spring-boot:build-image-no-fork -Dspring-boot.build-image.imageName=${imageTag}"
+                    sh "./mvnw spring-boot:build-image-no-fork -Dspring-boot.build-image.imageName=${IMAGE_TAG}"
                 }
             }
         }
         stage('Push Docker Image') {
             steps {
                 sh "gcloud auth configure-docker ${ARTIFACT_REGISTRY_HOST}"
-                sh "docker push ${imageTag}"
-                sh "gcloud artifacts docker tags add ${imageTag} ${DOCKER_ARTIFACT_REGISTRY}/${productName}-${moduleName}:latest"
+                sh "docker push ${IMAGE_TAG}"
+                sh "gcloud artifacts docker tags add ${IMAGE_TAG} ${DOCKER_ARTIFACT_REGISTRY}/${productName}-${moduleName}:latest"
             }
             when { branch 'main' }
         }
