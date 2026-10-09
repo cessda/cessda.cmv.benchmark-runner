@@ -68,7 +68,6 @@ pipeline {
                     sh "./mvnw spring-boot:build-image-no-fork -Dspring-boot.build-image.imageName=${imageTag}"
                 }
             }
-            when { branch 'main' }
         }
         stage('Push Docker Image') {
             steps {
@@ -77,6 +76,12 @@ pipeline {
                 sh "gcloud artifacts docker tags add ${imageTag} ${DOCKER_ARTIFACT_REGISTRY}/${productName}-${moduleName}:latest"
             }
             when { branch 'main' }
+        }
+        stage('Deploy Benchmark Runner') {
+            steps {
+                build job: 'cessda.cmv.deploy/main', parameters: [string(name: 'benchmarkRunnerImageTag', value: "${IMAGE_TAG}")], wait: false
+            }
+            when { branch 'main' }           
         }
     }
 }
