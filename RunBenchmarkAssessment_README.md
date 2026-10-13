@@ -21,9 +21,7 @@ interrupt the rest of the batch. See
 [Retry, backoff, and error output](#retry-backoff-and-error-output)
 for details.
 
-Processing runs on a virtual thread per GUID, with a small pause
-before each submission after the first and at most 2 requests in
-flight to Champion at any time — see
+GUIDs are submitted to Champion one at a time — see
 [HTTP behaviour](#http-behaviour).
 
 ## Default values
@@ -302,18 +300,20 @@ kinds apart without parsing the `error` message text.
 
 ## Retry, backoff, and error output
 
-Two independent kinds of pacing exist, for two different problems:
+GUIDs are submitted one at a time, so no pause between GUIDs is
+needed to keep Champion's request rate steady. The
+`benchmark.backoff-between-process-guid-ms` setting
+(see [Runtime configuration](#runtime-configuration)) is still
+accepted but is not currently applied between submissions.
 
-- **Between GUIDs.** Before submitting each GUID after the first in a
-  batch, processing pauses for
-  `benchmark.backoff-between-process-guid-ms` (default 1000ms) — see
-  [Runtime configuration](#runtime-configuration). This spreads the
-  batch out over time so Champion sees a steadier request rate rather
-  than a burst.
-- **Per request, on failure.** A single GUID's request is retried up
+Failed requests are retried as follows:
+
+- A single GUID's request is retried up
   to 3 times with exponential backoff (2s, 4s, 8s between attempts)
   when:
   - the connection fails with an SSL handshake error, or times out;
+  - the server rejects the request with "too many concurrent streams"
+    (an HTTP/2 stream-limit error);
   - Champion responds with HTTP 500, 502, or 504;
   - Champion responds HTTP 200, but the body contains one or more
     indicators whose `"result"` reads `"indeterminate (result data
@@ -335,11 +335,9 @@ Two independent kinds of pacing exist, for two different problems:
 - Request timeout per GUID: 120 seconds.
 - Up to 3 attempts per GUID, exponential backoff (2s/4s/8s) between
   them — see [Retry, backoff, and error output](#retry-backoff-and-error-output).
-- Concurrency: one virtual thread per GUID, but at most 2 requests in
-  flight to Champion at any time (a semaphore gates the rest, so a
-  large batch doesn't hit Champion with hundreds of simultaneous
-  requests even though every GUID's task starts right away).
-- Executor shutdown timeout: 10 minutes for the whole batch.
+- Concurrency: GUIDs are submitted sequentially, one request in
+  flight at a time, so a large batch (600+ GUIDs) never exceeds
+  Champion's HTTP/2 concurrent-stream limit.
 
 ## Dependencies
 

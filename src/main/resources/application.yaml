@@ -37,7 +37,7 @@ springdoc:
   info:
     title: CESSDA FAIR Benchmark Runner API
     description: REST API for the CESSDA CMV FAIR benchmark pipeline
-    version: 2.0.0
+    version: 3.4.0
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging:
