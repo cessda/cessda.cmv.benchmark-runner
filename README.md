@@ -87,9 +87,8 @@ POSTs each `GetRecord` URL to a configurable FAIR Champion championUri
 endpoint, with the configured benchmark algorithm URI included in the
 request payload.
 Results are saved as JSON files under the calling tenant's results
-directory, in `guids_<set>/`. Each GUID runs on its own virtual
-thread, paced with a short backoff between submissions and capped at
-2 concurrent requests to Champion, and a transient failure (a
+directory, in `guids_<set>/`. GUIDs are submitted to Champion one at
+a time, and a transient failure (a
 timeout, an HTTP 500/502/504, or Champion silently overloaded on a
 200 response) is retried with backoff before giving up. Only once
 retries are exhausted is a failure captured, in a separate

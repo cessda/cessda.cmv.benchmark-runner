@@ -152,9 +152,10 @@ The remaining lines are full `GetRecord` URLs, one per identifier.
 
 1. A `ListIdentifiers` request is built from the base URL, verb,
    metadata prefix, and set name. This repository's sets are keyed by
-   language, so the set name is sent as `set=language:<code>` (e.g.
-   `language:hr`), confirmed against `verb=ListSets` on the live
-   endpoint — the bare code alone (`set=hr`) is not a valid setSpec.
+   language, so the set name must be a full setSpec such as
+   `language:hr`, as returned by `verb=ListSets`. It is sent
+   unchanged as `set=<setSpec>`; a bare code (`set=hr`) is not
+   prefixed and is not a valid setSpec.
 2. The XML response is checked for a top-level `<error>` element (see
    [HTTP behaviour](#http-behaviour)) and then parsed for `<identifier>`
    elements.

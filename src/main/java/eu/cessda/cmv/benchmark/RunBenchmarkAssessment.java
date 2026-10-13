@@ -811,19 +811,32 @@ public class RunBenchmarkAssessment {
     // -----------------------------------------------------------------------
 
     /**
-     * Submits all GUIDs to the Champion API.
+     * Submits all GUIDs to the Champion API, one at a time. A GUID that
+     * fails (after retries) is logged, its error file has already been
+     * written, and processing carries on with the next GUID.
      *
      * @param guids  list of GetRecord URLs to submit
      * @param subDir subdirectory under {@code resultsDir} for
      *               results (may be {@code null})
      */
     private void processGuids(List<URI> guids, Path subDir) throws InterruptedException {
+        int failed = 0;
         for (URI uri : guids) {
             URI guid = normaliseGuid(uri);
-            processOneGuid(guid, subDir);
+            try {
+                processOneGuid(guid, subDir);
+            } catch (ProcessingException e) {
+                failed++;
+                logger.log(Level.SEVERE, e.getMessage());
+            }
         }
 
-        logger.info(TASKSUCCESS);
+        if (failed == 0) {
+            logger.info(TASKSUCCESS);
+        } else {
+            logger.log(Level.WARNING, "{0} of {1} GUID(s) failed; see the error_*.json files",
+                    new Object[]{failed, guids.size()});
+        }
     }
 
     /**

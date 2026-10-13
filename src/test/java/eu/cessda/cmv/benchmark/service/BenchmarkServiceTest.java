@@ -6,7 +6,6 @@
 
 package eu.cessda.cmv.benchmark.service;
 
-import eu.cessda.cmv.benchmark.ProcessingException;
 import eu.cessda.cmv.benchmark.RunBenchmarkAssessment;
 import eu.cessda.cmv.benchmark.config.BenchmarkProperties;
 import eu.cessda.cmv.benchmark.models.SummaryStats;
@@ -510,8 +509,9 @@ class BenchmarkServiceTest {
 
             // Supply the bare filename as the guidFile parameter; the service
             // resolves it against the tenant data dir.  The HTTP POST will fail,
-            // but no FileNotFoundException should be thrown beforehand.
-            assertThrows(ProcessingException.class,
+            // but the failure is recorded and processing carries on, so
+            // nothing (in particular no FileNotFoundException) is thrown.
+            assertDoesNotThrow(
                     () -> service.runAssessment(
                             URI.create("http://invalid.example.invalid"),
                             URI.create("http://invalid.example.invalid"),
