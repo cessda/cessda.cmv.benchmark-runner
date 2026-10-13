@@ -52,7 +52,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -145,7 +144,6 @@ public class RunBenchmarkAssessment {
     private static final String TASKSUCCESS = "All tasks completed successfully.";
     private static final String REQSEND = "Sending request to ";
     private static final String FILESAVEERR = "Could not save error file: ";
-    private static final String PROCERROR = "Error processing GUID {0}: {1}";
     private final ObjectMapper objectMapper;
 
     // CLI option names
@@ -813,16 +811,11 @@ public class RunBenchmarkAssessment {
     // -----------------------------------------------------------------------
 
     /**
-     * Submits all GUIDs to the Champion API using a fixed thread pool
-     * of five workers and awaits completion for up to ten minutes.
-     * Every submission after the first ({@code index > 0}) is preceded
-     * by a {@link #backoffBetweenProcessGuid}-millisecond pause, to
-     * ease the burst of concurrent requests Champion otherwise sees.
+     * Submits all GUIDs to the Champion API.
      *
      * @param guids  list of GetRecord URLs to submit
      * @param subDir subdirectory under {@code resultsDir} for
      *               results (may be {@code null})
-     * @return a {@link CompletableFuture} that completes when all guids finish processing.
      */
     private void processGuids(List<URI> guids, Path subDir) throws InterruptedException {
         for (URI uri : guids) {
@@ -924,6 +917,13 @@ public class RunBenchmarkAssessment {
                 logger.log(Level.FINE, "Attempt {0} failed for GUID {1}: {2}",
                         new Object[]{attempt + 1, guid, e.toString()});
             } catch (IOException e) {
+                if (e.getMessage() != null && e.getMessage().contains("too many concurrent streams")) {
+                    // Transient HTTP/2 stream-limit rejection — retry
+                    lastException = e;
+                    logger.log(Level.FINE, "Attempt {0} failed for GUID {1}: {2}",
+                            new Object[]{attempt + 1, guid, e.toString()});
+                    continue;
+                }
                 // Non-transient — fail immediately
                 saveErrorFile(guid, e, subDir);
                 throw new ProcessingException(guid, e);
