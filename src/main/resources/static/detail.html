@@ -226,6 +226,12 @@
       line-height: 1;
     }
 
+    .sum-sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
     .sum-val.pass {
       color: var(--pass);
     }
@@ -1168,8 +1174,9 @@
           <p class="sum-val indet" id="sum-indet">—</p>
         </div>
         <div class="sum-cell">
-          <p class="sum-label">Maturity Level</p>
-          <p class="sum-val" id="sum-maturity" style="font-size:20px;padding-top:6px">—</p>
+          <p class="sum-label">Maturity Levels</p>
+          <p class="sum-val" id="sum-maturity" style="font-size:18px;padding-top:6px">—</p>
+          <p class="sum-sub">across all records in set</p>
         </div>
       </div>
 
@@ -1455,6 +1462,21 @@
       }
     }
 
+    // Per-level record counts for the set, e.g. "6×L3 599×L2" (same style as the overall dashboard).
+    // Falls back to the single best-level badge if the summary has no distribution.
+    function maturityDistributionHTML(ls) {
+      const dist = ls.maturityDistribution;
+      if (!dist) return maturityBadgeHTML(ls.maturityLevel != null ? ls.maturityLevel : 0);
+      const parts = [
+        [dist.level3, 'L3', 'var(--pass)'],
+        [dist.level2, 'L2', 'var(--accent)'],
+        [dist.level1, 'L1', 'var(--indet)'],
+        [dist.none,   'L0', 'var(--fail)']
+      ].filter(([n]) => n)
+       .map(([n, label, color]) => `<span style="color:${color}">${n.toLocaleString()}×${label}</span>`);
+      return parts.join(' ') || '—';
+    }
+
     // ── Render summary KPIs from pre-aggregated stats ─────────────────────────
     function renderStats(ls) {
       const tot = ls.pass + ls.fail + ls.indet;
@@ -1463,8 +1485,7 @@
       document.getElementById('sum-fail').textContent = pct(ls.fail, tot) + '%';
       document.getElementById('sum-indet').textContent = pct(ls.indet, tot) + '%';
 
-      const mat = ls.maturityLevel != null ? ls.maturityLevel : 0;
-      document.getElementById('sum-maturity').innerHTML = maturityBadgeHTML(mat);
+      document.getElementById('sum-maturity').innerHTML = maturityDistributionHTML(ls);
 
       for (const cat of ['F', 'A', 'I', 'R']) {
         const d = ls.fair[cat] || { pass: 0, total: 0 };
