@@ -58,7 +58,7 @@ tenants:
   config:
     cessda:
       algorithm: https://docs.google.com/spreadsheets/d/1Nk0vM4yBpVQTo_UbB62NY_fz93aRZRHBZGh5fG-khOw
-      runner: https://tools.ostrails.eu/champion/assess/algorithm
+      runner: https://fair-champion.cessda.eu/champion/assess/algorithm
       oai-pmh-base-url: https://datacatalogue.cessda.eu/oai-pmh/v0/oai
       title: CESSDA Data Catalogue · Assessment Results
       footer: CESSDA FAIR Benchmark Dashboard
