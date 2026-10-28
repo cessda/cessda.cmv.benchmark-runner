@@ -8,8 +8,14 @@ function apiFetch(url, opts = {}) {
     sessionStorage.setItem('apiKey', entered);
     return apiFetch(url, opts); // retry with key now in storage
   }
-  return fetch(url, {
+  const res = fetch(url, {
     ...opts,
-    headers: { ...(opts.headers || {}), 'X-API-Key': key }
+    headers: {...opts.headers, 'X-API-Key': key}
   });
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+
+  return res;
 }
