@@ -16,7 +16,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.http.HttpStatus;
+import org.oclc.oai.harvester2.verb.OAIException;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -101,7 +101,7 @@ public class BenchmarkController {
                         @Parameter(description = "Fetch identifiers for a single named set only. " +
                                         "When supplied, the 'sets' parameter is ignored.") @RequestParam(required = false) String fetchSet
 
-        ) throws IOException, InterruptedException {
+        ) throws IOException, InterruptedException, OAIException {
                 String message = service.fetchIdentifiers(baseUrl, verb, metadataPrefix, sets, fetchSet);
                 return response("ok", message);
         }
@@ -155,14 +155,10 @@ public class BenchmarkController {
         public Map<String, List<GetOaiPmhIdentifiers.SetInfo>> getFetchIdentifiersSets(
 
                         @Parameter(description = "OAI-PMH base URL, for this request only. " +
-                                "Default: the current tenant's configured oai-pmh-base-url.") @RequestParam(required = false) URI baseUrl,
+                                "Default: the current tenant's configured oai-pmh-base-url.") @RequestParam(required = false) URI baseUrl
 
-                        @Parameter(description = "OAI-PMH verb. Default: ListIdentifiers " +
-                                        "(unused by ListSets itself, accepted for consistency with " +
-                                        "the other fetch-identifiers endpoints).") @RequestParam(required = false) String verb
-
-        ) throws IOException, InterruptedException {
-                return Map.of("sets", service.listAvailableSets(baseUrl, verb));
+        ) throws IOException, InterruptedException, OAIException {
+                return Map.of("sets", service.listAvailableSets(baseUrl));
         }
 
         // -------------------------------------------------------------------------

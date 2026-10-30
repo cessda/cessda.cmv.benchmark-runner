@@ -16,8 +16,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -52,21 +50,6 @@ class RunBenchmarkAssessmentTest {
         @AfterEach
         void tearDown() {
                 assessment = null;
-        }
-
-        @Test
-        void defaultSetsContainsTenSets() {
-                assertEquals(10, RunBenchmarkAssessment.DEFAULT_SETS.length);
-        }
-
-        @Test
-        void defaultSetsContainsExpectedSetCodes() {
-                List<String> sets = List.of(RunBenchmarkAssessment.DEFAULT_SETS);
-                assertAll(
-                                () -> assertTrue(sets.contains("de")),
-                                () -> assertTrue(sets.contains("en")),
-                                () -> assertTrue(sets.contains("fr")),
-                                () -> assertTrue(sets.contains("sl-SI")));
         }
 
         // ── deriveSubdirectory ───────────────────────────────────────────────────
@@ -406,19 +389,5 @@ class RunBenchmarkAssessmentTest {
                         URI.create("https://custom.example.org/api"),
                         URI.create("https://custom.example.org/championUri")
                 ));
-        }
-
-        // ── Parameterised: default sets match GetOaiPmhIdentifiers ───────────────
-
-        @ParameterizedTest
-        @ValueSource(strings = { "de", "el", "en", "fi", "fr", "hr", "nl",
-                        "sl", "sl-SI", "sv" })
-        void defaultSetsMatchGetOaiPmhIdentifiersDefaults(String set) {
-                List<String> runSets = List.of(RunBenchmarkAssessment.DEFAULT_SETS);
-                List<String> fetchSets = GetOaiPmhIdentifiers.DEFAULT_SETS;
-                assertTrue(runSets.contains(set),
-                                "RunBenchmarkAssessment.DEFAULT_SETS must contain " + set);
-                assertTrue(fetchSets.contains(set),
-                                "GetOaiPmhIdentifiers.DEFAULT_SETS must contain " + set);
         }
 }
