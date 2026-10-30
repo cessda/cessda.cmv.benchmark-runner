@@ -8,6 +8,7 @@ import eu.cessda.cmv.benchmark.config.BenchmarkProperties;
 import eu.cessda.cmv.benchmark.tenant.TenantContext;
 import eu.cessda.cmv.benchmark.tenant.TenantProperties;
 import eu.cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig;
+import org.oclc.oai.harvester2.verb.OAIException;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -17,6 +18,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -219,21 +221,16 @@ public class BenchmarkService {
      *
      * @param baseUrl OAI-PMH base URL override, or {@code null}/blank
      *                to use the current tenant's configured default
-     * @param verb    OAI-PMH verb, or {@code null}/blank for
-     *                {@link GetOaiPmhIdentifiers#DEFAULT_VERB}
-     *                (ListSets does not depend on this, but the same
-     *                client is reused for consistency)
      * @throws IOException          if the request fails or the
      *                               response cannot be parsed
      * @throws InterruptedException if interrupted while waiting for
      *                               the HTTP response
      */
     public java.util.List<GetOaiPmhIdentifiers.SetInfo> listAvailableSets(
-            URI baseUrl, String verb) throws IOException, InterruptedException {
+            URI baseUrl) throws IOException, InterruptedException, OAIException {
         URI resolvedBase = resolveOaiPmhBaseUrl(baseUrl);
-        String resolvedVerb = nvl(verb, GetOaiPmhIdentifiers.DEFAULT_VERB);
         GetOaiPmhIdentifiers client = new GetOaiPmhIdentifiers(
-                resolvedBase, resolvedVerb, GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX, null);
+                resolvedBase, GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX, null);
         return client.listSets();
     }
 
@@ -242,27 +239,26 @@ public class BenchmarkService {
             String verb,
             String metadataPrefix,
             String sets,
-            String fetchSet) throws IOException, InterruptedException {
+            String fetchSet) throws IOException, InterruptedException, OAIException {
 
         Path tDataDir = tenantDataDir();
         Files.createDirectories(tDataDir);
 
         URI resolvedBase = resolveOaiPmhBaseUrl(baseUrl);
-        String resolvedVerb   = nvl(verb,           GetOaiPmhIdentifiers.DEFAULT_VERB);
         String resolvedPrefix = nvl(metadataPrefix, GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX);
 
         GetOaiPmhIdentifiers client =
-                new GetOaiPmhIdentifiers(resolvedBase, resolvedVerb, resolvedPrefix, tDataDir);
+                new GetOaiPmhIdentifiers(resolvedBase, resolvedPrefix, tDataDir);
 
         if (fetchSet != null && !fetchSet.isBlank()) {
-            client.fetchIdentifiersForSet(fetchSet.trim());
+            client.fetchIdentifiersForSet(fetchSet);
             return "Fetched identifiers for set: " + fetchSet.trim()
                     + " -> " + tDataDir + "/guids_" + fetchSet.trim() + ".txt";
         }
 
         List<String> resolvedSets = (sets != null && !sets.isBlank())
                 ? Arrays.asList(sets.split(","))
-                : GetOaiPmhIdentifiers.DEFAULT_SETS;
+                : Collections.emptyList();
 
         // Isolate per-set failures rather than aborting the whole batch
         // at the first one -- an operator selecting several sets from

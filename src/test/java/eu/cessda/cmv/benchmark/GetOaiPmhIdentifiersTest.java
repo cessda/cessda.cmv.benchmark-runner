@@ -17,8 +17,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.URI;
 import java.nio.file.Path;
-import java.util.Collections;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -43,7 +41,6 @@ class GetOaiPmhIdentifiersTest {
     void setUp() {
         client = new GetOaiPmhIdentifiers(
                 GetOaiPmhIdentifiers.DEFAULT_OAI_PMH_BASE_URL,
-                GetOaiPmhIdentifiers.DEFAULT_VERB,
                 GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX,
                 tempDir);
     }
@@ -56,38 +53,8 @@ class GetOaiPmhIdentifiersTest {
     // ── Constants ────────────────────────────────────────────────────────────
 
     @Test
-    void defaultVerbIsListIdentifiers() {
-        assertEquals("ListIdentifiers", GetOaiPmhIdentifiers.DEFAULT_VERB);
-    }
-
-    @Test
     void defaultMetadataPrefixIsOaiDdi25() {
         assertEquals("oai_ddi25", GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX);
-    }
-
-    @Test
-    void defaultSetsContainsTenSets() {
-        assertEquals(10, GetOaiPmhIdentifiers.DEFAULT_SETS.size());
-    }
-
-    @Test
-    void defaultSetsContainsExpectedSetCodes() {
-        List<String> sets = GetOaiPmhIdentifiers.DEFAULT_SETS;
-        assertAll(
-                () -> assertTrue(sets.contains("de")),
-                () -> assertTrue(sets.contains("en")),
-                () -> assertTrue(sets.contains("fr")),
-                () -> assertTrue(sets.contains("sl-SI"))
-        );
-    }
-
-    @Test
-    void setSpecPrefixIsLanguageColon() {
-        // This repository's setSpecs are keyed by language (e.g.
-        // "language:hr" for the "hr" set, confirmed against
-        // verb=ListSets on the live endpoint) -- a bare code alone
-        // (e.g. "hr") is rejected with an OAI-PMH noRecordsMatch error.
-        assertEquals("language:", GetOaiPmhIdentifiers.SET_SPEC_PREFIX);
     }
 
     // ── sanitizeSetSpecForFilename ───────────────────────────────────────────
@@ -176,7 +143,7 @@ class GetOaiPmhIdentifiersTest {
     @Test
     void buildGetRecordUrlWithCustomBaseUrl(@TempDir Path dir) {
         GetOaiPmhIdentifiers custom = new GetOaiPmhIdentifiers(
-                URI.create("https://example.org/oai"), "ListIdentifiers", "oai_dc", dir);
+                URI.create("https://example.org/oai"), "oai_dc", dir);
         URI url = custom.buildGetRecordUrl("xyz");
         assertTrue(url.toString().startsWith("https://example.org/oai"),
                 "URL must use the custom base URL");
@@ -259,22 +226,12 @@ class GetOaiPmhIdentifiersTest {
         // (e.g. buildGetRecordUrl, parseArgs); the field is only accessed
         // inside writeGuidsFile, which is only called after a network fetch.
         assertDoesNotThrow(() -> new GetOaiPmhIdentifiers(
-                URI.create("https://example.org/oai"), "ListIdentifiers", "oai_dc", null));
+                URI.create("https://example.org/oai"),  "oai_dc", null));
     }
 
     // ── Integration-style: write guids file via fetchIdentifiersForSet ──
     // These tests use a WireMock or local HTTP server in a real project;
     // here we verify behaviour that does not require network access.
-
-    @Test
-    void fetchAllSetIdentifiersWithEmptySetsArrayDoesNotThrow() {
-        // With an empty set array the loop exits immediately without any
-        // HTTP calls, so no exception should be thrown even without a server.
-        GetOaiPmhIdentifiers noOpClient = new GetOaiPmhIdentifiers(
-                URI.create("https://127.0.0.1:1"), "ListIdentifiers", "oai_ddi25", null);
-        assertDoesNotThrow(
-                () -> noOpClient.fetchAllSetIdentifiers(Collections.emptyList()));
-    }
 
     // ── Parameterised: URL encoding covers all default sets ──────────────────
 
@@ -285,7 +242,6 @@ class GetOaiPmhIdentifiersTest {
                                                    @TempDir Path dir) {
         GetOaiPmhIdentifiers c = new GetOaiPmhIdentifiers(
                 GetOaiPmhIdentifiers.DEFAULT_OAI_PMH_BASE_URL,
-                GetOaiPmhIdentifiers.DEFAULT_VERB,
                 GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX,
                 dir);
         URI url = c.buildGetRecordUrl(set);

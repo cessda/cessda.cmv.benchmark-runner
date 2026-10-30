@@ -127,9 +127,7 @@ public class RunBenchmarkAssessment {
      * Set codes whose {@code guids_XX.txt} files are processed
      * by the {@code -P} / {@code --process-all} flag.
      */
-    public static final String[] DEFAULT_SETS = {
-            "de", "el", "en", "fi", "fr", "hr", "nl", "sl", "sl-SI", "sv"
-    };
+    public static final String[] DEFAULT_SETS = {"all"};
 
     private static final String OUTPUT_DIR = "results";
     private static final String HEADER_VALUE = "application/json";
