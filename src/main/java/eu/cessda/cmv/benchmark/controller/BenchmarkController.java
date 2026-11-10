@@ -98,6 +98,9 @@ public class BenchmarkController {
                 List<String> setList;
                 if (sets != null) {
                         setList = GetOaiPmhIdentifiers.splitSets(sets);
+                        if (setList.isEmpty()) {
+                                throw new IllegalArgumentException("Invalid sets argument, a comma separated list is expected");
+                        }
                 } else {
                         setList = Collections.emptyList();
                 }

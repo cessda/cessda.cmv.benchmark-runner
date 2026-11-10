@@ -180,6 +180,11 @@ public class GetOaiPmhIdentifiers {
             if (cmd.hasOption(SETS_ARG)) {
                 // Fetch sets specified on the command line
                 sets = splitSets(cmd.getOptionValue(SETS_ARG));
+                if (sets.isEmpty()) {
+                    System.err.println("--sets specified but no sets found");
+                    System.err.println("Use -h or --help for usage information.");
+                    System.exit(-1);
+                }
             } else {
                 // Fetch all identifiers
                 sets = Collections.emptyList();
@@ -191,11 +196,13 @@ public class GetOaiPmhIdentifiers {
     }
 
     public static List<String> splitSets(String sets) {
-        List<String> setList;
         var rawSets = sets.split(",");
-        setList = new ArrayList<>(rawSets.length);
+        var setList = new ArrayList<String>(rawSets.length);
         for (String rawSet : rawSets) {
-            setList.add(rawSet.trim());
+            var set = rawSet.trim();
+            if (!set.isEmpty()) {
+                setList.add(set);
+            }
         }
         return setList;
     }

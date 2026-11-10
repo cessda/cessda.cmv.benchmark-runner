@@ -108,7 +108,7 @@ class BenchmarkControllerTest {
         @DisplayName("Returns 200 with ok status when called with no parameters")
         void defaultParametersReturn200() throws Exception {
             when(service.fetchIdentifiers(
-                    any(URI.class), anyString(), anyList()))
+                    isNull(), isNull(), anyList()))
                 .thenReturn("Fetched identifiers for 10 set(s) -> /data");
 
             mvc.perform(post("/api/fetch-identifiers"))
@@ -120,14 +120,14 @@ class BenchmarkControllerTest {
                     is("Fetched identifiers for 10 set(s) -> /data")));
 
             verify(service).fetchIdentifiers(
-                    any(URI.class), anyString(), eq(Collections.emptyList()));
+                    isNull(), isNull(), eq(Collections.emptyList()));
         }
 
         @Test
         @DisplayName("Passes fetchSet parameter to service")
         void singleSetParameterIsForwarded() throws Exception {
             when(service.fetchIdentifiers(
-                    any(URI.class), anyString(), eq(List.of("en"))))
+                    isNull(), isNull(), eq(List.of("en"))))
                 .thenReturn("Fetched identifiers for set: en -> /data/guids_en.txt");
 
             mvc.perform(post("/api/fetch-identifiers")
@@ -136,14 +136,14 @@ class BenchmarkControllerTest {
                 .andExpect(jsonPath("$.status", is("ok")));
 
             verify(service).fetchIdentifiers(
-                    any(URI.class), anyString(), eq(List.of( "en")));
+                    isNull(), isNull(), eq(List.of("en")));
         }
 
         @Test
         @DisplayName("Passes comma-separated sets parameter to service")
         void multipleSetsParameterIsForwarded() throws Exception {
             when(service.fetchIdentifiers(
-                    any(URI.class), anyString(), eq(List.of("de","en","fr"))))
+                    isNull(), isNull(), eq(List.of("de", "en", "fr"))))
                 .thenReturn("Fetched identifiers for 3 set(s) -> /data");
 
             mvc.perform(post("/api/fetch-identifiers")
@@ -152,7 +152,7 @@ class BenchmarkControllerTest {
                 .andExpect(jsonPath("$.status", is("ok")));
 
             verify(service).fetchIdentifiers(
-                    any(URI.class), anyString(), eq(List.of("de","en","fr")));
+                    isNull(), isNull(), eq(List.of("de", "en", "fr")));
         }
 
         @Test
