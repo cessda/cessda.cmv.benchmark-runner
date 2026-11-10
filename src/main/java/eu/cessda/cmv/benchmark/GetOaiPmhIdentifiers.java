@@ -18,8 +18,10 @@
 package eu.cessda.cmv.benchmark;
 
 import org.apache.commons.cli.*;
-import org.oclc.oai.harvester2.verb.*;
-import org.oclc.oai.harvester2.verb.Set;
+import org.oclc.oai.harvester2.verb.ListIdentifiers;
+import org.oclc.oai.harvester2.verb.ListSets;
+import org.oclc.oai.harvester2.verb.OAIException;
+import org.oclc.oai.harvester2.verb.RecordHeader;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -32,7 +34,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -49,8 +54,6 @@ import java.util.logging.Logger;
  * <pre>
  *   -b, --oai-pmh-base-url <url>      OAI-PMH base URL
  *                                       (default: https://datacatalogue.cessda.eu/oai-pmh/v0/oai)
- *   -v, --verb <verb>                  OAI-PMH verb used when listing identifiers
- *                                       (default: ListIdentifiers)
  *   -m, --metadata-prefix <prefix>    Metadata prefix embedded in output GetRecord URLs
  *                                       (default: oai_ddi25)
  *   -S, --sets <set1,set2,...>         Comma-separated list of sets to fetch,
@@ -176,7 +179,7 @@ public class GetOaiPmhIdentifiers {
             List<String> sets;
             if (cmd.hasOption(SETS_ARG)) {
                 // Fetch sets specified on the command line
-                sets = Arrays.asList(cmd.getOptionValue(SETS_ARG).split(","));
+                sets = splitSets(cmd.getOptionValue(SETS_ARG));
             } else {
                 // Fetch all identifiers
                 sets = Collections.emptyList();
@@ -185,6 +188,16 @@ public class GetOaiPmhIdentifiers {
         } catch (OAIException | IOException e) {
             logger.log(Level.SEVERE, "Error: {0}", new Object[]{e.getMessage()});
         }
+    }
+
+    public static List<String> splitSets(String sets) {
+        List<String> setList;
+        var rawSets = sets.split(",");
+        setList = new ArrayList<>(rawSets.length);
+        for (String rawSet : rawSets) {
+            setList.add(rawSet.trim());
+        }
+        return setList;
     }
 
     // -----------------------------------------------------------------------
@@ -218,14 +231,10 @@ public class GetOaiPmhIdentifiers {
     public void fetchIdentifiers() throws IOException, InterruptedException, OAIException {
         logger.log(Level.INFO, "Fetching identifiers");
 
-        // Filecode is all
-        // TODO: could conflict with a set named all, fix this
-        String fileCode = "all";
-
         var identifiers = getIdentifiers(null);
 
         logger.log(Level.INFO, "Fetched {0} identifier(s)", new Object[]{identifiers.size()});
-        writeGuidsFile(fileCode, identifiers);
+        writeGuidsFile(null, identifiers);
     }
 
     /**
@@ -385,8 +394,8 @@ public class GetOaiPmhIdentifiers {
         Optional<String> resumptionToken;
         do {
             logger.log(Level.INFO, "  Fetching ListSets page {0}", new Object[]{page});
-            List<Set> setNodes = response.getSets();
-            for (Set setNode : setNodes) {
+            List<org.oclc.oai.harvester2.verb.Set> setNodes = response.getSets();
+            for (org.oclc.oai.harvester2.verb.Set setNode : setNodes) {
                 String setSpec = setNode.spec();
                 String setName = setNode.name();
                 sets.add(new SetInfo(setSpec, setName != null ? setName : setSpec));
@@ -409,12 +418,19 @@ public class GetOaiPmhIdentifiers {
      *
      * @param fileCode    filesystem-safe code used in the output
      *                    filename, e.g. "de" -- see
-     *                    {@link #sanitizeSetSpecForFilename(String)}
+     *                    {@link #sanitizeSetSpecForFilename(String)},
+     *                    if {@code null} {@code guids.txt} is written
      * @param identifiers raw identifier strings returned by OAI-PMH
      * @throws IOException if the file cannot be written
      */
     private void writeGuidsFile(String fileCode, List<String> identifiers) throws IOException {
-        Path outputPath = outputDir.resolve("guids_" + fileCode + ".txt");
+        Path outputPath;
+
+        if (fileCode != null) {
+            outputPath = outputDir.resolve("guids_" + fileCode + ".txt");
+        } else {
+            outputPath = outputDir.resolve("guids.txt");
+        }
 
         try (var writer = new PrintWriter(Files.newBufferedWriter(outputPath))) {
             writer.println("# Identifiers for set: " + fileCode);

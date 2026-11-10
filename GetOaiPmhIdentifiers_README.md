@@ -26,7 +26,6 @@ one file per set, under a tenant-scoped output directory — see
 | Parameter       | Default value                                    |
 |-----------------|--------------------------------------------------|
 | Base URL        | `https://datacatalogue.cessda.eu/oai-pmh/v0/oai` |
-| Verb            | `ListIdentifiers`                                |
 | Metadata prefix | `oai_ddi25`                                      |
 | Sets            |                                                  |
 | Tenant          | `cessda`                                         |
@@ -40,8 +39,6 @@ one file per set, under a tenant-scoped output directory — see
 -m, --metadata-prefix <prefix>   Metadata prefix embedded in output
                                    GetRecord URLs (default: oai_ddi25)
 -S, --sets <set1,set2,...>        Comma-separated list of sets to fetch
-                                   (default: de,el,en,fi,fr,hr,nl,sl,
-                                   sl-SI,sv)
 -t, --tenant <tenant>             Tenant name; output is written to
                                    guids/<tenant>/ (default: cessda)
 -h, --help                        Show the help message
@@ -54,7 +51,7 @@ Run with Maven (from the project root):
 ```bash
 mvn exec:java \
   -Dexec.mainClass="eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers" \
-  -Dexec.args="--fetch-set en"
+  -Dexec.args="--sets en"
 ```
 
 Run from a JAR:
@@ -63,7 +60,7 @@ Run from a JAR:
 java -cp <jar> eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers \
   --oai-pmh-base-url https://example.org/oai \
   --metadata-prefix oai_ddi25 \
-  --fetch-set de
+  --sets de
 ```
 
 ### Fetch all sets (default)
@@ -125,14 +122,17 @@ The remaining lines are full `GetRecord` URLs, one per identifier.
 
 ## How it works
 
-1. A `ListIdentifiers` request is built from the base URL, verb,
+`GetOaiPmhIdentifiers` uses the CESSDA Metadata Harvester's Java
+API to implement OAI-PMH support. The logic uses is as follows:
+
+1. A `ListIdentifiers` request is built from the base URL,
    metadata prefix, and set name.
 2. The XML response is checked for a top-level `<error>` element (see
    [HTTP behaviour](#http-behaviour)) and then parsed for `<identifier>`
    elements.
-3. If a `<resumptionToken>` is present, the next page is fetched and
+3. If a resumption token is present, the next page is fetched and
    the process repeats until all pages are exhausted.
-4. Each raw identifier is combined with the base URL and metadata
+4. Each identifier is combined with the base URL and metadata
    prefix to produce a `GetRecord` URL.
 5. All URLs are written to `guids_<set>.txt`.
 
@@ -156,13 +156,12 @@ form.
   `noRecordsMatch`, etc.) as an `<error>` element inside an ordinary
   HTTP 200 response, not as a non-2xx status. An `<error>` element
   raises an `OAIException` with the OAI-PMH error code and message.
-- XML external entities and external parameter entities are disabled to
-  guard against XXE attacks.
 
 ## Dependencies
 
 - Java standard library (`java.net.http`, `javax.xml.parsers`)
 - Apache Commons CLI (argument parsing)
+- [CESSDA Metadata Harvester OAI-PMH API](https://github.com/cessda/cessda.metadata.harvester)
 
 ## Contributing
 

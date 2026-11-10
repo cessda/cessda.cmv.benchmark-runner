@@ -232,11 +232,10 @@ public class BenchmarkService {
         return client.listSets();
     }
 
-    // TODO: implement exception for failures (all sets failed)
     public String fetchIdentifiers(
             URI baseUrl,
             String metadataPrefix,
-            List<String> sets) throws IOException, InterruptedException {
+            List<String> sets) throws IOException, InterruptedException, HarvestingFailedException {
 
         Path tDataDir = tenantDataDir();
         Files.createDirectories(tDataDir);
@@ -252,7 +251,7 @@ public class BenchmarkService {
                 client.fetchIdentifiers();
                 return "Fetched identifiers for the whole repository -> " + tDataDir;
             } catch (IOException | OAIException e) {
-                return "Failed to fetch identifiers from the repository: " + e;
+                throw new HarvestingFailedException("Failed to fetch identifiers from the repository", e);
             }
         }
 
@@ -273,9 +272,9 @@ public class BenchmarkService {
             }
         }
 
-        if (!failed.isEmpty()) {
-            return "Failed to fetch identifiers for all " + failed.size()
-                    + " selected set(s): " + describeFailures(failed);
+        if (succeeded.isEmpty()) {
+            throw new HarvestingFailedException("Failed to fetch identifiers for all " + failed.size()
+                    + " selected set(s): " + describeFailures(failed));
         }
 
         return "Fetched identifiers for " + succeeded.size() + " of "

@@ -9,6 +9,7 @@ package eu.cessda.cmv.benchmark.controller;
 import eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers;
 import eu.cessda.cmv.benchmark.service.BenchmarkService;
 import eu.cessda.cmv.benchmark.service.BenchmarkService.Branding;
+import eu.cessda.cmv.benchmark.service.HarvestingFailedException;
 import eu.cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -22,7 +23,6 @@ import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -88,16 +88,16 @@ public class BenchmarkController {
         @PostMapping("/fetch-identifiers")
         public Map<String, String> fetchIdentifiers(
 
-                        @Parameter(description = "OAI-PMH base URL. ") @RequestParam(defaultValue = "https://datacatalogue.cessda.eu/oai-pmh/v0/oai") URI baseUrl,
+                @Parameter(description = "OAI-PMH base URL. Defaults to the tenant's configured OAI-PMH endpoint.") @RequestParam(required = false) URI baseUrl,
 
-                        @Parameter(description = "Metadata prefix embedded in output GetRecord URLs. ") @RequestParam(defaultValue = "oai_ddi25") String metadataPrefix,
+                @Parameter(description = "Metadata prefix embedded in output GetRecord URLs. Defaults to the tenant's configured metadata prefix.") @RequestParam(required = false) String metadataPrefix,
 
                         @Parameter(description = "Comma-separated list of sets to fetch.") @RequestParam(required = false) String sets
 
-        ) throws IOException, InterruptedException {
+        ) throws IOException, InterruptedException, HarvestingFailedException {
                 List<String> setList;
                 if (sets != null) {
-                        setList = Arrays.asList(sets.split(","));
+                        setList = GetOaiPmhIdentifiers.splitSets(sets);
                 } else {
                         setList = Collections.emptyList();
                 }

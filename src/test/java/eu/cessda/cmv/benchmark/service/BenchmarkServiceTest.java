@@ -387,8 +387,7 @@ class BenchmarkServiceTest {
 
         @Test
         @DisplayName("Creates the tenant data directory when it does not exist")
-        void createsTenantDataDirectoryWhenAbsent(@TempDir Path root)
-                throws Exception {
+        void createsTenantDataDirectoryWhenAbsent(@TempDir Path root) throws IOException {
             // Point the service at a fresh root; the tenant sub-dir must not
             // yet exist.
             Path newRootData = root.resolve("data");
@@ -420,7 +419,8 @@ class BenchmarkServiceTest {
             service = new BenchmarkService(benchmarkProperties, tenantContext, tenantProperties);
 
             // Expected: the HTTP call will fail and the exception will be handled.
-            service.fetchIdentifiers(URI.create("http://invalid.example.invalid"), null, List.of("de"));
+            assertThrows(HarvestingFailedException.class,
+                    () -> service.fetchIdentifiers(URI.create("http://invalid.example.invalid"), null, List.of("de")));
 
             assertTrue(Files.isDirectory(expectedTenantDir),
                 "fetchIdentifiers must create the tenant-scoped data directory");
@@ -428,10 +428,11 @@ class BenchmarkServiceTest {
 
         @Test
         @DisplayName("Tenant data directories are isolated per tenant ID")
-        void tenantDataDirsAreIsolated() throws IOException, InterruptedException {
+        void tenantDataDirsAreIsolated() {
             // The directory created must be under the tenant ID sub-path,
             // not at the root data dir level.
-            service.fetchIdentifiers(URI.create("http://invalid.example.invalid"), null, List.of("de"));
+            assertThrows(HarvestingFailedException.class,
+                    () -> service.fetchIdentifiers(URI.create("http://invalid.example.invalid"), null, List.of("de")));
 
             // The tenant sub-dir must exist; the root must not contain any
             // guids files directly (they belong under the tenant sub-dir).
