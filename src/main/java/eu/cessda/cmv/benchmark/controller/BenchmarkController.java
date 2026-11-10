@@ -22,6 +22,8 @@ import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -86,23 +88,20 @@ public class BenchmarkController {
         @PostMapping("/fetch-identifiers")
         public Map<String, String> fetchIdentifiers(
 
-                        @Parameter(description = "OAI-PMH base URL. " +
-                                "Default: https://datacatalogue.cessda.eu/oai-pmh/v0/oai") @RequestParam(required = false) URI baseUrl,
+                        @Parameter(description = "OAI-PMH base URL. ") @RequestParam(defaultValue = "https://datacatalogue.cessda.eu/oai-pmh/v0/oai") URI baseUrl,
 
-                        @Parameter(description = "OAI-PMH verb used when listing identifiers. " +
-                                        "Default: ListIdentifiers") @RequestParam(required = false) String verb,
+                        @Parameter(description = "Metadata prefix embedded in output GetRecord URLs. ") @RequestParam(defaultValue = "oai_ddi25") String metadataPrefix,
 
-                        @Parameter(description = "Metadata prefix embedded in output GetRecord URLs. " +
-                                        "Default: oai_ddi25") @RequestParam(required = false) String metadataPrefix,
+                        @Parameter(description = "Comma-separated list of sets to fetch.") @RequestParam(required = false) String sets
 
-                        @Parameter(description = "Comma-separated list of sets to fetch. " +
-                                        "Default: de,el,en,fi,fr,hr,nl,sl,sl-SI,sv") @RequestParam(required = false) String sets,
-
-                        @Parameter(description = "Fetch identifiers for a single named set only. " +
-                                        "When supplied, the 'sets' parameter is ignored.") @RequestParam(required = false) String fetchSet
-
-        ) throws IOException, InterruptedException, OAIException {
-                String message = service.fetchIdentifiers(baseUrl, verb, metadataPrefix, sets, fetchSet);
+        ) throws IOException, InterruptedException {
+                List<String> setList;
+                if (sets != null) {
+                        setList = Arrays.asList(sets.split(","));
+                } else {
+                        setList = Collections.emptyList();
+                }
+                String message = service.fetchIdentifiers(baseUrl, metadataPrefix, setList);
                 return response("ok", message);
         }
 

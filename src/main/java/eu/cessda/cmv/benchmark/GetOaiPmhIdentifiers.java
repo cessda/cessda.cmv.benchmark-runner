@@ -53,10 +53,8 @@ import java.util.logging.Logger;
  *                                       (default: ListIdentifiers)
  *   -m, --metadata-prefix <prefix>    Metadata prefix embedded in output GetRecord URLs
  *                                       (default: oai_ddi25)
- *   -S, --sets <set1,set2,...>         Comma-separated list of sets to fetch
- *                                       (default: de,el,en,fi,fr,hr,nl,sl,sl-SI,sv)
- *   -F, --fetch-all-sets               Fetch identifiers for all sets (default behaviour)
- *   -s, --fetch-set <set>              Fetch identifiers for a single set only
+ *   -S, --sets <set1,set2,...>         Comma-separated list of sets to fetch,
+ *                                       leave blank to disable set based listing
  *   -t, --tenant <tenant>              Tenant name; output is written to
  *                                       guids/&lt;tenant&gt;/ (default: cessda)
  *   -h, --help                         Show this help message
@@ -89,11 +87,8 @@ public class GetOaiPmhIdentifiers {
     // -----------------------------------------------------------------------
 
     private static final String BASE_URL_ARG      = "oai-pmh-base-url";
-    private static final String VERB_ARG          = "verb";
     private static final String META_PREFIX_ARG   = "metadata-prefix";
     private static final String SETS_ARG          = "sets";
-    private static final String FETCH_ALL_ARG     = "fetch-all-sets";
-    private static final String FETCH_SET_ARG     = "fetch-set";
     private static final String TENANT_ARG        = "tenant";
 
     // -----------------------------------------------------------------------
@@ -178,21 +173,15 @@ public class GetOaiPmhIdentifiers {
 
         try {
             Files.createDirectories(outputDir);
-            if (cmd.hasOption(FETCH_SET_ARG)) {
-                String set = cmd.getOptionValue(FETCH_SET_ARG);
-                if (set == null || set.isBlank()) {
-                    logger.log(Level.SEVERE, "A set must be specified with -s / --fetch-set");
-                    return;
-                }
-                client.fetchIdentifiersForSet(set);
+            List<String> sets;
+            if (cmd.hasOption(SETS_ARG)) {
+                // Fetch sets specified on the command line
+                sets = Arrays.asList(cmd.getOptionValue(SETS_ARG).split(","));
             } else {
-                // Default: fetch all sets (also triggered by -F / --fetch-all-sets)
-                List<String> sets = Collections.emptyList();
-                if (cmd.hasOption(SETS_ARG)) {
-                    sets = Arrays.asList(cmd.getOptionValue(SETS_ARG).split(","));
-                }
-                client.fetchAllSetIdentifiers(sets);
+                // Fetch all identifiers
+                sets = Collections.emptyList();
             }
+            client.fetchAllSetIdentifiers(sets);
         } catch (OAIException | IOException e) {
             logger.log(Level.SEVERE, "Error: {0}", new Object[]{e.getMessage()});
         }
@@ -260,7 +249,6 @@ public class GetOaiPmhIdentifiers {
 
         // Also use the configured metadataPrefix (not the compiled-in
         // default) so -m/--metadata-prefix is honoured on this request
-        // too, matching buildGetRecordUrl.
         var identifiers = getIdentifiers(setSpec);
 
         logger.log(Level.INFO, "Fetched {0} identifier(s) for set: {1}", new Object[]{identifiers.size(), setSpec});
@@ -346,11 +334,7 @@ public class GetOaiPmhIdentifiers {
         options.addOption("m", META_PREFIX_ARG, true,
                 "Metadata prefix for output GetRecord URLs (default: " + DEFAULT_METADATA_PREFIX + ")");
         options.addOption("S", SETS_ARG, true,
-                "Comma-separated list of sets to fetch (default: de,el,en,fi,fr,hr,nl,sl,sl-SI,sv)");
-        options.addOption("F", FETCH_ALL_ARG, false,
-                "Fetch identifiers for all sets (default behaviour when no mode flag is given)");
-        options.addOption("s", FETCH_SET_ARG, true,
-                "Fetch identifiers for a single set only");
+                "Comma-separated list of sets to fetch");
         options.addOption("t", TENANT_ARG, true,
                 "Tenant name; output is written to guids/<tenant>/ (default: " + DEFAULT_TENANT + ")");
         options.addOption("h", "help", false, "Show help");

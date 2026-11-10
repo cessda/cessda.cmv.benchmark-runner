@@ -24,6 +24,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -418,10 +419,8 @@ class BenchmarkServiceTest {
 
             service = new BenchmarkService(benchmarkProperties, tenantContext, tenantProperties);
 
-            // Expected: the HTTP call will fail.
-            assertThrows(IOException.class, () -> service.fetchIdentifiers(
-                    URI.create("http://invalid.example.invalid"),
-                    null, null, "de", null));
+            // Expected: the HTTP call will fail and the exception will be handled.
+            service.fetchIdentifiers(URI.create("http://invalid.example.invalid"), null, List.of("de"));
 
             assertTrue(Files.isDirectory(expectedTenantDir),
                 "fetchIdentifiers must create the tenant-scoped data directory");
@@ -429,12 +428,10 @@ class BenchmarkServiceTest {
 
         @Test
         @DisplayName("Tenant data directories are isolated per tenant ID")
-        void tenantDataDirsAreIsolated() {
+        void tenantDataDirsAreIsolated() throws IOException, InterruptedException {
             // The directory created must be under the tenant ID sub-path,
             // not at the root data dir level.
-            assertThrows(IOException.class, () -> service.fetchIdentifiers(
-                    URI.create("http://invalid.example.invalid"),
-                    null, null, "de", null));
+            service.fetchIdentifiers(URI.create("http://invalid.example.invalid"), null, List.of("de"));
 
             // The tenant sub-dir must exist; the root must not contain any
             // guids files directly (they belong under the tenant sub-dir).

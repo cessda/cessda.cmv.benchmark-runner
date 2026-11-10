@@ -17,8 +17,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -234,12 +232,11 @@ public class BenchmarkService {
         return client.listSets();
     }
 
+    // TODO: implement exception for failures (all sets failed)
     public String fetchIdentifiers(
             URI baseUrl,
-            String verb,
             String metadataPrefix,
-            String sets,
-            String fetchSet) throws IOException, InterruptedException, OAIException {
+            List<String> sets) throws IOException, InterruptedException {
 
         Path tDataDir = tenantDataDir();
         Files.createDirectories(tDataDir);
@@ -247,18 +244,17 @@ public class BenchmarkService {
         URI resolvedBase = resolveOaiPmhBaseUrl(baseUrl);
         String resolvedPrefix = nvl(metadataPrefix, GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX);
 
-        GetOaiPmhIdentifiers client =
-                new GetOaiPmhIdentifiers(resolvedBase, resolvedPrefix, tDataDir);
+        GetOaiPmhIdentifiers client = new GetOaiPmhIdentifiers(resolvedBase, resolvedPrefix, tDataDir);
 
-        if (fetchSet != null && !fetchSet.isBlank()) {
-            client.fetchIdentifiersForSet(fetchSet);
-            return "Fetched identifiers for set: " + fetchSet.trim()
-                    + " -> " + tDataDir + "/guids_" + fetchSet.trim() + ".txt";
+        if (sets.isEmpty()) {
+            // Gather all identifiers in the repository
+            try {
+                client.fetchIdentifiers();
+                return "Fetched identifiers for the whole repository -> " + tDataDir;
+            } catch (IOException | OAIException e) {
+                return "Failed to fetch identifiers from the repository: " + e;
+            }
         }
-
-        List<String> resolvedSets = (sets != null && !sets.isBlank())
-                ? Arrays.asList(sets.split(","))
-                : Collections.emptyList();
 
         // Isolate per-set failures rather than aborting the whole batch
         // at the first one -- an operator selecting several sets from
@@ -268,28 +264,22 @@ public class BenchmarkService {
         // RunBenchmarkAssessment batch.
         java.util.List<String> succeeded = new java.util.ArrayList<>();
         java.util.Map<String, Exception> failed = new java.util.LinkedHashMap<>();
-        for (String rawSet : resolvedSets) {
-            String set = rawSet == null ? "" : rawSet.trim();
-            if (set.isEmpty()) continue;
+        for (String set : sets) {
             try {
                 client.fetchIdentifiersForSet(set);
                 succeeded.add(set);
-            } catch (IOException ioe) {
-                failed.put(set, ioe);
+            } catch (IOException | OAIException e) {
+                failed.put(set, e);
             }
         }
 
-        if (succeeded.isEmpty() && !failed.isEmpty()) {
-            throw new IOException("Failed to fetch identifiers for all " + failed.size()
-                    + " selected set(s): " + describeFailures(failed));
+        if (!failed.isEmpty()) {
+            return "Failed to fetch identifiers for all " + failed.size()
+                    + " selected set(s): " + describeFailures(failed);
         }
 
-        String message = "Fetched identifiers for " + succeeded.size() + " of "
-                + resolvedSets.size() + " set(s) -> " + tDataDir;
-        if (!failed.isEmpty()) {
-            message += " (failed: " + describeFailures(failed) + ")";
-        }
-        return message;
+        return "Fetched identifiers for " + succeeded.size() + " of "
+                + sets.size() + " set(s) -> " + tDataDir;
     }
 
     // ── 2. Run Assessment ────────────────────────────────────────────────────

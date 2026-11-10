@@ -170,26 +170,6 @@ class GetOaiPmhIdentifiersTest {
     }
 
     @Test
-    void parseArgsRecognisesFetchSetShortOption() throws ParseException {
-        CommandLine cmd = GetOaiPmhIdentifiers.parseArgs("-s", "de");
-        assertTrue(cmd.hasOption("fetch-set"));
-        assertEquals("de", cmd.getOptionValue("fetch-set"));
-    }
-
-    @Test
-    void parseArgsRecognisesFetchSetLongOption() throws ParseException {
-        CommandLine cmd = GetOaiPmhIdentifiers.parseArgs("--fetch-set", "en");
-        assertTrue(cmd.hasOption("fetch-set"));
-        assertEquals("en", cmd.getOptionValue("fetch-set"));
-    }
-
-    @Test
-    void parseArgsRecognisesFetchAllSetsShortOption() throws ParseException {
-        CommandLine cmd = GetOaiPmhIdentifiers.parseArgs("-F");
-        assertTrue(cmd.hasOption("fetch-all-sets"));
-    }
-
-    @Test
     void parseArgsRecognisesBaseUrlLongOption() throws ParseException {
         CommandLine cmd = GetOaiPmhIdentifiers.parseArgs(
                 "--oai-pmh-base-url", "https://example.org/oai");
