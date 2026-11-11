@@ -1,0 +1,350 @@
+/*
+ * SPDX-FileCopyrightText: 2026 CESSDA ERIC (support@cessda.eu)
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package eu.cessda.cmv.benchmark.controller;
+
+import eu.cessda.cmv.benchmark.config.BenchmarkProperties;
+import eu.cessda.cmv.benchmark.config.SecurityConfig;
+import eu.cessda.cmv.benchmark.service.BenchmarkService;
+import eu.cessda.cmv.benchmark.tenant.TenantAuthFilter;
+import eu.cessda.cmv.benchmark.tenant.TenantContext;
+import eu.cessda.cmv.benchmark.tenant.TenantProperties;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.ComponentScan.Filter;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.io.FileNotFoundException;
+import java.net.URI;
+import java.nio.file.Path;
+import java.util.Collections;
+import java.util.List;
+
+import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+/**
+ * Unit tests for {@link BenchmarkController}.
+ *
+ * <p>Uses the {@code @WebMvcTest} slice so only the MVC layer is
+ * loaded. {@link BenchmarkService} is replaced with a Mockito mock,
+ * meaning no real HTTP calls or file I/O occur during these tests.</p>
+ *
+ * <p>{@link SecurityConfig} is imported explicitly so that this slice
+ * uses the application's real, permissive security rules (CSRF
+ * disabled, all requests permitted) rather than Spring Security's
+ * restrictive defaults, which would otherwise reject every POST with
+ * a 403 (CSRF) or 401 (auth required).</p>
+ *
+ * <p>{@code @WebMvcTest} does not component-scan plain
+ * {@code @Component} beans outside the web layer, so
+ * {@link TenantContext} and {@link TenantProperties} — both required
+ * transitively by {@link SecurityConfig} via
+ * {@code TenantAuthFilter} — are supplied here as Mockito mocks rather
+ * than relying on component scanning to find them.</p>
+ *
+ * <p>{@code TenantAuthFilter} itself is explicitly excluded from this
+ * slice via {@code excludeFilters}, since these tests verify controller
+ * parameter-forwarding and error-handling behaviour, not
+ * authentication. With the filter excluded, {@link SecurityConfig}'s
+ * {@code Optional<TenantAuthFilter>} resolves to empty and its
+ * {@code permitAll()} rule applies unconditionally, so requests reach
+ * the controller without needing an {@code X-API-Key} header.</p>
+ *
+ * <p>Each nested class groups the tests for one endpoint. Within each
+ * group the happy path is tested first, followed by error cases.</p>
+ */
+@WebMvcTest(
+    controllers = BenchmarkController.class,
+    excludeFilters = @Filter(
+        type = org.springframework.context.annotation.FilterType.ASSIGNABLE_TYPE,
+            classes = TenantAuthFilter.class
+    )
+)
+@Import({ControllerAdvisor.class, SecurityConfig.class})
+@EnableConfigurationProperties(BenchmarkProperties.class)
+@TestPropertySource(properties = {
+    "benchmark.data-dir=${java.io.tmpdir}/benchmark-controller-test-data",
+    "benchmark.results-dir=${java.io.tmpdir}/benchmark-controller-test-results"
+})
+class BenchmarkControllerTest {
+
+    @Autowired
+    private MockMvc mvc;
+
+    @MockitoBean
+    private BenchmarkService service;
+
+    @MockitoBean
+    private TenantContext tenantContext;
+
+    @MockitoBean
+    private TenantProperties tenantProperties;
+
+    // -------------------------------------------------------------------------
+    // POST /api/fetch-identifiers
+    // -------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("POST /api/fetch-identifiers")
+    class FetchIdentifiers {
+
+        @Test
+        @DisplayName("Returns 200 with ok status when called with no parameters")
+        void defaultParametersReturn200() throws Exception {
+            when(service.fetchIdentifiers(
+                    isNull(), isNull(), anyList()))
+                .thenReturn("Fetched identifiers for 10 set(s) -> /data");
+
+            mvc.perform(post("/api/fetch-identifiers"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(
+                    MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.status", is("ok")))
+                .andExpect(jsonPath("$.message",
+                    is("Fetched identifiers for 10 set(s) -> /data")));
+
+            verify(service).fetchIdentifiers(
+                    isNull(), isNull(), eq(Collections.emptyList()));
+        }
+
+        @Test
+        @DisplayName("Passes fetchSet parameter to service")
+        void singleSetParameterIsForwarded() throws Exception {
+            when(service.fetchIdentifiers(
+                    isNull(), isNull(), eq(List.of("en"))))
+                .thenReturn("Fetched identifiers for set: en -> /data/guids_en.txt");
+
+            mvc.perform(post("/api/fetch-identifiers")
+                    .param("sets", "en"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("ok")));
+
+            verify(service).fetchIdentifiers(
+                    isNull(), isNull(), eq(List.of("en")));
+        }
+
+        @Test
+        @DisplayName("Passes comma-separated sets parameter to service")
+        void multipleSetsParameterIsForwarded() throws Exception {
+            when(service.fetchIdentifiers(
+                    isNull(), isNull(), eq(List.of("de", "en", "fr"))))
+                .thenReturn("Fetched identifiers for 3 set(s) -> /data");
+
+            mvc.perform(post("/api/fetch-identifiers")
+                    .param("sets", "de,en,fr"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("ok")));
+
+            verify(service).fetchIdentifiers(
+                    isNull(), isNull(), eq(List.of("de", "en", "fr")));
+        }
+
+        @Test
+        @DisplayName("Passes all optional parameters to service")
+        void allOptionalParametersAreForwarded() throws Exception {
+            when(service.fetchIdentifiers(
+                    eq(URI.create("https://example.org/oai")),
+                    eq("oai_dc"),
+                    anyList()))
+                .thenReturn("Fetched identifiers for 10 set(s) -> /data");
+
+            mvc.perform(post("/api/fetch-identifiers")
+                    .param("baseUrl",        "https://example.org/oai")
+                    .param("metadataPrefix", "oai_dc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("ok")));
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // POST /api/run-assessment
+    // -------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("POST /api/run-assessment")
+    class RunAssessment {
+
+        @Test
+        @DisplayName("Returns 200 with ok status when called with no parameters")
+        void defaultParametersReturn200() throws Exception {
+            when(service.runAssessment(
+                    isNull(), isNull(), isNull(), isNull(), isNull(), eq(false)))
+                .thenReturn(
+                    "Processed default file: guids_hr.txt"
+                    + " -> results written to /results");
+
+            mvc.perform(post("/api/run-assessment"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("ok")))
+                .andExpect(jsonPath("$.message",
+                    is("Processed default file: guids_hr.txt"
+                        + " -> results written to /results")));
+
+            verify(service).runAssessment(null, null, null, null, null, false);
+        }
+
+        @Test
+        @DisplayName("Passes processAll=true to service")
+        void processAllParameterIsForwarded() throws Exception {
+              when(service.runAssessment(
+        any(), any(), any(), any(), isNull(), anyBoolean()))
+                .thenReturn(
+                    "Processed all default set files from /data"
+                    + " -> results written to /results");
+
+            mvc.perform(post("/api/run-assessment")
+                    .param("processAll", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("ok")));
+
+            verify(service).runAssessment(null, null, null, null, null, true);
+        }
+
+        @Test
+        @DisplayName("Passes guidFile parameter to service")
+        void guidFileParameterIsForwarded() throws Exception {
+            Path guidFile = Path.of("guids_de.txt");
+            when(service.runAssessment(
+                    isNull(), isNull(), eq(guidFile), isNull(), isNull(), eq(false)))
+                .thenReturn(
+                    "Processed file: /data/guids_de.txt"
+                    + " -> results written to /results");
+
+            mvc.perform(post("/api/run-assessment")
+                    .param("guidFile", "guids_de.txt"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("ok")));
+
+            verify(service).runAssessment(
+                    null, null, guidFile, null, null, false);
+        }
+
+        @Test
+        @DisplayName("Passes guidFiles parameter to service")
+        void guidFilesParametersAreForwarded() throws Exception {
+            Path guidFile = Path.of("guids_de.txt");
+            List<Path> guidFileList = List.of(guidFile);
+            when(service.runAssessment(
+                    isNull(), isNull(), isNull(), eq(guidFileList), isNull(), eq(false)))
+                    .thenReturn(
+                            "Processed file: /data/guids_de.txt"
+                                    + " -> results written to /results");
+
+            mvc.perform(post("/api/run-assessment")
+                            .param("guidFiles", guidFile.toString()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status", is("ok")));
+
+            verify(service).runAssessment(
+                    null, null, null, guidFileList, null, false);
+        }
+
+        @Test
+        @DisplayName("Passes single guid URL parameter to service")
+        void singleGuidParameterIsForwarded() throws Exception {
+            String guid =
+                "https://datacatalogue.cessda.eu/oai-pmh/v0/oai"
+                + "?verb=GetRecord&metadataPrefix=oai_ddi25"
+                + "&identifier=abc123";
+
+            URI guidUri = URI.create(guid);
+
+            when(service.runAssessment(
+                    isNull(), isNull(), isNull(), isNull(), eq(guidUri), eq(false)))
+                .thenReturn(
+                        "Processed single GUID: " + guid
+                    + " -> results written to /results");
+
+            mvc.perform(post("/api/run-assessment")
+                            .param("guid", guid))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("ok")));
+
+            verify(service).runAssessment(null, null, null, null, guidUri, false);
+        }
+
+        @Test
+        @DisplayName("Passes custom spreadsheetUri to service")
+        void spreadsheetUriParameterIsForwarded() throws Exception {
+            URI customUri = URI.create("https://example.org/spreadsheet");
+            when(service.runAssessment(
+        eq(customUri), isNull(),isNull(), isNull(), isNull(), eq(false)))
+                .thenReturn("Processed default file: guids_hr.txt"
+                    + " -> results written to /results");
+
+            mvc.perform(post("/api/run-assessment")
+                            .param("spreadsheetUri", customUri.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("ok")));
+
+            verify(service).runAssessment(customUri, null, null, null, null, false);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // POST /api/generate-manifest
+    // -------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("POST /api/generate-manifest")
+    class GenerateManifest {
+
+        @Test
+        @DisplayName("Returns 200 with ok status when called with no parameters")
+        void defaultParametersReturn200() throws Exception {
+            when(service.generateManifest(isNull()))
+                .thenReturn("Manifest generated in: /results");
+
+            mvc.perform(post("/api/generate-manifest"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("ok")))
+                .andExpect(jsonPath("$.message",
+                    is("Manifest generated in: /results")));
+
+            verify(service).generateManifest(null);
+        }
+
+        @Test
+        @DisplayName("Passes resultsDir override parameter to service")
+        void resultsDirOverrideIsForwarded() throws Exception {
+            when(service.generateManifest("/custom/results"))
+                .thenReturn("Manifest generated in: /custom/results");
+
+            mvc.perform(post("/api/generate-manifest")
+                    .param("resultsDir", "/custom/results"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("ok")))
+                .andExpect(jsonPath("$.message",
+                    is("Manifest generated in: /custom/results")));
+
+            verify(service).generateManifest("/custom/results");
+        }
+
+        @Test
+        @DisplayName("Returns 403 with error status when results directory does not exist")
+        void missingResultsDirReturns403() throws Exception {
+            when(service.generateManifest(any()))
+                .thenThrow(new FileNotFoundException(
+                    "Results directory not found: /results"));
+
+            mvc.perform(post("/api/generate-manifest"))
+                .andExpect(status().isNotFound());
+        }
+    }
+}

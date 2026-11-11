@@ -65,3 +65,6 @@ bin/
 ### Input and output files (.txt, .json)###
 results/**/*.json
 guids/**/*.txt
+
+### Chatbot directives ###
+CLAUDE.md

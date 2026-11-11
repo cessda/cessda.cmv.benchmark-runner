@@ -1,0 +1,274 @@
+/*
+ * SPDX-FileCopyrightText: 2026 CESSDA ERIC (support@cessda.eu)
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package eu.cessda.cmv.benchmark.controller;
+
+import eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers;
+import eu.cessda.cmv.benchmark.service.BenchmarkService;
+import eu.cessda.cmv.benchmark.service.BenchmarkService.Branding;
+import eu.cessda.cmv.benchmark.service.HarvestingFailedException;
+import eu.cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.oclc.oai.harvester2.verb.OAIException;
+import org.springframework.web.bind.annotation.*;
+
+import java.io.IOException;
+import java.net.URI;
+import java.nio.file.Path;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * REST controller exposing the three benchmark pipeline operations as HTTP
+ * POST endpoints.
+ *
+ * <p>
+ * All parameters mirror the CLI flags of the original command-line classes.
+ * All parameters are optional; defaults match the CLI defaults.
+ * </p>
+ */
+@RestController
+@RequestMapping("/api")
+@Tag(name = "Benchmark Pipeline", description = "Endpoints for fetching OAI-PMH identifiers, running FAIR " +
+                "benchmark assessments, and generating the dashboard manifest.")
+public class BenchmarkController {
+
+        private final BenchmarkService service;
+
+        public BenchmarkController(BenchmarkService service) {
+                this.service = service;
+        }
+
+        // -------------------------------------------------------------------------
+        // GET /api/config
+        // -------------------------------------------------------------------------
+
+        @GetMapping({ "/config", "/api/config" })
+        public Map<String, Map<String, String>> getConfig() {
+                TenantConfig cfg = service.getCurrentTenantConfig();
+                return Map.of(
+                                "setNames", cfg.getSetNames(),
+                                "fairMap", cfg.getFairMap());
+        }
+
+        // -------------------------------------------------------------------------
+        // GET /api/tenant/branding
+        // -------------------------------------------------------------------------
+
+        @Operation(summary = "Get tenant branding", description = "Returns the display title and footer text configured for "
+                        +
+                        "the current tenant, for use in the dashboard UI.", responses = {
+                                        @ApiResponse(responseCode = "200", description = "Branding retrieved", content = @Content(schema = @Schema(example = "{\"title\":\"CESSDA · Assessment Results\",\"footer\":\"CESSDA FAIR Benchmark\"}")))
+                        })
+        @GetMapping("/tenant/branding")
+        public Branding getTenantBranding() {
+                return service.getTenantBranding();
+        }
+
+        // -------------------------------------------------------------------------
+        // 1. POST /api/fetch-identifiers
+        // -------------------------------------------------------------------------
+
+        @Operation(summary = "Fetch OAI-PMH identifiers", description = "Fetches record identifiers from an OAI-PMH endpoint and writes "
+                        +
+                        "guids_<set>.txt files to the data volume. " +
+                        "Equivalent to running GetOaiPmhIdentifiers from the command line.", responses = {
+                                        @ApiResponse(responseCode = "200", description = "Identifiers fetched successfully", content = @Content(schema = @Schema(example = "{\"status\":\"ok\",\"message\":\"Fetched identifiers for 10 set(s)\"}"))),
+                                        @ApiResponse(responseCode = "500", description = "Fetch failed")
+                        })
+        @PostMapping("/fetch-identifiers")
+        public Map<String, String> fetchIdentifiers(
+
+                @Parameter(description = "OAI-PMH base URL. Defaults to the tenant's configured OAI-PMH endpoint.") @RequestParam(required = false) URI baseUrl,
+
+                @Parameter(description = "Metadata prefix embedded in output GetRecord URLs. Defaults to the tenant's configured metadata prefix.") @RequestParam(required = false) String metadataPrefix,
+
+                        @Parameter(description = "Comma-separated list of sets to fetch.") @RequestParam(required = false) String sets
+
+        ) throws IOException, InterruptedException, HarvestingFailedException {
+                List<String> setList;
+                if (sets != null) {
+                        setList = GetOaiPmhIdentifiers.splitSets(sets);
+                        if (setList.isEmpty()) {
+                                throw new IllegalArgumentException("Invalid sets argument, a comma separated list is expected");
+                        }
+                } else {
+                        setList = Collections.emptyList();
+                }
+                String message = service.fetchIdentifiers(baseUrl, metadataPrefix, setList);
+                return response("ok", message);
+        }
+
+        // -------------------------------------------------------------------------
+        // 1a. GET /api/fetch-identifiers/defaults
+        // -------------------------------------------------------------------------
+
+        private static Map<String, String> response(String status, String message) {
+                return Map.of(
+                        "status", status,
+                        "message", message
+                );
+        }
+
+        // -------------------------------------------------------------------------
+        // 1b. GET /api/fetch-identifiers/sets
+        // -------------------------------------------------------------------------
+
+        @Operation(summary = "Get default OAI-PMH base URL", description = "Returns the OAI-PMH base URL that would be used for the "
+                        +
+                        "current tenant if fetch-identifiers were called with no explicit " +
+                        "override. Used by the dashboard to populate the \"Fetch " +
+                        "identifiers\" page's URL field before the operator optionally " +
+                        "changes it for this run.", responses = {
+                                        @ApiResponse(responseCode = "200", description = "Default retrieved successfully", content = @Content(schema = @Schema(example = "{\"baseUrl\":\"https://datacatalogue.cessda.eu/oai-pmh/v0/oai\"}"))),
+                                        @ApiResponse(responseCode = "500", description = "Failed to resolve default")
+                        })
+        @GetMapping("/fetch-identifiers/defaults")
+        public Map<String, URI> getFetchIdentifiersDefaults() {
+                return Map.of("baseUrl", service.getDefaultOaiPmhBaseUrl());
+        }
+
+        // -------------------------------------------------------------------------
+        // 2. GET /api/run-assessment/defaults
+        // -------------------------------------------------------------------------
+
+        @Operation(summary = "List sets available from an OAI-PMH endpoint", description = "Calls verb=ListSets against the given (or, if omitted, "
+                        +
+                        "the current tenant's default) OAI-PMH endpoint and returns every " +
+                        "set it reports, live. There is no static or compiled-in " +
+                        "fallback list: a hand-maintained copy inevitably drifts out of " +
+                        "sync with the actual repository, so the dashboard's checkable " +
+                        "set list always reflects exactly what that specific endpoint " +
+                        "currently offers, including after the URL is overridden for a " +
+                        "one-off run.", responses = {
+                                        @ApiResponse(responseCode = "200", description = "Sets listed successfully", content = @Content(schema = @Schema(example = "{\"sets\":[{\"setSpec\":\"language:hr\",\"setName\":\"Language hr\"}]}"))),
+                                        @ApiResponse(responseCode = "500", description = "Failed to list sets")
+                        })
+        @GetMapping("/fetch-identifiers/sets")
+        public Map<String, List<GetOaiPmhIdentifiers.SetInfo>> getFetchIdentifiersSets(
+
+                        @Parameter(description = "OAI-PMH base URL, for this request only. " +
+                                "Default: the current tenant's configured oai-pmh-base-url.") @RequestParam(required = false) URI baseUrl
+
+        ) throws IOException, InterruptedException, OAIException {
+                return Map.of("sets", service.listAvailableSets(baseUrl));
+        }
+
+        // -------------------------------------------------------------------------
+        // 3. GET /api/run-assessment/guid-files
+        // -------------------------------------------------------------------------
+
+        @Operation(summary = "Get default algorithm and runner URIs", description = "Returns the algorithm and runner URIs that would be used "
+                        +
+                        "for the current tenant if run-assessment were called with " +
+                        "no explicit overrides. Used by the dashboard to populate " +
+                        "the confirmation dialog shown before triggering an " +
+                        "assessment run.", responses = {
+                                        @ApiResponse(responseCode = "200", description = "Defaults retrieved successfully", content = @Content(schema = @Schema(example = "{\"algorithm\":\"https://...\",\"runner\":\"https://...\"}"))),
+                                        @ApiResponse(responseCode = "500", description = "Failed to resolve defaults")
+                        })
+        @GetMapping("/run-assessment/defaults")
+        public Map<String, URI> getRunAssessmentDefaults() {
+                URI[] defaults = service.getDefaultAlgorithmAndRunner();
+                return Map.of(
+                        "algorithm", defaults[0],
+                        "runner", defaults[1]
+                );
+        }
+
+        // -------------------------------------------------------------------------
+        // 4. POST /api/run-assessment
+        // -------------------------------------------------------------------------
+
+        @Operation(summary = "Run FAIR benchmark assessment", description = "Reads guids_*.txt files from the data volume, posts each GetRecord "
+                        +
+                        "URL to the FAIR Champion API, and writes JSON result files to the " +
+                        "results volume. Equivalent to running RunBenchmarkAssessment from " +
+                        "the command line.", responses = {
+                                        @ApiResponse(responseCode = "200", description = "Assessment completed", content = @Content(schema = @Schema(example = "{\"status\":\"ok\",\"message\":\"Processed all default set files\"}"))),
+                                        @ApiResponse(responseCode = "500", description = "Assessment failed")
+                        })
+        @PostMapping("/run-assessment")
+        public Map<String, String> runAssessment(
+
+                        @Parameter(description = "Algorithm runner URI. " +
+                                "Configurable via 'benchmark.algorithm' property.") @RequestParam(required = false) URI spreadsheetUri,
+
+                        @Parameter(description = "FAIR Champion API URI to POST GUIDs to. " +
+                                "Configurable via 'benchmark.runner' property.") @RequestParam(required = false) URI runnerUri,
+
+                        @Parameter(description = "Name of a specific guids_*.txt file to process " +
+                                        "(e.g. guids_de.txt). Ignored when 'guidFiles', 'guid', or " +
+                                "'processAll' is set.") @RequestParam(required = false) Path guidFile,
+
+                        @Parameter(description = "One or more specific guids_*.txt filenames to " +
+                                        "process, as selected by the operator (e.g. " +
+                                        "guids_de.txt, guids_en.txt). Takes priority over " +
+                                "'guidFile' and 'processAll', but not over 'guid'.") @RequestParam(required = false) List<Path> guidFiles,
+
+                        @Parameter(description = "A single full OAI-PMH GetRecord URL to assess directly. " +
+                                "Takes priority over 'guidFiles', 'guidFile', and 'processAll'.") @RequestParam(required = false) URI guid,
+
+                        @Parameter(description = "When true, process guids_*.txt files for all default sets " +
+                                        "(de, el, en, fi, fr, hr, nl, sl, sl-SI, sv). Ignored when " +
+                                        "'guidFiles' is set. Default: false") @RequestParam(required = false, defaultValue = "false") boolean processAll
+
+        ) throws IOException, InterruptedException {
+                        String message = service.runAssessment(
+                                        spreadsheetUri, runnerUri,
+                                        guidFile, guidFiles, guid, processAll);
+                return response("ok", message);
+        }
+
+        // -------------------------------------------------------------------------
+        // 5. POST /api/generate-manifest
+        // -------------------------------------------------------------------------
+
+        @Operation(summary = "Generate dashboard manifest", description = "Reads JSON result files from the results volume and produces "
+                        +
+                        "results/summary.json and paginated results/guids_<set>/pages/page-NNN.json " +
+                        "files consumed by the HTML dashboard. " +
+                        "Equivalent to running GenerateManifest from the command line or " +
+                        "the first step of start-dashboard.sh.", responses = {
+                                        @ApiResponse(responseCode = "200", description = "Manifest generated successfully", content = @Content(schema = @Schema(example = "{\"status\":\"ok\",\"message\":\"Manifest generated in: /results\"}"))),
+                                        @ApiResponse(responseCode = "404", description = "JSON result files not found"),
+                                        @ApiResponse(responseCode = "500", description = "Manifest generation failed")
+                        })
+        @PostMapping("/generate-manifest")
+        public Map<String, String> generateManifest(
+
+                        @Parameter(description = "Override the results directory path. " +
+                                        "Default: the 'benchmark.results-dir' volume (/results).") @RequestParam(required = false) String resultsDir
+
+        ) throws IOException {
+                String message = service.generateManifest(resultsDir);
+                return response("ok", message);
+        }
+
+        // -------------------------------------------------------------------------
+        // Helper
+        // -------------------------------------------------------------------------
+
+        @Operation(summary = "List available guids_*.txt files", description = "Lists the guids_*.txt files present in the current "
+                        +
+                        "tenant's data directory, for selecting which sets to " +
+                        "assess. Used by the dashboard to populate the " +
+                        "checkable list shown in the run-assessment " +
+                        "confirmation dialog.", responses = {
+                                        @ApiResponse(responseCode = "200", description = "Files listed successfully", content = @Content(schema = @Schema(example = "{\"files\":[\"guids_de.txt\",\"guids_en.txt\"]}"))),
+                                        @ApiResponse(responseCode = "500", description = "Failed to list files")
+                        })
+        @GetMapping("/run-assessment/guid-files")
+        public Map<String, List<String>> listGuidFiles() throws IOException {
+                return Map.of("files", service.listGuidFiles());
+        }
+}

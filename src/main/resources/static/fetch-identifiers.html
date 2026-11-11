@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fetch Identifiers · FAIR Benchmark Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:         #f5f3ee;
+      --surface:    #ffffff;
+      --border:     #e2ddd6;
+      --border2:    #c5bcb0;
+      --text:       #1c1917;
+      --muted:      #57534e;
+      --pass:       #14532d;
+      --pass-bg:    #dcfce7;
+      --fail:       #991b1b;
+      --fail-bg:    #fee2e2;
+      --indet:      #78350f;
+      --indet-bg:   #fef3c7;
+      --accent:     #1d4ed8;
+      --accent-bg:  #eff6ff;
+      --navy:       #1e40af;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    :focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+
+    header {
+      border-bottom: 2px solid var(--border2);
+      padding: 20px 48px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: var(--surface);
+    }
+    .back-btn {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 12px;
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      transition: background 0.12s, border-color 0.12s;
+      white-space: nowrap;
+    }
+    .back-btn:hover { background: var(--accent-bg); border-color: var(--accent); }
+    header h1 {
+      font-family: 'Fraunces', serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.3px;
+    }
+    .header-right { margin-left: auto; }
+    .about-btn {
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .about-btn:hover { background: var(--border); }
+
+    main { max-width: 720px; margin: 0 auto; padding: 40px 48px; }
+
+    #no-key-notice {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+    #no-key-notice a { color: var(--accent); }
+
+    .intro {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.7;
+      margin-bottom: 28px;
+      max-width: 620px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+    .card h2 {
+      font-family: 'Fraunces', serif;
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .card .card-hint {
+      color: var(--muted);
+      font-size: 11.5px;
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    .url-row { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 4px; }
+    .url-row input[type="text"] {
+      flex: 1;
+      padding: 9px 11px;
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 12px;
+    }
+    .url-row button {
+      padding: 9px 16px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--border2);
+      background: var(--bg);
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .url-row button:hover { background: var(--border); }
+    .url-row button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .field-hint { color: var(--muted); font-size: 11px; margin-bottom: 20px; }
+
+    #sets-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      margin-top: 20px;
+    }
+    #sets-actions { display: flex; gap: 6px; }
+    #sets-actions button {
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      color: var(--muted);
+      padding: 3px 10px;
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    #sets-actions button:hover { background: var(--border); color: var(--text); }
+    #sets-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    #sets-list {
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      max-height: 260px;
+      overflow-y: auto;
+      margin-bottom: 8px;
+      background: var(--bg);
+    }
+    .set-item {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .set-item:last-child { border-bottom: none; }
+    .set-item input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .set-item label {
+      margin-bottom: 0 !important;
+      text-transform: none !important;
+      letter-spacing: normal !important;
+      font-size: 12px !important;
+      font-weight: 400 !important;
+      color: var(--text) !important;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .set-item .set-spec { color: var(--muted); font-size: 10.5px; }
+    #sets-empty, #sets-loading {
+      padding: 16px 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    #sets-loading .spinner {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid var(--border2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+      vertical-align: -2px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #sets-error {
+      color: var(--fail);
+      font-size: 12px;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    #fetch-submit {
+      width: 100%;
+      padding: 11px 18px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: #fff;
+      margin-top: 12px;
+    }
+    #fetch-submit:hover { background: var(--navy); border-color: var(--navy); }
+    #fetch-submit:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    #result-box {
+      display: none;
+      border-radius: 8px;
+      padding: 18px 20px;
+      font-size: 12.5px;
+      line-height: 1.7;
+      margin-bottom: 24px;
+      white-space: pre-line;
+    }
+    #result-box.ok {
+      background: var(--pass-bg);
+      color: var(--pass);
+      border: 1px solid #a7f3d0;
+    }
+    #result-box.warn {
+      background: var(--indet-bg);
+      color: var(--indet);
+      border: 1px solid #fde68a;
+    }
+    #result-box.error {
+      background: var(--fail-bg);
+      color: var(--fail);
+      border: 1px solid #fca5a5;
+    }
+
+    footer {
+      border-top: 1px solid var(--border2);
+      padding: 20px 48px;
+      color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      background: var(--surface);
+    }
+
+    @media (max-width: 700px) {
+      main { padding: 24px 20px; }
+      header { padding: 16px 20px; }
+      footer { padding: 16px 20px; flex-direction: column; gap: 4px; }
+      .url-row { flex-direction: column; }
+      #about-modal-card { padding: 24px 20px; }
+    }
+
+    /* ── About / user guide modal ── */
+    #about-modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(28, 25, 23, 0.45);
+      z-index: 100;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 20px;
+      overflow-y: auto;
+    }
+    #about-modal-card {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+      padding: 32px 36px;
+      max-width: 640px;
+      width: 100%;
+      position: relative;
+    }
+    #about-modal-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1px solid var(--border2);
+      background: var(--bg);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1;
+    }
+    #about-modal-close:hover { background: var(--border); color: var(--text); }
+    #about-modal-title {
+      font-family: 'Fraunces', serif;
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      padding-right: 24px;
+    }
+    #about-modal-body { font-size: 12.5px; line-height: 1.7; color: var(--text); }
+    #about-modal-body h2 {
+      font-family: 'Fraunces', serif;
+      font-size: 15px;
+      font-weight: 700;
+      margin: 22px 0 8px;
+    }
+    #about-modal-body h2:first-child { margin-top: 0; }
+    #about-modal-body h3 {
+      font-size: 12px;
+      font-weight: 700;
+      margin: 16px 0 6px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    #about-modal-body p { margin-bottom: 10px; color: var(--muted); }
+    #about-modal-body ul, #about-modal-body ol { margin: 0 0 12px 20px; color: var(--muted); }
+    #about-modal-body li { margin-bottom: 4px; }
+    #about-modal-body code {
+      background: var(--bg);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: inherit;
+      border: 1px solid var(--border);
+      font-size: 11.5px;
+    }
+    #about-modal-body strong { color: var(--text); font-weight: 600; }
+    #about-modal-body a { color: var(--accent); }
+    #about-modal-body blockquote {
+      border-left: 3px solid var(--accent);
+      background: var(--accent-bg);
+      padding: 10px 14px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+    #about-modal-body blockquote p { color: var(--text); margin-bottom: 0; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a href="index.html" class="back-btn">← Dashboard</a>
+    <h1>Fetch OAI-PMH Identifiers</h1>
+    <div class="header-right">
+      <button class="about-btn" id="about-btn" onclick="openAboutModal()">ⓘ About</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="no-key-notice">
+      No API key found for this tab. <a href="index.html">Go to the dashboard</a>
+      and enter your organisation's key first, then come back to this page.
+    </div>
+
+    <p class="intro">
+      Queries an OAI-PMH endpoint for the sets it currently offers, then
+      fetches record identifiers for whichever sets you select and
+      writes them as <code>guids_&lt;code&gt;.txt</code> files, ready
+      for "Run assessment". The set list shown below is always read
+      live from the endpoint URL currently in the field — it is never
+      a saved or hand-maintained list, so it can't go stale even if you
+      point it at a different catalogue.
+    </p>
+
+    <div class="card">
+      <h2>Endpoint</h2>
+      <p class="card-hint">Defaults to your organisation's configured OAI-PMH URL. Changing it here only affects this run — your organisation's saved default is not changed.</p>
+
+      <label for="base-url-input">OAI-PMH base URL</label>
+      <div class="url-row">
+        <input type="text" id="base-url-input" placeholder="https://..." autocomplete="off" />
+        <button type="button" id="load-sets-btn" onclick="onLoadSetsClick()">↻ Load sets</button>
+      </div>
+      <p class="field-hint">Sets reload automatically for the default URL when this page opens. Edit the URL above and click "Load sets" to see a different endpoint's sets.</p>
+
+      <div id="sets-header">
+        <label style="margin-bottom:0">Sets available at this endpoint</label>
+        <div id="sets-actions">
+          <button type="button" id="sets-select-all" onclick="onSetsSelectAllClick()">All</button>
+          <button type="button" id="sets-select-none" onclick="onSetsSelectNoneClick()">None</button>
+        </div>
+      </div>
+      <div id="sets-list">
+        <p id="sets-loading" style="display:none"><span class="spinner"></span>Loading sets…</p>
+        <p id="sets-empty" style="display:none">No sets found. Check the URL above and click "Load sets".</p>
+      </div>
+      <p id="sets-error"></p>
+
+      <button type="button" id="fetch-submit" disabled onclick="onFetchClick()">Fetch identifiers</button>
+    </div>
+
+    <div id="result-box" role="status"></div>
+  </main>
+
+  <footer>
+    <span id="footer-text">FAIR Benchmark Dashboard</span>
+    <span>Step 1 of 3 — followed by Run assessment, then Generate manifest</span>
+  </footer>
+
+  <div id="about-modal-backdrop" onclick="if (event.target === this) closeAboutModal()">
+    <div id="about-modal-card" role="dialog" aria-modal="true" aria-labelledby="about-modal-title">
+      <button id="about-modal-close" onclick="closeAboutModal()" aria-label="Close user guide">✕</button>
+      <h2 id="about-modal-title">User Guide</h2>
+      <div id="about-modal-body"><p>Loading…</p></div>
+    </div>
+  </div>
+
+  <script>
+    // ── Tenant API key ────────────────────────────────────────────────────────
+    // Reached only via the "Fetch identifiers" button on index.html, which
+    // already gates on an API key -- this page just reuses whatever key that
+    // page stored for the tab, the same way detail.html does.
+    function getStoredApiKey() {
+      return sessionStorage.getItem('apiKey') || '';
+    }
+
+    const _apiKey = getStoredApiKey();
+
+    function apiFetch(url, options = {}) {
+      const headers = Object.assign({}, options.headers || {});
+      if (_apiKey) headers['X-API-Key'] = _apiKey;
+      return fetch(url, Object.assign({}, options, { headers }));
+    }
+
+    function showUnauthorized() {
+      document.getElementById('no-key-notice').style.display = 'block';
+      document.getElementById('load-sets-btn').disabled = true;
+      document.getElementById('fetch-submit').disabled = true;
+    }
+
+    // ── Sets list state ───────────────────────────────────────────────────────
+    let setsLoaded = false;
+
+    function renderSetsList(sets) {
+      const listEl   = document.getElementById('sets-list');
+      const emptyEl  = document.getElementById('sets-empty');
+      const loadEl   = document.getElementById('sets-loading');
+      Array.from(listEl.querySelectorAll('.set-item')).forEach(el => el.remove());
+      loadEl.style.display = 'none';
+
+      if (!sets || sets.length === 0) {
+        emptyEl.style.display = 'block';
+        setsLoaded = false;
+        document.getElementById('fetch-submit').disabled = true;
+        return;
+      }
+
+      emptyEl.style.display = 'none';
+      sets.forEach((set, i) => {
+        const item = document.createElement('div');
+        item.className = 'set-item';
+        const inputId = `set-${i}`;
+        item.innerHTML = `
+          <input type="checkbox" id="${inputId}" value="${set.setSpec}" checked />
+          <label for="${inputId}">
+            <span>${set.setName}</span>
+            <span class="set-spec">${set.setSpec}</span>
+          </label>`;
+        listEl.appendChild(item);
+      });
+      setsLoaded = true;
+      document.getElementById('fetch-submit').disabled = false;
+    }
+
+    function onSetsSelectAllClick() {
+      document.querySelectorAll('#sets-list input[type="checkbox"]')
+        .forEach(cb => { cb.checked = true; });
+    }
+
+    function onSetsSelectNoneClick() {
+      document.querySelectorAll('#sets-list input[type="checkbox"]')
+        .forEach(cb => { cb.checked = false; });
+    }
+
+    // ── Loading sets from the endpoint currently in the URL field ──────────────
+
+    async function loadSets() {
+      const urlInput   = document.getElementById('base-url-input');
+      const loadBtn    = document.getElementById('load-sets-btn');
+      const errEl      = document.getElementById('sets-error');
+      const loadEl     = document.getElementById('sets-loading');
+      const emptyEl    = document.getElementById('sets-empty');
+      const submitBtn  = document.getElementById('fetch-submit');
+
+      errEl.style.display = 'none';
+      emptyEl.style.display = 'none';
+      loadEl.style.display = 'block';
+      loadBtn.disabled = true;
+      submitBtn.disabled = true;
+      setsLoaded = false;
+      Array.from(document.getElementById('sets-list').querySelectorAll('.set-item')).forEach(el => el.remove());
+
+      try {
+        const params = new URLSearchParams();
+        const baseUrl = urlInput.value.trim();
+        if (baseUrl) params.set('baseUrl', baseUrl);
+
+        const res = await apiFetch(`/api/fetch-identifiers/sets?${params.toString()}`);
+
+        if (res.status === 401) {
+          showUnauthorized();
+          return;
+        }
+
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(body.message || `HTTP ${res.status}`);
+        }
+
+        renderSetsList(body.sets || []);
+      } catch (e) {
+        loadEl.style.display = 'none';
+        errEl.textContent = `Could not load sets from this endpoint.\n${e.message}`;
+        errEl.style.display = 'block';
+      } finally {
+        loadBtn.disabled = false;
+      }
+    }
+
+    function onLoadSetsClick() {
+      loadSets();
+    }
+
+    // ── Fetching identifiers for the selected sets ──────────────────────────────
+
+    function showResult(kind, message) {
+      const box = document.getElementById('result-box');
+      box.className = kind;
+      box.textContent = message;
+      box.style.display = 'block';
+    }
+
+    async function onFetchClick() {
+      const urlInput  = document.getElementById('base-url-input');
+      const submitBtn = document.getElementById('fetch-submit');
+      const loadBtn   = document.getElementById('load-sets-btn');
+      const resultBox = document.getElementById('result-box');
+
+      resultBox.style.display = 'none';
+
+      const selected = Array.from(
+        document.querySelectorAll('#sets-list input[type="checkbox"]:checked')
+      ).map(cb => cb.value);
+
+      if (selected.length === 0) {
+        showResult('warn', 'Select at least one set to fetch, or click "All" to select every set shown.');
+        return;
+      }
+
+      const originalLabel = submitBtn.textContent;
+      submitBtn.disabled = true;
+      loadBtn.disabled = true;
+      submitBtn.textContent = 'Fetching…';
+
+      try {
+        const params = new URLSearchParams();
+        const baseUrl = urlInput.value.trim();
+        if (baseUrl) params.set('baseUrl', baseUrl);
+        params.set('sets', selected.join(','));
+
+        const res = await apiFetch('/api/fetch-identifiers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString()
+        });
+
+        if (res.status === 401) {
+          showUnauthorized();
+          return;
+        }
+
+        const body = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          showResult('error', body.message || `HTTP ${res.status}`);
+          return;
+        }
+
+        const message = body.message || 'Fetch complete.';
+        const kind = message.includes('(failed:') ? 'warn' : 'ok';
+        showResult(kind, message + '\n\nGo to the dashboard and click "Run assessment" to assess these identifiers next.');
+      } catch (e) {
+        showResult('error', e.message);
+      } finally {
+        submitBtn.disabled = false;
+        loadBtn.disabled = false;
+        submitBtn.textContent = originalLabel;
+      }
+    }
+
+    // ── Bootstrap ────────────────────────────────────────────────────────────
+
+    // Populates the footer with the current tenant's own branding text,
+    // the same way index.html does -- so this page reads as part of the
+    // same organisation's dashboard rather than a generic tool page.
+    async function loadBranding() {
+      try {
+        const res = await apiFetch('/api/tenant/branding');
+        if (!res.ok) return;
+        const branding = await res.json();
+        if (branding.footer) {
+          document.getElementById('footer-text').textContent = branding.footer;
+        }
+      } catch (e) {
+        console.warn('Could not load /api/tenant/branding:', e.message);
+      }
+    }
+
+    async function init() {
+      if (!_apiKey) {
+        showUnauthorized();
+        return;
+      }
+
+      loadBranding();
+
+      try {
+        const res = await apiFetch('/api/fetch-identifiers/defaults');
+        if (res.status === 401) {
+          showUnauthorized();
+          return;
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = await res.json();
+        document.getElementById('base-url-input').value = body.baseUrl || '';
+      } catch (e) {
+        console.warn('Could not load /api/fetch-identifiers/defaults:', e.message);
+      }
+
+      loadSets();
+    }
+
+    // ── About / user guide modal ────────────────────────────────────────────
+    // The guide is a plain Markdown file served as a static resource
+    // (About_fetch_identifiers.md), fetched without an API key -- it is
+    // generic help text, not tenant data, so it is exempted from
+    // TenantAuthFilter the same way fetch-identifiers.html itself is.
+    let aboutLoaded = false;
+
+    function openAboutModal() {
+      document.getElementById('about-modal-backdrop').style.display = 'flex';
+      document.getElementById('about-modal-close').focus();
+      if (!aboutLoaded) loadAboutContent();
+    }
+
+    function closeAboutModal() {
+      document.getElementById('about-modal-backdrop').style.display = 'none';
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape'
+          && document.getElementById('about-modal-backdrop').style.display === 'flex') {
+        closeAboutModal();
+      }
+    });
+
+    async function loadAboutContent() {
+      const bodyEl = document.getElementById('about-modal-body');
+      try {
+        const res = await fetch('About_fetch_identifiers.md');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const md = await res.text();
+        bodyEl.innerHTML = renderMarkdown(md);
+        aboutLoaded = true;
+      } catch (e) {
+        bodyEl.innerHTML = `<p style="color:var(--fail)">Could not load the user guide (${e.message}).</p>`;
+      }
+    }
+
+    // Minimal Markdown -> HTML renderer, deliberately limited to the
+    // subset the About_*.md guides actually use (## / ### headings,
+    // paragraphs, - and 1. lists, **bold**, `code`, [links](url), and
+    // "> " blockquotes as callouts) rather than pulling in a general
+    // Markdown library.
+    function renderMarkdown(md) {
+      function esc(s) {
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+      function inline(text) {
+        return esc(text)
+          .replace(/`([^`]+)`/g, '<code>$1</code>')
+          .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+          .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+      }
+
+      const lines = md.replace(/\r\n/g, '\n').split('\n');
+      let html = '';
+      let listType = null;
+      let inQuote = false;
+      let para = [];
+
+      const flushPara = () => {
+        if (para.length) { html += `<p>${inline(para.join(' '))}</p>`; para = []; }
+      };
+      const closeList = () => { if (listType) { html += `</${listType}>`; listType = null; } };
+      const closeQuote = () => { if (inQuote) { html += '</blockquote>'; inQuote = false; } };
+
+      for (const raw of lines) {
+        const line = raw.trimEnd();
+        let m;
+        if (!line.trim()) {
+          flushPara(); closeList(); closeQuote();
+        } else if ((m = line.match(/^###\s+(.*)/))) {
+          flushPara(); closeList(); closeQuote();
+          html += `<h3>${inline(m[1])}</h3>`;
+        } else if ((m = line.match(/^##\s+(.*)/))) {
+          flushPara(); closeList(); closeQuote();
+          html += `<h2>${inline(m[1])}</h2>`;
+        } else if ((m = line.match(/^-\s+(.*)/))) {
+          flushPara(); closeQuote();
+          if (listType !== 'ul') { closeList(); html += '<ul>'; listType = 'ul'; }
+          html += `<li>${inline(m[1])}</li>`;
+        } else if ((m = line.match(/^\d+\.\s+(.*)/))) {
+          flushPara(); closeQuote();
+          if (listType !== 'ol') { closeList(); html += '<ol>'; listType = 'ol'; }
+          html += `<li>${inline(m[1])}</li>`;
+        } else if ((m = line.match(/^>\s?(.*)/))) {
+          flushPara(); closeList();
+          if (!inQuote) { html += '<blockquote>'; inQuote = true; }
+          html += `<p>${inline(m[1])}</p>`;
+        } else {
+          closeList(); closeQuote();
+          para.push(line.trim());
+        }
+      }
+      flushPara(); closeList(); closeQuote();
+      return html;
+    }
+
+    init();
+  </script>
+</body>
+</html>

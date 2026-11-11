@@ -2,7 +2,7 @@
 services:
   benchmark-runner:
     build: .
-    image: benchmark-runner:3.0.0
+    image: benchmark-runner:3.4.0
     container_name: benchmark-runner
     ports:
       - "8080:8080"
