@@ -23,13 +23,12 @@ one file per set, under a tenant-scoped output directory — see
 
 ## Default values
 
-| Parameter       | Default value                                                 |
-|-----------------|---------------------------------------------------------------|
-| Base URL        | `https://datacatalogue.cessda.eu/oai-pmh/v0/oai`              |
-| Verb            | `ListIdentifiers`                                             |
-| Metadata prefix | `oai_ddi25`                                                   |
-| Sets            | `de`, `el`, `en`, `fi`, `fr`, `hr`, `nl`, `sl`, `sl-SI`, `sv` |
-| Tenant          | `cessda`                                                       |
+| Parameter       | Default value                                    |
+|-----------------|--------------------------------------------------|
+| Base URL        | `https://datacatalogue.cessda.eu/oai-pmh/v0/oai` |
+| Metadata prefix | `oai_ddi25`                                      |
+| Sets            |                                                  |
+| Tenant          | `cessda`                                         |
 
 ## Command-line options
 
@@ -37,16 +36,9 @@ one file per set, under a tenant-scoped output directory — see
 -b, --oai-pmh-base-url <url>     OAI-PMH base URL
                                    (default: https://datacatalogue
                                    .cessda.eu/oai-pmh/v0/oai)
--v, --verb <verb>                 OAI-PMH verb used when listing
-                                   identifiers (default: ListIdentifiers)
 -m, --metadata-prefix <prefix>   Metadata prefix embedded in output
                                    GetRecord URLs (default: oai_ddi25)
 -S, --sets <set1,set2,...>        Comma-separated list of sets to fetch
-                                   (default: de,el,en,fi,fr,hr,nl,sl,
-                                   sl-SI,sv)
--F, --fetch-all-sets              Fetch identifiers for all sets
-                                   (default behaviour)
--s, --fetch-set <set>             Fetch identifiers for a single set only
 -t, --tenant <tenant>             Tenant name; output is written to
                                    guids/<tenant>/ (default: cessda)
 -h, --help                        Show the help message
@@ -59,7 +51,7 @@ Run with Maven (from the project root):
 ```bash
 mvn exec:java \
   -Dexec.mainClass="eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers" \
-  -Dexec.args="--fetch-set en"
+  -Dexec.args="--sets en"
 ```
 
 Run from a JAR:
@@ -68,7 +60,7 @@ Run from a JAR:
 java -cp <jar> eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers \
   --oai-pmh-base-url https://example.org/oai \
   --metadata-prefix oai_ddi25 \
-  --fetch-set de
+  --sets de
 ```
 
 ### Fetch all sets (default)
@@ -80,8 +72,7 @@ java -cp <jar> eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers
 Or
 
 ```bash
-mvn exec:java -Dexec.mainClass="eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers" \
-  -Dexec.args="-F"
+mvn exec:java -Dexec.mainClass="eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers"
 ```
 
 ### Fetch a custom list of sets
@@ -95,14 +86,7 @@ java -cp <jar> eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers \
 
 ```bash
 java -cp <jar> eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers \
-  --fetch-set hr
-```
-
-Or
-
-```bash
-mvn exec:java -Dexec.mainClass="eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers" \
--Dexec.args="-s <set_name>"
+  --sets hr
 ```
 
 ### Fetch for a specific tenant
@@ -110,14 +94,7 @@ mvn exec:java -Dexec.mainClass="eu.cessda.cmv.benchmark.GetOaiPmhIdentifiers" \
 ```bash
 java -cp <jar> cessda.cmv.benchmark.GetOaiPmhIdentifiers \
   --tenant new-org \
-  --fetch-set de
-```
-
-Or
-
-```bash
-mvn exec:java -Dexec.mainClass="cessda.cmv.benchmark.GetOaiPmhIdentifiers" \
--Dexec.args="-t new-org -s de"
+  --sets de
 ```
 
 Output is written to `guids/new-org/guids_de.txt` instead of the
@@ -133,11 +110,6 @@ if it does not already exist — e.g. running with the default tenant
 writes to `guids/cessda/guids_de.txt`, `guids/cessda/guids_en.txt`,
 and so on.
 
-This mirrors how the web/REST pipeline resolves each tenant's data
-directory (`benchmark.data-dir`, default `./guids`, resolved as
-`{data-dir}/{tenant-id}/`), so a standalone CLI run for a given tenant
-and a REST-triggered run for that same tenant land in the same place.
-
 Each file begins with three comment lines:
 
 ```text
@@ -150,18 +122,17 @@ The remaining lines are full `GetRecord` URLs, one per identifier.
 
 ## How it works
 
-1. A `ListIdentifiers` request is built from the base URL, verb,
-   metadata prefix, and set name. This repository's sets are keyed by
-   language, so the set name must be a full setSpec such as
-   `language:hr`, as returned by `verb=ListSets`. It is sent
-   unchanged as `set=<setSpec>`; a bare code (`set=hr`) is not
-   prefixed and is not a valid setSpec.
+`GetOaiPmhIdentifiers` uses the CESSDA Metadata Harvester's Java
+API to implement OAI-PMH support. The logic uses is as follows:
+
+1. A `ListIdentifiers` request is built from the base URL,
+   metadata prefix, and set name.
 2. The XML response is checked for a top-level `<error>` element (see
    [HTTP behaviour](#http-behaviour)) and then parsed for `<identifier>`
    elements.
-3. If a `<resumptionToken>` is present, the next page is fetched and
+3. If a resumption token is present, the next page is fetched and
    the process repeats until all pages are exhausted.
-4. Each raw identifier is combined with the base URL and metadata
+4. Each identifier is combined with the base URL and metadata
    prefix to produce a `GetRecord` URL.
 5. All URLs are written to `guids_<set>.txt`.
 
@@ -169,41 +140,28 @@ The remaining lines are full `GetRecord` URLs, one per identifier.
 
 Besides fetching identifiers, `GetOaiPmhIdentifiers` can call
 `verb=ListSets` to discover exactly which sets an endpoint currently
-offers, returning each set's `setSpec` (the value to pass back as a
-set name) alongside its own human-readable `setName` — there is no
-static or hand-maintained mapping to keep in sync, so this always
-reflects the live catalogue. Every OAI-PMH repository that supports
-selective harvesting at all is required to support `ListSets`, so
-this works for any tenant's endpoint regardless of its own setSpec
-naming scheme (CESSDA's own `language:<code>` scheme is not assumed).
-A repository with no set hierarchy returns an empty list — OAI-PMH's
-`noSetHierarchy` response — rather than an error.
+offers, returning each set's `setSpec`.
 
 This is not currently exposed as its own CLI flag; it backs the
 dashboard's "Fetch identifiers" page and the `GET
 /api/fetch-identifiers/sets` REST endpoint. See
-[API_Usage.md](API_Usage.md#discover-available-sets) for the REST
+[ApiUsage_README.md](ApiUsage_README.md#discover-available-sets) for the REST
 form.
 
 ## HTTP behaviour
 
 - Connection timeout: 30 seconds.
 - Request timeout: 60 seconds.
-- Non-2xx responses raise an `IOException`.
 - OAI-PMH reports protocol-level failures (`badVerb`, `badArgument`,
   `noRecordsMatch`, etc.) as an `<error>` element inside an ordinary
-  HTTP 200 response, not as a non-2xx status. Every response is checked
-  for this before its identifiers are counted, and an `<error>` element
-  raises an `IOException` naming the OAI-PMH error code and message —
-  a failed set is never silently written out as an empty
-  `guids_<set>.txt` file.
-- XML external entities and external parameter entities are disabled to
-  guard against XXE attacks.
+  HTTP 200 response, not as a non-2xx status. An `<error>` element
+  raises an `OAIException` with the OAI-PMH error code and message.
 
 ## Dependencies
 
 - Java standard library (`java.net.http`, `javax.xml.parsers`)
 - Apache Commons CLI (argument parsing)
+- [CESSDA Metadata Harvester OAI-PMH API](https://github.com/cessda/cessda.metadata.harvester)
 
 ## Contributing
 

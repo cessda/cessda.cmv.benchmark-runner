@@ -67,15 +67,12 @@ following resumption tokens until all pages have been retrieved. For
 each set it writes a `guids_<set>.txt` file, under the
 calling tenant's data directory, in which every non-comment line is a
 complete OAI-PMH `GetRecord` URL ready for the next stage. By default
-it targets the CESSDA Data Catalogue endpoint and processes ten
-sets (`de`, `el`, `en`, `fi`, `fr`, `hr`, `nl`, `sl`,
-`sl-SI`, `sv`).
+it targets the CESSDA Data Catalogue endpoint and processes all
+identifiers.
 
-It can also query `verb=ListSets` to discover, live, exactly which
-sets an endpoint currently offers — used by the dashboard's "Fetch
-identifiers" page (see [HTTP API overview](#http-api-overview)) so
-the set list shown to an operator can never drift out of sync with
-the real catalogue, unlike a hand-maintained list.
+It can also query `verb=ListSets` to discover exactly which
+sets an endpoint currently offers. This is used by the dashboard's 
+"Fetch identifiers" page (see [HTTP API overview](#http-api-overview)).
 
 See [GetOaiPmhIdentifiers_README.md](GetOaiPmhIdentifiers_README.md)
 for full usage and options.

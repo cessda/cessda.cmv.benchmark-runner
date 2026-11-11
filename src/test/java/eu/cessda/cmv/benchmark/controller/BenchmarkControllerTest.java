@@ -28,6 +28,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.io.FileNotFoundException;
 import java.net.URI;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 
 import static org.hamcrest.Matchers.is;
@@ -107,7 +108,7 @@ class BenchmarkControllerTest {
         @DisplayName("Returns 200 with ok status when called with no parameters")
         void defaultParametersReturn200() throws Exception {
             when(service.fetchIdentifiers(
-                    isNull(), isNull(), isNull(), isNull(), isNull()))
+                    isNull(), isNull(), anyList()))
                 .thenReturn("Fetched identifiers for 10 set(s) -> /data");
 
             mvc.perform(post("/api/fetch-identifiers"))
@@ -119,30 +120,30 @@ class BenchmarkControllerTest {
                     is("Fetched identifiers for 10 set(s) -> /data")));
 
             verify(service).fetchIdentifiers(
-                null, null, null, null, null);
+                    isNull(), isNull(), eq(Collections.emptyList()));
         }
 
         @Test
         @DisplayName("Passes fetchSet parameter to service")
         void singleSetParameterIsForwarded() throws Exception {
             when(service.fetchIdentifiers(
-                    isNull(), isNull(), isNull(), isNull(), eq("en")))
+                    isNull(), isNull(), eq(List.of("en"))))
                 .thenReturn("Fetched identifiers for set: en -> /data/guids_en.txt");
 
             mvc.perform(post("/api/fetch-identifiers")
-                    .param("fetchSet", "en"))
+                    .param("sets", "en"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status", is("ok")));
 
             verify(service).fetchIdentifiers(
-                null, null, null, null, "en");
+                    isNull(), isNull(), eq(List.of("en")));
         }
 
         @Test
         @DisplayName("Passes comma-separated sets parameter to service")
         void multipleSetsParameterIsForwarded() throws Exception {
             when(service.fetchIdentifiers(
-                    isNull(), isNull(), isNull(), eq("de,en,fr"), isNull()))
+                    isNull(), isNull(), eq(List.of("de", "en", "fr"))))
                 .thenReturn("Fetched identifiers for 3 set(s) -> /data");
 
             mvc.perform(post("/api/fetch-identifiers")
@@ -151,7 +152,7 @@ class BenchmarkControllerTest {
                 .andExpect(jsonPath("$.status", is("ok")));
 
             verify(service).fetchIdentifiers(
-                null, null, null, "de,en,fr", null);
+                    isNull(), isNull(), eq(List.of("de", "en", "fr")));
         }
 
         @Test
@@ -159,15 +160,12 @@ class BenchmarkControllerTest {
         void allOptionalParametersAreForwarded() throws Exception {
             when(service.fetchIdentifiers(
                     eq(URI.create("https://example.org/oai")),
-                    eq("ListIdentifiers"),
                     eq("oai_dc"),
-                    isNull(),
-                    isNull()))
+                    anyList()))
                 .thenReturn("Fetched identifiers for 10 set(s) -> /data");
 
             mvc.perform(post("/api/fetch-identifiers")
                     .param("baseUrl",        "https://example.org/oai")
-                    .param("verb",           "ListIdentifiers")
                     .param("metadataPrefix", "oai_dc"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status", is("ok")));

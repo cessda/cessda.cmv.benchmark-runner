@@ -24,6 +24,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -386,8 +387,7 @@ class BenchmarkServiceTest {
 
         @Test
         @DisplayName("Creates the tenant data directory when it does not exist")
-        void createsTenantDataDirectoryWhenAbsent(@TempDir Path root)
-                throws Exception {
+        void createsTenantDataDirectoryWhenAbsent(@TempDir Path root) throws IOException {
             // Point the service at a fresh root; the tenant sub-dir must not
             // yet exist.
             Path newRootData = root.resolve("data");
@@ -418,10 +418,9 @@ class BenchmarkServiceTest {
 
             service = new BenchmarkService(benchmarkProperties, tenantContext, tenantProperties);
 
-            // Expected: the HTTP call will fail.
-            assertThrows(IOException.class, () -> service.fetchIdentifiers(
-                    URI.create("http://invalid.example.invalid"),
-                    null, null, "de", null));
+            // Expected: the HTTP call will fail and the exception will be handled.
+            assertThrows(HarvestingFailedException.class,
+                    () -> service.fetchIdentifiers(URI.create("http://invalid.example.invalid"), null, List.of("de")));
 
             assertTrue(Files.isDirectory(expectedTenantDir),
                 "fetchIdentifiers must create the tenant-scoped data directory");
@@ -432,9 +431,8 @@ class BenchmarkServiceTest {
         void tenantDataDirsAreIsolated() {
             // The directory created must be under the tenant ID sub-path,
             // not at the root data dir level.
-            assertThrows(IOException.class, () -> service.fetchIdentifiers(
-                    URI.create("http://invalid.example.invalid"),
-                    null, null, "de", null));
+            assertThrows(HarvestingFailedException.class,
+                    () -> service.fetchIdentifiers(URI.create("http://invalid.example.invalid"), null, List.of("de")));
 
             // The tenant sub-dir must exist; the root must not contain any
             // guids files directly (they belong under the tenant sub-dir).

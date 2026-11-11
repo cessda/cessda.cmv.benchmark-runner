@@ -8,6 +8,7 @@ import eu.cessda.cmv.benchmark.config.BenchmarkProperties;
 import eu.cessda.cmv.benchmark.tenant.TenantContext;
 import eu.cessda.cmv.benchmark.tenant.TenantProperties;
 import eu.cessda.cmv.benchmark.tenant.TenantProperties.TenantConfig;
+import org.oclc.oai.harvester2.verb.OAIException;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -16,7 +17,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 @Service
@@ -219,50 +219,41 @@ public class BenchmarkService {
      *
      * @param baseUrl OAI-PMH base URL override, or {@code null}/blank
      *                to use the current tenant's configured default
-     * @param verb    OAI-PMH verb, or {@code null}/blank for
-     *                {@link GetOaiPmhIdentifiers#DEFAULT_VERB}
-     *                (ListSets does not depend on this, but the same
-     *                client is reused for consistency)
      * @throws IOException          if the request fails or the
      *                               response cannot be parsed
      * @throws InterruptedException if interrupted while waiting for
      *                               the HTTP response
      */
     public java.util.List<GetOaiPmhIdentifiers.SetInfo> listAvailableSets(
-            URI baseUrl, String verb) throws IOException, InterruptedException {
+            URI baseUrl) throws IOException, InterruptedException, OAIException {
         URI resolvedBase = resolveOaiPmhBaseUrl(baseUrl);
-        String resolvedVerb = nvl(verb, GetOaiPmhIdentifiers.DEFAULT_VERB);
         GetOaiPmhIdentifiers client = new GetOaiPmhIdentifiers(
-                resolvedBase, resolvedVerb, GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX, null);
+                resolvedBase, GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX, null);
         return client.listSets();
     }
 
     public String fetchIdentifiers(
             URI baseUrl,
-            String verb,
             String metadataPrefix,
-            String sets,
-            String fetchSet) throws IOException, InterruptedException {
+            List<String> sets) throws IOException, InterruptedException, HarvestingFailedException {
 
         Path tDataDir = tenantDataDir();
         Files.createDirectories(tDataDir);
 
         URI resolvedBase = resolveOaiPmhBaseUrl(baseUrl);
-        String resolvedVerb   = nvl(verb,           GetOaiPmhIdentifiers.DEFAULT_VERB);
         String resolvedPrefix = nvl(metadataPrefix, GetOaiPmhIdentifiers.DEFAULT_METADATA_PREFIX);
 
-        GetOaiPmhIdentifiers client =
-                new GetOaiPmhIdentifiers(resolvedBase, resolvedVerb, resolvedPrefix, tDataDir);
+        GetOaiPmhIdentifiers client = new GetOaiPmhIdentifiers(resolvedBase, resolvedPrefix, tDataDir);
 
-        if (fetchSet != null && !fetchSet.isBlank()) {
-            client.fetchIdentifiersForSet(fetchSet.trim());
-            return "Fetched identifiers for set: " + fetchSet.trim()
-                    + " -> " + tDataDir + "/guids_" + fetchSet.trim() + ".txt";
+        if (sets.isEmpty()) {
+            // Gather all identifiers in the repository
+            try {
+                client.fetchIdentifiers();
+                return "Fetched identifiers for the whole repository -> " + tDataDir;
+            } catch (IOException | OAIException e) {
+                throw new HarvestingFailedException("Failed to fetch identifiers from the repository", e);
+            }
         }
-
-        List<String> resolvedSets = (sets != null && !sets.isBlank())
-                ? Arrays.asList(sets.split(","))
-                : GetOaiPmhIdentifiers.DEFAULT_SETS;
 
         // Isolate per-set failures rather than aborting the whole batch
         // at the first one -- an operator selecting several sets from
@@ -272,28 +263,22 @@ public class BenchmarkService {
         // RunBenchmarkAssessment batch.
         java.util.List<String> succeeded = new java.util.ArrayList<>();
         java.util.Map<String, Exception> failed = new java.util.LinkedHashMap<>();
-        for (String rawSet : resolvedSets) {
-            String set = rawSet == null ? "" : rawSet.trim();
-            if (set.isEmpty()) continue;
+        for (String set : sets) {
             try {
                 client.fetchIdentifiersForSet(set);
                 succeeded.add(set);
-            } catch (IOException ioe) {
-                failed.put(set, ioe);
+            } catch (IOException | OAIException e) {
+                failed.put(set, e);
             }
         }
 
-        if (succeeded.isEmpty() && !failed.isEmpty()) {
-            throw new IOException("Failed to fetch identifiers for all " + failed.size()
+        if (succeeded.isEmpty()) {
+            throw new HarvestingFailedException("Failed to fetch identifiers for all " + failed.size()
                     + " selected set(s): " + describeFailures(failed));
         }
 
-        String message = "Fetched identifiers for " + succeeded.size() + " of "
-                + resolvedSets.size() + " set(s) -> " + tDataDir;
-        if (!failed.isEmpty()) {
-            message += " (failed: " + describeFailures(failed) + ")";
-        }
-        return message;
+        return "Fetched identifiers for " + succeeded.size() + " of "
+                + sets.size() + " set(s) -> " + tDataDir;
     }
 
     // ── 2. Run Assessment ────────────────────────────────────────────────────
